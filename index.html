@@ -387,8 +387,14 @@ input[type=checkbox],input[type=radio]{width:auto}
     </div>
     <div class="r2">
       <div class="card"><div class="ct">Dapur</div><div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-dapur" placeholder="Nama dapur..."><button class="btn bp bsm" onclick="addDapur()">Tambah</button></div><div id="dapur-list"></div></div>
-      <div class="card"><div class="ct">Rekening / sumber dana</div><div class="bg" style="margin-bottom:9px"><button class="btn bp bsm" onclick="openModalRek()">+ Tambah rekening</button></div><div id="master-rek-list"></div></div>
+      <div class="card">
+        <div class="ct">Kategori item</div>
+        <div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-kat" placeholder="Nama kategori baru..."><button class="btn bp bsm" onclick="addKat()">Tambah</button></div>
+        <div id="kat-list"></div>
+        <div style="font-size:11px;color:var(--t3);margin-top:6px">Kategori default: Daging, Sayur, Buah, Bumbu, Telur, Beras, UMKM, Others</div>
+      </div>
     </div>
+    <div class="card"><div class="ct">Rekening / sumber dana</div><div class="bg" style="margin-bottom:9px"><button class="btn bp bsm" onclick="openModalRek()">+ Tambah rekening</button></div><div id="master-rek-list"></div></div>
     <div class="card"><div class="ct">Vendor</div><div class="bg" style="margin-bottom:9px"><button class="btn bp bsm" onclick="openModalVendor()">+ Tambah vendor</button></div>
       <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama vendor</th><th>Kategori</th><th>No. HP</th><th>Sistem cashback</th><th>Aksi</th></tr></thead><tbody id="vendor-tbl"></tbody></table></div>
     </div>
@@ -925,8 +931,11 @@ function restoreData(){
 }
 
 // ===== CONSTANTS =====
-const CATS=['Daging','Sayur','Buah','Bumbu','Telur','Beras','UMKM','Others'];
-const CAT_OPTS=CATS.map(c=>`<option value="${c}">${c}</option>`).join('');
+const DEFAULT_CATS=['Daging','Sayur','Buah','Bumbu','Telur','Beras','UMKM','Others'];
+function getCats(){const m=getMaster();return(m.kategori&&m.kategori.length)?m.kategori:DEFAULT_CATS;}
+function getCatOpts(selected=''){return['<option value="">—</option>',...getCats().map(c=>`<option value="${c}"${c===selected?' selected':''}>${c}</option>`)].join('');}
+// Legacy - keep for places that use CAT_OPTS directly (will be replaced gradually)
+let CATS=getCats();let CAT_OPTS=getCatOpts();
 
 // ===== UTILS =====
 const today=()=>new Date().toISOString().split('T')[0];
@@ -1028,12 +1037,39 @@ function nav(name){
 
 // ===== MASTER DATA =====
 function renderMaster(){
+  CATS=getCats();CAT_OPTS=getCatOpts();
+  renderKats();
   const m=getMaster();const reks=getReks();
   document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><span style="font-size:13px">${d}</span><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';
   const vtbl=document.getElementById('vendor-tbl');
   vtbl.innerHTML=m.vendor.length?m.vendor.map((v,i)=>`<tr><td style="font-weight:500">${v.nama}</td><td>${catBadge(v.kat)}</td><td style="font-family:var(--mn);font-size:11px">${v.hp||'—'}</td><td>${v.cashback?`<span class="tag tpu">CB ~${v.cashback_pct||'?'}%</span>`:'—'}</td><td><div class="bg"><button class="btn bxs bi" onclick="editVendor(${i})">Edit</button><button class="btn bxs bd-" onclick="rmVendor(${i})">Hapus</button></div></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty">Belum ada vendor</div></td></tr>`;
   updateDL();
+}
+function addKat(){
+  const val=document.getElementById('new-kat')?.value.trim();if(!val)return;
+  const m=getMaster();
+  if(!m.kategori)m.kategori=[...DEFAULT_CATS];
+  if(m.kategori.includes(val)){showToast('Kategori sudah ada',true);return;}
+  m.kategori.push(val);setMaster(m);
+  document.getElementById('new-kat').value='';
+  CATS=getCats();CAT_OPTS=getCatOpts();
+  renderKats();showToast('Kategori ditambahkan!');
+}
+function delKat(nama){
+  if(!confirm(`Hapus kategori "${nama}"?\nItem yang sudah pakai kategori ini tidak terpengaruh.`))return;
+  const m=getMaster();
+  m.kategori=(m.kategori||[...DEFAULT_CATS]).filter(k=>k!==nama);
+  setMaster(m);CATS=getCats();CAT_OPTS=getCatOpts();
+  renderKats();showToast('Kategori dihapus');
+}
+function renderKats(){
+  const cats=getCats();
+  const el=document.getElementById('kat-list');if(!el)return;
+  el.innerHTML=cats.map(k=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd)">
+    <span style="font-size:13px">${k}</span>
+    <button class="btn bxs bd-" onclick="delKat('${k}')">✕</button>
+  </div>`).join('');
 }
 function addDapur(){const v=document.getElementById('new-dapur').value.trim();if(!v)return;const m=getMaster();if(!m.dapur.includes(v)){m.dapur.push(v);setMaster(m);}document.getElementById('new-dapur').value='';renderMaster();showToast('Dapur ditambahkan');}
 function rmDapur(i){const m=getMaster();m.dapur.splice(i,1);setMaster(m);renderMaster();}
@@ -1076,7 +1112,7 @@ function addRow(d){
   manualId++;const id=manualId;const tr=document.createElement('tr');tr.id='mr-'+id;
   tr.innerHTML=`<td><input type="text" value="${d?.hari||''}" placeholder="Senin 20 Apr" id="mr-h-${id}" style="width:105px"></td>
     <td><input type="text" value="${d?.nama||''}" placeholder="Nama bahan baku" id="mr-n-${id}" style="min-width:130px"></td>
-    <td><select id="mr-kat-${id}" style="width:74px;font-size:11px;padding:2px 3px"><option value="">—</option>${CAT_OPTS}</select></td>
+    <td><select id="mr-kat-${id}" style="width:74px;font-size:11px;padding:2px 3px"><option value="">—</option>${getCatOpts()}</select></td>
     <td><input type="text" value="${d?.satuan||''}" placeholder="kg" id="mr-s-${id}" style="width:50px"></td>
     <td><input type="number" value="${d?.qty||''}" placeholder="0" id="mr-q-${id}" style="width:62px" min="0"></td>
     <td><input type="number" value="${d?.harga_po||''}" placeholder="0" id="mr-hp-${id}" style="width:90px" min="0"></td>
@@ -1168,7 +1204,7 @@ function renderMerged(items){
       <td style="font-size:11px;color:var(--t3)">${i.hari||''}</td>
       <td style="font-weight:500">${i.nama}</td>
       <td><select onchange="importedItems[${idx}].kat=this.value" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)">
-        <option value="">—</option>${CATS.map(c=>`<option value="${c}" ${i.kat===c?'selected':''}>${c}</option>`).join('')}
+        <option value="">—</option>${getCats().map(c=>`<option value="${c}" ${i.kat===c?'selected':''}>${c}</option>`).join('')}
       </select></td>
       <td>${i.satuan}</td><td class="num">${i.qty}</td><td class="num">${fmtF(i.harga_po)}</td>
       <td style="font-size:11px;color:var(--t2);max-width:160px">${i.spek||'—'}</td>
@@ -1501,7 +1537,7 @@ function showDetail(id){
       const rowStatus=allDone?'done':hasWarn?'todo':'running';
       itemsHtml+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
         <td style="font-weight:500;min-width:110px">${item.nama}${item.retur?`<br><span style="font-size:9px;color:var(--dn)">Retur: ${fmtF(item.retur.val)}</span>`:''}</td>
-        <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${CATS.map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
+        <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${getCats().map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
         <td>${tipeTag(item.tipe_kirim)}</td>
         <td style="white-space:nowrap">${item.satuan}</td>
         <td class="num">${item.qty}</td>
@@ -1653,7 +1689,7 @@ function showDetail(id){
         </select>
         <select id="det-f-kat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto">
           <option value="">Semua kategori</option>
-          ${CATS.map(c=>`<option value="${c}">${c}</option>`).join('')}
+          ${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}
         </select>
         <select id="det-f-vendor" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto">
           <option value="">Semua vendor</option>
@@ -1808,7 +1844,7 @@ function addTaiRow(d){
   tr.innerHTML=`
     <td><input type="text" value="${d?.hari||''}" placeholder="Senin 20 Apr" id="${id}-h" style="width:105px"></td>
     <td><input type="text" value="${d?.nama||''}" placeholder="Nama item" id="${id}-n" style="min-width:130px"></td>
-    <td><select id="${id}-kat" style="width:74px;font-size:11px;padding:2px 3px"><option value="">—</option>${CAT_OPTS}</select></td>
+    <td><select id="${id}-kat" style="width:74px;font-size:11px;padding:2px 3px"><option value="">—</option>${getCatOpts()}</select></td>
     <td><input type="text" value="${d?.satuan||''}" placeholder="kg" id="${id}-s" style="width:50px"></td>
     <td><input type="number" value="${d?.qty||''}" placeholder="0" id="${id}-q" style="width:62px" min="0"></td>
     <td><input type="number" value="${d?.harga_po||''}" placeholder="0" id="${id}-hp" style="width:90px" min="0"></td>
@@ -3143,6 +3179,66 @@ function showInvDDetail(invId){
   const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=inv.total-recv;
   const po=getPOs().find(p=>p.id===inv.po_id);
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
+
+  // Build vendor breakdown — match each invD item back to its invV using composite key
+  let vendorBreakdownHtml='';
+  if(inv.type!=='passthrough'&&po&&inv.items?.length){
+    const invVForPO=getInvV().filter(iv=>iv.po_id===inv.po_id);
+    // Map: invV.id → {invV, items:[]}
+    const vendorMap={};
+    inv.items.forEach(di=>{
+      // Find PO item for this invD item using composite key
+      const poItem=po.items.find(pi=>{
+        const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim().toLowerCase();
+        return pi.nama.toLowerCase()===diNama&&((!di.hari&&!pi.hari)||di.hari===pi.hari)&&((!di.deadline&&!pi.deadline)||di.deadline===pi.deadline);
+      })||po.items.find(pi=>(di.nama||'').toLowerCase().includes(pi.nama.toLowerCase()));
+      if(!poItem)return;
+      // Find which invV covers this PO item
+      let ivMatch=null;
+      for(const iv of invVForPO){
+        const found=(iv.items||[]).find(i=>{
+          if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx]===poItem)return true;
+          return itemKey(i)===itemKey(poItem)||i.nama===poItem.nama;
+        });
+        if(found){ivMatch=iv;break;}
+      }
+      if(!ivMatch)return;
+      if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
+      // Use qty from invV item (more accurate), fallback to invD item qty
+      const ivItem=(ivMatch.items||[]).find(i=>itemKey(i)===itemKey(poItem)||i.nama===poItem.nama);
+      vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:ivItem?.harga_vendor||poItem.harga_vendor||0});
+    });
+
+    const entries=Object.values(vendorMap);
+    if(entries.length){
+      vendorBreakdownHtml=`<div class="ct" style="margin-top:14px">Breakdown per vendor</div>`;
+      entries.forEach(({iv,items:vitems})=>{
+        const vTotal=vitems.reduce((s,i)=>s+(i.qty_vendor||0)*(i.harga_vendor||0),0);
+        vendorBreakdownHtml+=`<div style="margin-bottom:10px;border:1px solid var(--bd);border-radius:var(--r);overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--s2);border-bottom:1px solid var(--bd)">
+            <div>
+              <span style="font-weight:600;font-size:12px">${iv.vendor}</span>
+              <span class="tag ${iv.bayar_status==='lunas'?'tok':'tno'}" style="margin-left:5px;font-size:9px">${iv.no}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-family:var(--mn);font-size:12px">${fmtF(vTotal)}</span>
+              <button class="btn bxs bi" onclick="closeModal('modal-det-invd');showInvVDetail('${iv.id}')">Lihat →</button>
+            </div>
+          </div>
+          <table class="tbl" style="margin:0">
+            <tbody>${vitems.map(i=>`<tr>
+              <td style="font-weight:500;font-size:11px">${i.nama}</td>
+              <td class="num" style="font-size:11px">${i.qty_vendor} ${i.satuan||''}</td>
+              <td class="num" style="font-size:11px;color:var(--t3)">${i.harga_vendor?fmtF(i.harga_vendor):'—'}</td>
+              <td class="num" style="font-size:11px">${i.harga_vendor?fmtF((i.qty_vendor||0)*i.harga_vendor):'—'}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>`;
+      });
+      if(Object.keys(vendorMap).length===0)vendorBreakdownHtml='';
+    }
+  }
+
   document.getElementById('det-invd-title').textContent='Invoice Dapur: '+inv.no;
   document.getElementById('det-invd-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r)">
@@ -3164,6 +3260,7 @@ function showInvDDetail(invId){
     <tbody>${items.map(i=>`<tr><td style="font-weight:500">${i.nama}</td><td class="num">${i.qty}</td><td>${i.satuan||''}</td><td class="num" style="text-align:right">${fmtF(i.harga_dapur||0)}</td><td class="num" style="text-align:right">${fmtF((i.qty||0)*(i.harga_dapur||0))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;padding:8px">Total</td><td class="num" style="text-align:right;font-weight:600;padding:8px">${fmtF(inv.total)}</td></tr></tfoot>
     </table></div>
+    ${vendorBreakdownHtml}
     ${(inv.payments||[]).length?`<div class="ct" style="margin-top:12px">Histori penerimaan</div>${inv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · ${getRekNama(p.rek_id)}</span><span class="num g">+${fmtF(p.jumlah)}</span>${p.catatan?`<span style="font-size:10px;color:var(--t3)">${p.catatan}</span>`:''}</div>`).join('')}`:''}
     ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:var(--t2)">Catatan: ${inv.catatan}</div>`:''}
     <div class="bg" style="margin-top:14px">

@@ -331,7 +331,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- INVOICE VENDOR -->
 <div id="page-inv-vendor" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div>
+  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm bw" onclick="dedupInvV()" title="Hapus invoice duplikat">🧹 Bersihkan duplikat</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor..." id="srch-invv" oninput="renderInvV()">
@@ -898,6 +898,16 @@ async function loadAllData(){
   try{
     const snap=await db.collection('sims').doc('data').get();
     if(snap.exists){const d=snap.data();Object.keys(_cache).forEach(k=>{if(d[k]!==undefined)_cache[k]=d[k];});}
+    // Auto-fix counter: if counter is lower than actual invoices, recalculate from data
+    const fixCtr=(invArr,key,prefix)=>{
+      const maxN=invArr.reduce((mx,iv)=>{
+        const m=iv.no?.match(new RegExp(prefix+'(\\d+)'));
+        return m?Math.max(mx,parseInt(m[1])):mx;
+      },0);
+      if(maxN>(_cache[key]||0))_cache[key]=maxN;
+    };
+    fixCtr(_cache.invv,'ctr_invv','INV-V-');
+    fixCtr(_cache.invd,'ctr_invd','INV-D-');
   }catch(e){console.error('Load error:',e);}
 }
 function saveData(keys){
@@ -1213,7 +1223,9 @@ function renderMerged(items){
   }).join('');
   document.getElementById('prev-tot').textContent=fmtF(tp);
 }
+let _savingPO=false;
 function savePO(){
+  if(_savingPO)return;_savingPO=true;
   const no=document.getElementById('in-no').value.trim();const date=document.getElementById('in-date').value;const dapur=document.getElementById('in-dapur').value.trim();
   if(!no||!date||!dapur){showToast('Isi No. PO, tanggal, dan dapur!',true);return;}
   const items=activeTab===0?getManualItems():importedItems;
@@ -1222,6 +1234,7 @@ function savePO(){
   const po={id:uid(),no,date,dapur,jenis:document.getElementById('in-jenis')?.value||'bahan_baku',catatan:document.getElementById('in-cat-po').value.trim(),items,revisions:[],created:new Date().toISOString()};
   const pos=getPOs();pos.push(po);setPOs(pos);
   addLog('buat_po','Buat PO','po',po.id,po.no,po.items.length+' item · '+po.dapur);
+  _savingPO=false;
   showToast('PO '+no+' disimpan!');nav('daftar-po');
 }
 
@@ -2205,7 +2218,9 @@ function calcInvVTotal(){
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   document.getElementById('invv-total').value=Math.round(total+ongkir);
 }
+let _savingInvV=false;
 function saveInvV(){
+  if(_savingInvV)return;// prevent double submit
   const no=document.getElementById('invv-no').value.trim();const tgl=document.getElementById('invv-tgl').value;const vendor=document.getElementById('invv-vendor').value.trim();const poId=document.getElementById('invv-po').value;
   if(!no||!vendor||!poId){showToast('Isi no. invoice, vendor, dan PO!',true);return;}
   const items=[];document.querySelectorAll('.invv-cb:checked').forEach(cb=>{
@@ -2213,15 +2228,26 @@ function saveInvV(){
     items.push({idx,nama:cb.dataset.nama,qty:parseFloat(cb.dataset.qty),satuan:cb.dataset.sat,harga_vendor:hv});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
+  // Disable tombol simpan & tampilkan loading
+  _savingInvV=true;
+  const btn=document.querySelector('#modal-invv .btn.bp');
+  if(btn){btn.disabled=true;btn.textContent='Menyimpan...';}
   const total=parseFloat(document.getElementById('invv-total').value)||0;
-  // Update harga_vendor & vendor di PO items
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
   if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0)po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor&&!po.items[i.idx].vendor)po.items[i.idx].vendor=vendor;}});setPOs(pos);}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||undefined,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
+  const done=()=>{
+    const invs=getInvV();invs.push(inv);setInvV(invs);
+    closeModal('modal-invv');
+    showToast('Invoice vendor disimpan!');
+    addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
+    _savingInvV=false;
+    if(btn){btn.disabled=false;btn.textContent='Simpan invoice';}
+    if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
+  };
   const file=document.getElementById('invv-file').files[0];
-  const done=()=>{const invs=getInvV();invs.push(inv);setInvV(invs);closeModal('modal-invv');showToast('Invoice vendor disimpan!');addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();};
   if(file){const nk='invv_'+inv.id;const r=new FileReader();r.onload=e=>{saveFile(nk,e.target.result);inv.file_key=nk;done();};r.readAsDataURL(file);}else done();
 }
 
@@ -2755,7 +2781,9 @@ function calcInvDTotal(){
   const el=document.getElementById('invd-total');
   if(el)el.value=total>0?Math.round(total):'';
 }
+let _savingInvD=false;
 function saveInvD(){
+  if(_savingInvD)return;_savingInvD=true;
   const no=document.getElementById('invd-no').value.trim();const tgl=document.getElementById('invd-tgl').value;const dapur=document.getElementById('invd-dapur').value.trim();const poId=document.getElementById('invd-po').value;
   if(!no||!dapur){showToast('Isi no. invoice dan dapur!',true);return;}
   const isPT=document.querySelector('input[name="invd-type"]:checked').value==='passthrough';
@@ -2778,7 +2806,7 @@ function saveInvD(){
   }
   const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,terima_status:'belum',payments:[],created:new Date().toISOString()};
   const invs=getInvD();invs.push(inv);setInvD(invs);autoMaster(dapur,[]);
-  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
+  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));_savingInvD=false;closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
 }
 
 // ===== TERIMA DARI DAPUR =====
@@ -3567,6 +3595,39 @@ function initUserProfile(){
 
 
 let _rekapPoId=null,_rekapVendor=null;
+
+// Cleanup duplicate invoices
+// Strategy 1: exact same no+vendor+po_id+tgl
+// Strategy 2: same vendor+po_id+tgl+total+items (catches counter-restart duplicates)
+function dedupInvV(){
+  const invs=getInvV();
+  const before=invs.length;
+
+  // Build signature for each invoice (vendor+po_id+tgl+total+item names sorted)
+  const sig=(iv)=>{
+    const items=(iv.items||[]).map(i=>i.nama).sort().join('|');
+    return`${iv.vendor}|${iv.po_id}|${iv.tgl}|${iv.total}|${items}`;
+  };
+
+  const seenSig=new Set();
+  const seenNo=new Set();
+  const deduped=invs.filter(iv=>{
+    const s=sig(iv);
+    const n=`${iv.no}|${iv.vendor}|${iv.po_id}`;
+    if(seenSig.has(s)||seenNo.has(n))return false;
+    seenSig.add(s);seenNo.add(n);
+    return true;
+  });
+
+  const removed=before-deduped.length;
+  if(removed>0){
+    setInvV(deduped);
+    showToast(`${removed} invoice duplikat dihapus!`);
+    if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+  } else {
+    showToast('Tidak ada duplikat ditemukan');
+  }
+}
 
 function openRekapVendor(poId,vendorEnc){
   const vname=decodeURIComponent(vendorEnc);

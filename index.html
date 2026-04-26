@@ -160,6 +160,32 @@ input[type=checkbox],input[type=radio]{width:auto}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:99}
 .overlay.show{display:block}
 @media(max-width:720px){.sidebar{transform:translateX(-220px)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.mob-hdr{display:flex}.r2,.r3,.r4{grid-template-columns:1fr}}
+
+/* Mobile styles for detail PO and invoice modals */
+@media(max-width:600px){
+  /* Detail PO - hide table, show cards */
+  .det-tbl-wrap{display:none!important}
+  .det-item-cards{display:block!important}
+  /* Action bar scrollable */
+  #det-act{display:flex;overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;padding-bottom:4px;gap:6px;scrollbar-width:none}
+  #det-act::-webkit-scrollbar{display:none}
+  #det-act .btn{flex-shrink:0;white-space:nowrap}
+  /* Metrics grid 2x2 */
+  .det-metrics-wrap .mg{grid-template-columns:1fr 1fr!important}
+  /* Modal full screen on mobile */
+  .modal-bg{padding:0!important;align-items:flex-end!important}
+  .modal{max-width:100%!important;max-height:95vh!important;border-radius:var(--rl) var(--rl) 0 0!important}
+  .mw{max-width:100%!important}
+  /* Invoice detail - stack header vertically */
+  .inv-det-header{flex-direction:column!important;gap:6px!important}
+  .inv-det-total{text-align:left!important}
+  /* Invoice detail - replace table with rows */
+  .inv-det-tbl{display:none!important}
+  .inv-det-rows{display:block!important}
+  /* Action buttons grid */
+  .inv-det-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
+  .inv-det-actions .btn-full{grid-column:1/-1!important}
+}
 </style>
 </head>
 <body>
@@ -322,7 +348,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- DETAIL PO -->
 <div id="page-detail-po" class="page">
-  <div class="ph" style="position:static">
+  <div class="ph det-metrics-wrap" style="position:static">
     <div><button class="btn bgh bsm" onclick="nav('daftar-po')" style="margin-bottom:3px">← Kembali</button><div class="ph-t" id="det-t"></div><div class="ph-s" id="det-s"></div></div>
     <div class="bg" id="det-act"></div>
   </div>
@@ -902,8 +928,14 @@ const _cache={po:[],invv:[],invd:[],rek:[],master:{dapur:[],vendor:[]},log:[],us
 async function loadAllData(){
   try{
     const snap=await db.collection('sims').doc('data').get();
-    if(snap.exists){const d=snap.data();Object.keys(_cache).forEach(k=>{if(d[k]!==undefined)_cache[k]=d[k];});}
-    // Auto-fix counter: if counter is lower than actual invoices, recalculate from data
+    if(snap.exists){
+      const d=snap.data();
+      // Load known keys
+      Object.keys(_cache).forEach(k=>{if(d[k]!==undefined)_cache[k]=d[k];});
+      // Load dynamic file_ keys
+      Object.keys(d).forEach(k=>{if(k.startsWith('file_'))_cache[k]=d[k];});
+    }
+    // Auto-fix counter from existing data
     const fixCtr=(invArr,key,prefix)=>{
       const maxN=invArr.reduce((mx,iv)=>{
         const m=iv.no?.match(new RegExp(prefix+'(\\d+)'));
@@ -934,7 +966,21 @@ const getReks=()=>_cache.rek;const setReks=d=>{_cache.rek=d;saveData(['rek']);};
 const getInvV=()=>_cache.invv;const setInvV=d=>{_cache.invv=d;saveData(['invv']);};
 const getInvD=()=>_cache.invd;const setInvD=d=>{_cache.invd=d;saveData(['invd']);};
 function nextInvNo(type){const key=type==='v'?'ctr_invv':'ctr_invd';_cache[key]=(_cache[key]||0)+1;saveData([key]);return(type==='v'?'INV-V-':'INV-D-')+String(_cache[key]).padStart(3,'0');}
-const saveFile=(k,v)=>{_cache['file_'+k]=v;saveData(['file_'+k]);};const getFile=k=>_cache['file_'+k]||null;
+// File storage — separate Firestore collection to avoid 1MB main doc limit
+const saveFile=async(key,dataUrl)=>{
+  _cache['file_'+key]=dataUrl;
+  if(_currentUser){
+    try{await db.collection('sims_files').doc(key).set({data:dataUrl});}
+    catch(e){console.error('saveFile:',e);}
+  }
+};
+const getFile=k=>_cache['file_'+k]||null;
+const loadFile=async(key)=>{
+  if(_cache['file_'+key])return _cache['file_'+key];
+  try{const s=await db.collection('sims_files').doc(key).get();if(s.exists){_cache['file_'+key]=s.data().data;return _cache['file_'+key];}}
+  catch(e){console.error('loadFile:',e);}
+  return null;
+};
 function backupData(){
   const data={po:getPOs(),invv:getInvV(),invd:getInvD(),rek:getReks(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,exported:new Date().toISOString(),ver:'5'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
@@ -1535,7 +1581,7 @@ function showDetail(id){
       </div>
     </div>
     <div id="${hariId}" style="overflow:hidden;transition:max-height .25s ease;max-height:2000px">`;
-    itemsHtml+=`<div style="overflow-x:auto;margin-bottom:4px"><table class="tbl"><thead><tr>
+    itemsHtml+=`<div style="overflow-x:auto;margin-bottom:4px" class="det-tbl-wrap"><table class="tbl"><thead><tr>
       <th>Nama</th><th>Kat</th><th>Tipe</th><th>Sat</th><th>Qty</th><th>Hrg PO</th>
       ${spekVisible?'<th style="min-width:130px">Spesifikasi</th>':''}
       <th>Deadline</th><th>Vendor</th><th>Hrg Vendor</th><th>Margin</th>
@@ -1598,7 +1644,52 @@ function showDetail(id){
         </td>
       </tr>`;
     });
-    itemsHtml+='</tbody></table></div></div>';// close table wrap + collapsible section
+    itemsHtml+='</tbody></table></div>';// close table wrap
+
+    // Mobile card view (hidden on desktop, shown on mobile via CSS)
+    itemsHtml+=`<div class="det-item-cards" style="display:none">`;
+    items.forEach(item=>{
+      const idx=item._idx;
+      const ip=(item.qty||0)*(item.harga_po||0);
+      const iv2=item.harga_vendor?(item.qty||0)*(item.harga_vendor||0):null;
+      const im=iv2!==null?ip-iv2:null;
+      const ivObj2=itemInvV[idx];
+      const isPT2=itemPassthrough.has(idx);
+      const allDone2=isPT2?(!!ivObj2&&ivObj2.bayar_status==='lunas'&&item.status_kirim==='diterima'):(!!ivObj2&&ivObj2.bayar_status==='lunas'&&item.status_kirim==='diterima'&&!!itemInvD[idx]&&itemInvD[idx].terima_status==='lunas');
+      const hasWarn2=!allDone2&&((!ivObj2)||(ivObj2&&ivObj2.bayar_status!=='lunas')||(item.deadline&&diffDays(item.deadline)<=0));
+      const statusLabel=allDone2?'✓ Selesai':hasWarn2?'! Perlu aksi':'· Berjalan';
+      const statusColor=allDone2?'var(--ac)':hasWarn2?'var(--wn)':'var(--t3)';
+      const statusBg=allDone2?'var(--abg)':hasWarn2?'var(--wbg)':'var(--s2)';
+      itemsHtml+=`<div style="padding:10px 0;border-bottom:1px solid var(--bd)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
+          <div style="font-weight:500;font-size:13px;flex:1">${item.nama}</div>
+          <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="flex-shrink:0;padding:2px 7px;font-size:10px;border-radius:9px;background:${statusBg};color:${statusColor};border:none;cursor:pointer">${statusLabel}</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--t3);font-family:var(--mn)">${item.qty} ${item.satuan}</span>
+          <span style="font-size:11px;color:var(--in)">${item.tipe_kirim==='fresh'?'Fresh':'Bulk'}</span>
+          ${item.vendor?`<span style="font-size:11px;color:var(--t2)">${item.vendor}</span>`:'<span style="font-size:11px;color:var(--t3)">Belum ada vendor</span>'}
+          ${item.deadline?`<span style="font-size:11px;color:var(--t3);font-family:var(--mn)">Jt: ${item.deadline}</span>`:''}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+          <span style="font-size:11px;color:var(--t2)">PO: ${fmtF(item.harga_po)}${item.harga_vendor?' · Vendor: '+fmtF(item.harga_vendor):''}</span>
+          <span style="font-size:11px;font-family:var(--mn);font-weight:500;color:${im===null?'var(--t3)':im>=0?'var(--ac)':'var(--dn)'}">${im===null?'—':fmtF(im)}</span>
+        </div>
+        <div style="display:flex;gap:5px">
+          <button class="btn bxs bt" onclick="openKirim('${id}',${idx})" style="font-size:11px;padding:4px 8px">Kirim</button>
+          <div class="kbb"><button class="kbb-btn" onclick="openKbb('kbb-mob-${id}-${idx}',event)" style="font-size:11px;padding:4px 8px">⋯</button>
+            <div class="kbb-menu" id="kbb-mob-${id}-${idx}">
+              <button onclick="openItemEdit('${id}',${idx})">Edit</button>
+              <button onclick="openGantiItem('${id}',${idx})">Ganti item</button>
+              <button onclick="showStatPopup(event,'${id}',${idx})">Lihat status</button>
+              <div class="kbb-div"></div>
+              <button class="kd" onclick="hapusItem('${id}',${idx})">Hapus</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    });
+    itemsHtml+=`</div></div>`;// close cards + collapsible section
   });
 
   // Vendor summary
@@ -2148,13 +2239,16 @@ document.addEventListener('click',e=>{
 });
 
 // ===== VIEW NOTA =====
-function viewNota(key,nama){
-  const data=getFile(key);if(!data)return;
+async function viewNota(key,nama){
   document.getElementById('nota-title').textContent='Nota: '+nama;
   const b=document.getElementById('nota-body');
+  b.innerHTML=`<div style="padding:20px;text-align:center;color:var(--t3)">Memuat file...</div>`;
+  openModal('modal-nota');
+  let data=getFile(key);
+  if(!data)data=await loadFile(key);
+  if(!data){b.innerHTML=`<p style="color:var(--dn);padding:10px">File tidak ditemukan.</p>`;return;}
   if(data.startsWith('data:image'))b.innerHTML=`<img src="${data}" style="max-width:100%;max-height:340px;border-radius:var(--r);display:block;margin:0 auto">`;
   else b.innerHTML=`<p style="font-size:13px;color:var(--t2);margin-bottom:9px">File PDF.</p><a href="${data}" target="_blank" class="btn bp bsm">Buka PDF</a>`;
-  openModal('modal-nota');
 }
 
 // ===== INVOICE VENDOR =====
@@ -3293,14 +3387,14 @@ function showInvVDetail(invId){
   const cbTotal=(inv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
   document.getElementById('det-invv-title').textContent='Invoice Vendor: '+inv.no;
   document.getElementById('det-invv-body').innerHTML=`
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r)">
+    <div class="inv-det-header" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r)">
       <div>
         <div style="font-weight:600;font-size:14px">${inv.no} <span class="tag ${inv.bayar_status==='lunas'?'tok':'tno'}" style="margin-left:4px">${inv.bayar_status==='lunas'?'Lunas':'Blm dibayar'}</span>${(inv.edits||[]).length?`<span class="tag twn" style="margin-left:3px">Rev ${inv.edits.length}</span>`:''}</div>
         <div style="font-size:12px;color:var(--t2)">${inv.vendor}${vObj?.cashback?' · Cashback vendor':''}</div>
         <div style="font-size:11px;font-family:var(--mn);color:var(--t3)">${inv.tgl}${inv.jatuh?' · Jt: '+inv.jatuh:''}${inv.created_by?' · <span style="color:var(--t2)">oleh <strong>'+inv.created_by+'</strong></span>':''}</div>
         ${po?`<div style="font-size:11px;color:var(--t2)">PO: ${po.no} — ${po.dapur}</div>`:''}
       </div>
-      <div style="text-align:right">
+      <div class="inv-det-total" style="text-align:right">
         <div style="font-size:18px;font-weight:600;font-family:var(--mn)">${fmtF(inv.total)}</div>
         ${n.ongkir>0?`<div style="font-size:11px;color:var(--dn)">Ongkir: ${fmtF(n.ongkir)}</div>`:''}
         ${n.retur>0?`<div style="font-size:11px;color:var(--dn)">Retur: -${fmtF(n.retur)}</div><div style="font-size:12px">Net: ${fmtF(n.netTotal)}</div>`:''}
@@ -3309,24 +3403,33 @@ function showInvVDetail(invId){
       </div>
     </div>
     <div class="ct">Item dalam invoice</div>
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Hrg vendor</th><th style="text-align:right">Subtotal</th></tr></thead>
+    <div class="inv-det-tbl" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Hrg vendor</th><th style="text-align:right">Subtotal</th></tr></thead>
     <tbody>${(inv.items||[]).map(i=>`<tr><td style="font-weight:500">${i.nama}</td><td class="num">${i.qty}</td><td>${i.satuan||''}</td><td class="num" style="text-align:right">${fmtF(i.harga_vendor||0)}</td><td class="num" style="text-align:right">${fmtF((i.qty||0)*(i.harga_vendor||0))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;padding:8px">Total</td><td class="num" style="text-align:right;font-weight:600;padding:8px">${fmtF(inv.total)}</td></tr></tfoot>
     </table></div>
+    <div class="inv-det-rows" style="display:none">
+      ${(inv.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--bd)">
+        <div><div style="font-weight:500;font-size:13px">${i.nama}</div><div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:1px">${i.qty} ${i.satuan||''} × ${fmtF(i.harga_vendor||0)}</div></div>
+        <div style="font-family:var(--mn);font-size:13px;flex-shrink:0;padding-left:8px">${fmtF((i.qty||0)*(i.harga_vendor||0))}</div>
+      </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:600;font-size:13px">
+        <span>Total</span><span style="font-family:var(--mn)">${fmtF(inv.total)}</span>
+      </div>
+    </div>
     ${(inv.edits||[]).length?`<div class="ct" style="margin-top:12px">Histori revisi harga</div>${inv.edits.map(e=>`<div style="font-size:11px;padding:4px 0;border-bottom:1px solid var(--bd)"><span style="font-family:var(--mn);color:var(--t3)">${e.tgl}</span> — ${e.catatan} <span style="color:var(--wt)">total lama: ${fmtF(e.total_lama)} → ${fmtF(e.total_baru)}</span></div>`).join('')}`:''}
     ${(inv.returs||[]).length?`<div class="ct" style="margin-top:12px">Retur</div>${inv.returs.map(r=>`<div class="pay-row"><span>${r.tgl}: ${r.ket}</span><span class="num r">-${fmtF(r.val)}</span></div>`).join('')}`:''}
     ${(inv.payments||[]).length?`<div class="ct" style="margin-top:12px">Histori pembayaran</div>${inv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · ${getRekNama(p.rek_id)}</span><span class="num r">-${fmtF(p.jumlah)}</span>${p.catatan?`<span style="font-size:10px;color:var(--t3)">${p.catatan}</span>`:''}</div>`).join('')}`:''}
     ${(inv.cashbacks||[]).length?`<div class="ct" style="margin-top:12px">Cashback diterima</div>${inv.cashbacks.map(c=>`<div class="pay-row"><span>${c.tgl} · ${getRekNama(c.rek_id)}</span><span class="num p">+${fmtF(c.jumlah)}</span></div>`).join('')}`:''}
     ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:var(--t2)">Catatan: ${inv.catatan}</div>`:''}
-    <div class="bg" style="margin-top:14px">
-      ${inv.bayar_status!=='lunas'&&!isPassthrough(inv.id)?`<button class="btn bsm bp" onclick="closeModal('modal-det-invv');openBayarInvV('${inv.id}')">Rekam bayar</button>`:inv.bayar_status!=='lunas'?'<span class="tag ttl">Pass-through</span>':''}
+    <div class="inv-det-actions bg" style="margin-top:14px">
+      ${inv.bayar_status!=='lunas'&&!isPassthrough(inv.id)?`<button class="btn bsm bp btn-full" onclick="closeModal('modal-det-invv');openBayarInvV('${inv.id}')">Rekam bayar</button>`:inv.bayar_status!=='lunas'?'<span class="tag ttl btn-full">Pass-through</span>':''}
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openEditInvV('${inv.id}')">Revisi harga</button>
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openRetur('${inv.id}')">+ Retur</button>
       ${!n.ongkir?`<button class="btn bsm" onclick="closeModal('modal-det-invv');openOngkir('${inv.id}')">+ Ongkir</button>`:''}
       ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota('${inv.file_key}','${inv.no}')">📎 Lihat file</button>`:`<button class="btn bsm" onclick="closeModal('modal-det-invv');uploadInvVFile('${inv.id}')">📎 Upload file</button>`}
       <button class="btn bsm" onclick="printInvV('${inv.id}')">🖨 Cetak</button>
-      ${po?`<button class="btn bsm bi" onclick="closeModal('modal-det-invv');showDetail('${po.id}')">Lihat PO</button>`:''}
+      ${po?`<button class="btn bsm bi btn-full" onclick="closeModal('modal-det-invv');showDetail('${po.id}')">Lihat PO →</button>`:''}
     </div>`;
   openModal('modal-det-invv');
 }
@@ -3398,14 +3501,14 @@ function showInvDDetail(invId){
 
   document.getElementById('det-invd-title').textContent='Invoice Dapur: '+inv.no;
   document.getElementById('det-invd-body').innerHTML=`
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r)">
+    <div class="inv-det-header" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--s2);border-radius:var(--r)">
       <div>
         <div style="font-weight:600;font-size:14px">${inv.no} ${inv.type==='passthrough'?'<span class="tag tpu" style="margin-left:3px">Pass-through</span>':''} <span class="tag ${inv.terima_status==='lunas'?'tok':'tno'}" style="margin-left:3px">${inv.terima_status==='lunas'?'Lunas':'Blm diterima'}</span></div>
         <div style="font-size:12px;color:var(--t2)">Kepada: ${inv.dapur}</div>
         <div style="font-size:11px;font-family:var(--mn);color:var(--t3)">${inv.tgl}${inv.jatuh?' · Jt: '+inv.jatuh:''}${inv.created_by?' · <span style="color:var(--t2)">oleh <strong>'+inv.created_by+'</strong></span>':''}</div>
         ${po?`<div style="font-size:11px;color:var(--t2)">PO: ${po.no} — ${po.dapur}</div>`:''}
       </div>
-      <div style="text-align:right">
+      <div class="inv-det-total" style="text-align:right">
         <div style="font-size:18px;font-weight:600;font-family:var(--mn)">${fmtF(inv.total)}</div>
         ${recv>0?`<div style="font-size:11px;color:var(--ac)">Dibayar: +${fmtF(recv)}</div>`:''}
         <div style="font-size:13px" class="${sisa>0?'a':'g'}">Sisa: ${fmtF(sisa)}</div>
@@ -3413,18 +3516,27 @@ function showInvDDetail(invId){
     </div>
     ${inv.type==='passthrough'&&inv.pt_inv_id?`<div style="margin-bottom:10px;padding:8px 10px;background:var(--tbg);border:1px solid var(--tbd);border-radius:var(--r);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px"><span style="font-size:12px;color:var(--tt)">Invoice ini meneruskan pembayaran dari dapur ke vendor.</span><button class="btn bsm bt" onclick="closeModal('modal-det-invd');showInvVDetail('${inv.pt_inv_id}')">Lihat invoice vendor →</button></div>`:''}
     <div class="ct">Item dalam invoice</div>
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Harga ke dapur</th><th style="text-align:right">Subtotal</th></tr></thead>
+    <div class="inv-det-tbl" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Harga ke dapur</th><th style="text-align:right">Subtotal</th></tr></thead>
     <tbody>${items.map(i=>`<tr><td style="font-weight:500">${i.nama}</td><td class="num">${i.qty}</td><td>${i.satuan||''}</td><td class="num" style="text-align:right">${fmtF(i.harga_dapur||0)}</td><td class="num" style="text-align:right">${fmtF((i.qty||0)*(i.harga_dapur||0))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;padding:8px">Total</td><td class="num" style="text-align:right;font-weight:600;padding:8px">${fmtF(inv.total)}</td></tr></tfoot>
     </table></div>
+    <div class="inv-det-rows" style="display:none">
+      ${items.map(i=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--bd)">
+        <div><div style="font-weight:500;font-size:13px">${i.nama}</div><div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:1px">${i.qty} ${i.satuan||''} × ${fmtF(i.harga_dapur||0)}</div></div>
+        <div style="font-family:var(--mn);font-size:13px;flex-shrink:0;padding-left:8px">${fmtF((i.qty||0)*(i.harga_dapur||0))}</div>
+      </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:600;font-size:13px">
+        <span>Total</span><span style="font-family:var(--mn)">${fmtF(inv.total)}</span>
+      </div>
+    </div>
     ${vendorBreakdownHtml}
     ${(inv.payments||[]).length?`<div class="ct" style="margin-top:12px">Histori penerimaan</div>${inv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · ${getRekNama(p.rek_id)}</span><span class="num g">+${fmtF(p.jumlah)}</span>${p.catatan?`<span style="font-size:10px;color:var(--t3)">${p.catatan}</span>`:''}</div>`).join('')}`:''}
     ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:var(--t2)">Catatan: ${inv.catatan}</div>`:''}
-    <div class="bg" style="margin-top:14px">
-      ${inv.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="closeModal('modal-det-invd');openTerima('${inv.id}')">Rekam terima</button>`:''}
-      ${inv.type==='passthrough'&&inv.pt_inv_id?`<button class="btn bsm bt" onclick="closeModal('modal-det-invd');showInvVDetail('${inv.pt_inv_id}')">Lihat invoice vendor</button>`:''}
+    <div class="inv-det-actions bg" style="margin-top:14px">
+      ${inv.terima_status!=='lunas'?`<button class="btn bsm bp btn-full" onclick="closeModal('modal-det-invd');openTerima('${inv.id}')">Rekam terima</button>`:''}
+      ${inv.type==='passthrough'&&inv.pt_inv_id?`<button class="btn bsm bt btn-full" onclick="closeModal('modal-det-invd');showInvVDetail('${inv.pt_inv_id}')">Lihat invoice vendor</button>`:''}
       <button class="btn bsm" onclick="printInvD('${inv.id}')">🖨 Cetak</button>
-      ${po?`<button class="btn bsm bi" onclick="closeModal('modal-det-invd');showDetail('${po.id}')">Lihat PO</button>`:''}
+      ${po?`<button class="btn bsm bi btn-full" onclick="closeModal('modal-det-invd');showDetail('${po.id}')">Lihat PO →</button>`:''}
     </div>`;
   openModal('modal-det-invd');
 }

@@ -916,9 +916,15 @@ async function loadAllData(){
   }catch(e){console.error('Load error:',e);}
 }
 function saveData(keys){
+  // Firebase doesn't accept undefined — strip before saving
+  function stripUndefined(obj){
+    if(Array.isArray(obj))return obj.map(stripUndefined);
+    if(obj&&typeof obj==='object'){const r={};Object.keys(obj).forEach(k=>{if(obj[k]!==undefined)r[k]=stripUndefined(obj[k]);});return r;}
+    return obj;
+  }
   if(!_currentUser)return;
   const payload={};
-  (keys||Object.keys(_cache)).forEach(k=>{if(_cache[k]!==undefined)payload[k]=_cache[k];});
+  (keys||Object.keys(_cache)).forEach(k=>{if(_cache[k]!==undefined)payload[k]=stripUndefined(_cache[k]);});
   db.collection('sims').doc('data').set(payload,{merge:true}).catch(e=>console.error('Save:',e));
 }
 const ST={g:(k,d)=>_cache[k]!==undefined?_cache[k]:d,s:(k,v)=>{_cache[k]=v;saveData([k]);}};
@@ -2270,26 +2276,25 @@ function saveInvV(){
   // All valid — now disable button
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Menyimpan...';}
   // 10 second failsafe
-  const failsafe=setTimeout(()=>{resetBtn();showToast('Timeout — coba lagi',true);},10000);
+  const failsafe=setTimeout(()=>{resetBtn();},10000);
+  try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
   if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0)po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor&&!po.items[i.idx].vendor)po.items[i.idx].vendor=vendor;}});setPOs(pos);}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
-  const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||undefined,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
+  const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
   const done=()=>{
     clearTimeout(failsafe);
     const invs=getInvV();invs.push(inv);setInvV(invs);
-    // Close modal and show success FIRST — always
     closeModal('modal-invv');
     resetBtn();
     showToast('Invoice vendor disimpan!');
     addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
-    // Render silently — errors here don't affect save result
     try{
       if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
     }catch(e){
-      console.error('render after saveInvV error — invoice was saved OK:',e.message,e.stack);
+      console.error('render after saveInvV error:',e.message,e.stack);
     }
   };
   const file=document.getElementById('invv-file').files[0];
@@ -2301,6 +2306,12 @@ function saveInvV(){
   }else done();
   }catch(e){
     console.error('saveInvV error:',e);
+    clearTimeout(failsafe);
+    resetBtn();
+    showToast('Gagal: '+e.message,true);
+  }
+  }catch(e){
+    console.error('saveInvV outer error:',e);
     resetBtn();
   }
 }
@@ -2379,7 +2390,7 @@ function openOngkir(invId){
   if(val===null)return;
   const ongkir=parseFloat(val)||0;
   const invVs=getInvV();const iv=invVs.find(v=>v.id===invId);if(!iv)return;
-  iv.ongkir=ongkir||undefined;
+  iv.ongkir=ongkir||0;
   setInvV(invVs);
   showToast(ongkir?`Ongkir ${fmtF(ongkir)} disimpan — mengurangi margin`:'Ongkir dihapus');
   if(_currentPoId)showDetail(_currentPoId);else renderInvV();

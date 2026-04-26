@@ -334,7 +334,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- DAFTAR PO -->
 <div id="page-daftar-po" class="page">
-  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div>
+  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
   <div class="pc">
     <div class="fbar">
       <input type="text" placeholder="Cari PO / dapur..." id="srch" oninput="renderDaftar()">
@@ -2373,7 +2373,7 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
-  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0)po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor&&!po.items[i.idx].vendor)po.items[i.idx].vendor=vendor;}});setPOs(pos);}
+  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;}}});setPOs(pos);}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
@@ -2642,6 +2642,25 @@ function filterInvDBln(){
 }
 
 // Fix invoice data issues — fill missing tgl, etc
+function fixVendorData(){
+  // Clear vendor from PO items that have no matching invoice vendor
+  const pos=getPOs();const invVs=getInvV();let fixed=0;
+  pos.forEach(po=>{
+    po.items.forEach((item,idx)=>{
+      if(!item.vendor&&!item.harga_vendor)return;
+      // Check if this item actually has an invoice vendor
+      const hasInvV=invVs.some(iv=>iv.po_id===po.id&&(iv.items||[]).some(i=>
+        typeof i.idx==='number'?i.idx===idx:i.nama===item.nama
+      ));
+      if(!hasInvV&&item.vendor){
+        item.vendor='';item.harga_vendor=0;fixed++;
+      }
+    });
+  });
+  if(fixed>0){setPOs(pos);showToast(`${fixed} vendor salah dibersihkan!`);renderDaftar();}
+  else showToast('Tidak ada vendor yang perlu dibersihkan');
+}
+
 function fixInvData(){
   const invVs=getInvV();let fixed=0;
   invVs.forEach(iv=>{

@@ -1450,7 +1450,7 @@ function showDetail(id){
   // Next steps — specific per vendor & item, not abstract
   const vendors=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
   const noVendorItems=po.items.filter(i=>!i.vendor||!i.harga_vendor);
-  const anyInvVUnpaid=invV.filter(iv=>iv.bayar_status!=='lunas');
+  const anyInvVUnpaid=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id));
   const notKirim=po.items.filter(i=>i.status_kirim!=='diterima');
   const hasInvD=invD.length>0;
   const anyInvDUnpaid=invD.filter(d=>d.terima_status!=='lunas');
@@ -2491,7 +2491,7 @@ function filterInvDBln(){
 
 function renderInvV(){
   const invs=getInvV();let bBayar=0,lunas=0,totalAll=0;
-  invs.forEach(iv=>{const n=invVNet(iv);totalAll+=n.netTotal;if(iv.bayar_status==='lunas')lunas+=n.netTotal;else bBayar+=n.sisa;});
+  invs.forEach(iv=>{const n=invVNet(iv);totalAll+=n.netTotal;if(iv.bayar_status==='lunas')lunas+=n.netTotal;else if(!isPassthrough(iv.id))bBayar+=n.sisa;});
   document.getElementById('invv-met').innerHTML=`
     <div class="met"><div class="ml">Total tagihan vendor</div><div class="mv num">${fmt(totalAll)}</div></div>
     <div class="met"><div class="ml">Belum dibayar</div><div class="mv num r">${fmt(bBayar)}</div></div>
@@ -2502,6 +2502,7 @@ function renderInvV(){
   const fK=document.getElementById('f-invv-kirim')?.value||'';
   const fB=document.getElementById('f-invv-bln')?.value||'';
   const fP=document.getElementById('f-invv-po')?.value||'';
+  const pos=getPOs();
   // Populate month filter
   const bSet=new Set(invs.map(v=>v.tgl.substring(0,7)));
   const fBE=document.getElementById('f-invv-bln');const cbv=fBE.value;
@@ -2510,7 +2511,6 @@ function renderInvV(){
   const poSel=document.getElementById('f-invv-po');const curPo=poSel?.value||'';
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  const pos2=getPOs();
 
   // Compute kirim status per invoice using composite key matching
   const getKirimStatus=(iv)=>{
@@ -2547,8 +2547,6 @@ function renderInvV(){
 
   const el=document.getElementById('invv-list');
   if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';return;}
-
-  const pos=pos2;
 
   el.innerHTML=filtered.map(iv=>{
     const n=invVNet(iv);const po=pos.find(p=>p.id===iv.po_id);
@@ -2932,17 +2930,17 @@ function renderInvD(){
     <div class="met"><div class="ml">Sudah diterima</div><div class="mv num g">${fmt(lunas)}</div></div>
     <div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${invs.length}</div></div>`;
   const srch=(document.getElementById('srch-invd')?.value||'').toLowerCase();const fS=document.getElementById('f-invd-stat')?.value||'';const fB=document.getElementById('f-invd-bln')?.value||'';const fP=document.getElementById('f-invd-po')?.value||'';
+  const pos=getPOs();
   const bSet=new Set(invs.map(v=>v.tgl.substring(0,7)));const fBE=document.getElementById('f-invd-bln');const cbv=fBE.value;
   fBE.innerHTML='<option value="">Semua bulan</option>'+[...bSet].sort().reverse().map(b=>`<option value="${b}" ${b===cbv?'selected':''}>${new Date(b+'-01').toLocaleDateString('id-ID',{year:'numeric',month:'long'})}</option>`).join('');
   // PO filter by month
-  const pos=getPOs();const poSel=document.getElementById('f-invd-po');const curPo=poSel?.value||'';
+  const poSel=document.getElementById('f-invd-po');const curPo=poSel?.value||'';
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!iv.tgl.startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>b.tgl.localeCompare(a.tgl));
   const el=document.getElementById('invd-list');if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice ke dapur</div>';return;}
-  const pos2=pos;
   el.innerHTML=filtered.map(iv=>{
-    const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos2.find(p=>p.id===iv.po_id);
+    const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos.find(p=>p.id===iv.po_id);
     return`<div class="inv-card"><div class="inv-hdr">
       <div>
         <span style="font-weight:600;font-size:13px">${iv.no}</span>
@@ -3045,7 +3043,7 @@ function renderDashboard(){
 
   // Cashflow today bar
   const today2=today();
-  const keluarHariIni=invV.filter(iv=>iv.jatuh===today2&&iv.bayar_status!=='lunas').reduce((s,iv)=>s+invVNet(iv).sisa,0);
+  const keluarHariIni=invV.filter(iv=>iv.jatuh===today2&&iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)).reduce((s,iv)=>s+invVNet(iv).sisa,0);
   const masukHariIni=invD.filter(id=>id.jatuh===today2&&id.terima_status!=='lunas').reduce((s,id)=>{const r=(id.payments||[]).reduce((a,p)=>a+p.jumlah,0);return s+id.total-r;},0);
   const cfEl=document.getElementById('cf-today-bar');
   if(keluarHariIni>0||masukHariIni>0){
@@ -3073,7 +3071,7 @@ function renderDashboard(){
     <div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)} ${tipeTag(x.item.tipe_kirim)}</span></div>
     <button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update kirim</button>
   </div>`)});
-  const invVJT=invV.filter(iv=>{if(iv.bayar_status==='lunas')return false;if(!iv.jatuh)return false;return diffDays(iv.jatuh)<=0;});
+  const invVJT=invV.filter(iv=>{if(iv.bayar_status==='lunas')return false;if(isPassthrough(iv.id))return false;if(!iv.jatuh)return false;return diffDays(iv.jatuh)<=0;});
   if(invVJT.length)agendaSections.push({title:'💳 Invoice vendor jatuh tempo ('+invVJT.length+')',items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent">
     <div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>
     ${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}
@@ -3124,12 +3122,12 @@ function renderDashboard(){
   // Metrics
   let ttlM=0,blmBV=0,blmTD=0,blmVnd=0;
   pos.forEach(po=>{const t=poTotals(po);ttlM+=t.margin;blmVnd+=t.total-t.wv;});
-  invV.forEach(iv=>{const n=invVNet(iv);blmBV+=n.sisa;});
+  invV.forEach(iv=>{const n=invVNet(iv);if(iv.bayar_status!=='lunas'&&!isPassthrough(iv.id))blmBV+=n.sisa;});
   invD.forEach(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);blmTD+=id.total-r;});
 
   // Overdue counts
   const tgl=today();
-  const overdueInvV=invV.filter(iv=>iv.bayar_status!=='lunas'&&iv.jatuh&&iv.jatuh<tgl).length;
+  const overdueInvV=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)&&iv.jatuh&&iv.jatuh<tgl).length;
   const overdueInvD=invD.filter(id=>id.terima_status!=='lunas'&&id.jatuh&&id.jatuh<tgl).length;
 
   document.getElementById('dash-met').innerHTML=`

@@ -2382,6 +2382,28 @@ function saveBayarInvV(){
   addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 
+function uploadInvVFile(invId){
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/*,.pdf';
+  input.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const r=new FileReader();
+    r.onload=ev=>{
+      try{
+        const nk='invv_'+invId;
+        saveFile(nk,ev.target.result);
+        const invs=getInvV();const iv=invs.find(v=>v.id===invId);
+        if(iv){iv.file_key=nk;setInvV(invs);}
+        showToast('File berhasil diupload!');
+        if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+      }catch(err){showToast('Gagal upload: '+err.message,true);}
+    };
+    r.onerror=()=>showToast('Gagal baca file',true);
+    r.readAsDataURL(file);
+  };
+  input.click();
+}
+
 function openOngkir(invId){
   const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
   const cur=inv.ongkir||0;
@@ -2669,7 +2691,7 @@ function renderInvV(){
             ${!isPTCB&&(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
             <button onclick="openRetur('${iv.id}')">+ Retur</button>
             <button onclick="openKonversiPT('${iv.id}')">Konversi PT</button>
-            ${iv.file_key?`<button onclick="viewNota('${iv.file_key}','${iv.no}')">📎 Lihat file</button>`:''}
+            ${iv.file_key?`<button onclick="viewNota('${iv.file_key}','${iv.no}')">📎 Lihat file</button>`:`<button onclick="uploadInvVFile('${iv.id}')">📎 Upload file</button>`}
             ${po?`<button onclick="showDetail('${po.id}')">Lihat PO</button>`:''}
             <button onclick="printInvV('${iv.id}')">🖨 Cetak</button>
             <div class="kbb-div"></div>
@@ -3302,7 +3324,7 @@ function showInvVDetail(invId){
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openRetur('${inv.id}')">+ Retur</button>
       ${!n.ongkir?`<button class="btn bsm" onclick="closeModal('modal-det-invv');openOngkir('${inv.id}')">+ Ongkir</button>`:''}
-      ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota('${inv.file_key}','${inv.no}')">📎 Lihat file</button>`:''}
+      ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota('${inv.file_key}','${inv.no}')">📎 Lihat file</button>`:`<button class="btn bsm" onclick="closeModal('modal-det-invv');uploadInvVFile('${inv.id}')">📎 Upload file</button>`}
       <button class="btn bsm" onclick="printInvV('${inv.id}')">🖨 Cetak</button>
       ${po?`<button class="btn bsm bi" onclick="closeModal('modal-det-invv');showDetail('${po.id}')">Lihat PO</button>`:''}
     </div>`;

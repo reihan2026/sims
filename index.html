@@ -1228,18 +1228,20 @@ function renderMerged(items){
   }).join('');
   document.getElementById('prev-tot').textContent=fmtF(tp);
 }
-let _savingPO=false;
 function savePO(){
-  if(_savingPO)return;_savingPO=true;
+  const btn=document.querySelector('button[onclick="savePO()"]');
+  if(btn&&btn.disabled)return;
+  if(btn){btn.disabled=true;btn.textContent='Menyimpan...';}
+  const resetBtn=()=>{if(btn){btn.disabled=false;btn.textContent='Simpan PO';}};
   const no=document.getElementById('in-no').value.trim();const date=document.getElementById('in-date').value;const dapur=document.getElementById('in-dapur').value.trim();
-  if(!no||!date||!dapur){showToast('Isi No. PO, tanggal, dan dapur!',true);_savingPO=false;return;}
+  if(!no||!date||!dapur){showToast('Isi No. PO, tanggal, dan dapur!',true);resetBtn();return;}
   const items=activeTab===0?getManualItems():importedItems;
-  if(!items.length){showToast('Tambah minimal 1 item!',true);_savingPO=false;return;}
+  if(!items.length){showToast('Tambah minimal 1 item!',true);resetBtn();return;}
   autoMaster(dapur,[]);
   const po={id:uid(),no,date,dapur,jenis:document.getElementById('in-jenis')?.value||'bahan_baku',catatan:document.getElementById('in-cat-po').value.trim(),items,revisions:[],created:new Date().toISOString()};
   const pos=getPOs();pos.push(po);setPOs(pos);
   addLog('buat_po','Buat PO','po',po.id,po.no,po.items.length+' item · '+po.dapur);
-  _savingPO=false;
+  resetBtn();
   showToast('PO '+no+' disimpan!');nav('daftar-po');
 }
 
@@ -2249,19 +2251,23 @@ function calcInvVTotal(){
 }
 let _savingInvV=false;
 function saveInvV(){
-  if(_savingInvV)return;// prevent double submit
+  const saveBtn=document.getElementById('invv-save-btn');
+  if(saveBtn&&saveBtn.disabled)return;
+  const resetBtn=()=>{if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Simpan invoice';}};
+  try{
+  // Validate first BEFORE disabling button
   const no=document.getElementById('invv-no').value.trim();const tgl=document.getElementById('invv-tgl').value;const vendor=document.getElementById('invv-vendor').value.trim();const poId=document.getElementById('invv-po').value;
-  if(!no||!vendor||!poId){showToast('Isi no. invoice, vendor, dan PO!',true);_savingInvV=false;return;}
-  if(!tgl){showToast('Isi tanggal invoice!',true);_savingInvV=false;return;}
+  if(!no||!vendor||!poId){showToast('Isi no. invoice, vendor, dan PO!',true);return;}
+  if(!tgl){showToast('Isi tanggal invoice!',true);return;}
   const items=[];document.querySelectorAll('.invv-cb:checked').forEach(cb=>{
     const idx=parseInt(cb.dataset.idx);const hvEl=document.querySelector(`.invv-hv[data-idx="${idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;
     items.push({idx,nama:cb.dataset.nama,qty:parseFloat(cb.dataset.qty),satuan:cb.dataset.sat,harga_vendor:hv});
   });
-  if(!items.length){showToast('Pilih minimal 1 item!',true);_savingInvV=false;return;}
-  _savingInvV=true;
-  const saveBtn=document.getElementById('invv-save-btn');
+  if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
+  // All valid — now disable button
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Menyimpan...';}
-  const resetBtn=()=>{_savingInvV=false;if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Simpan invoice';}};
+  // 10 second failsafe
+  const failsafe=setTimeout(()=>{resetBtn();showToast('Timeout — coba lagi',true);},10000);
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
   if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0)po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor&&!po.items[i.idx].vendor)po.items[i.idx].vendor=vendor;}});setPOs(pos);}
@@ -2269,15 +2275,30 @@ function saveInvV(){
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||undefined,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
   const done=()=>{
-    const invs=getInvV();invs.push(inv);setInvV(invs);
-    closeModal('modal-invv');
-    showToast('Invoice vendor disimpan!');
-    addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
-    resetBtn();
-    if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
+    clearTimeout(failsafe);
+    try{
+      const invs=getInvV();invs.push(inv);setInvV(invs);
+      closeModal('modal-invv');
+      showToast('Invoice vendor disimpan!');
+      addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
+      if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
+    }catch(e){
+      console.error('saveInvV done error:',e);
+      showToast('Tersimpan — coba refresh halaman',true);
+    }finally{resetBtn();}
   };
   const file=document.getElementById('invv-file').files[0];
-  if(file){const nk='invv_'+inv.id;const r=new FileReader();r.onload=e=>{saveFile(nk,e.target.result);inv.file_key=nk;done();};r.readAsDataURL(file);}else done();
+  if(file){
+    const nk='invv_'+inv.id;const r=new FileReader();
+    r.onload=e=>{try{saveFile(nk,e.target.result);inv.file_key=nk;}catch(e2){console.error('file save error:',e2);}done();};
+    r.onerror=()=>{console.error('FileReader error');done();};
+    r.readAsDataURL(file);
+  }else done();
+  }catch(e){
+    console.error('saveInvV error:',e);
+    showToast('Error: '+e.message,true);
+    resetBtn();
+  }
 }
 
 // ===== REVISI INVOICE VENDOR =====
@@ -2848,9 +2869,11 @@ function calcInvDTotal(){
 }
 let _savingInvD=false;
 function saveInvD(){
-  if(_savingInvD)return;_savingInvD=true;
+  const saveInvDBtn=document.querySelector('#modal-invd .btn.bp');
+  if(saveInvDBtn&&saveInvDBtn.disabled)return;
+  // Validate BEFORE disabling
   const no=document.getElementById('invd-no').value.trim();const tgl=document.getElementById('invd-tgl').value;const dapur=document.getElementById('invd-dapur').value.trim();const poId=document.getElementById('invd-po').value;
-  if(!no||!dapur){showToast('Isi no. invoice dan dapur!',true);_savingInvD=false;return;}
+  if(!no||!dapur){showToast('Isi no. invoice dan dapur!',true);return;}
   const isPT=document.querySelector('input[name="invd-type"]:checked').value==='passthrough';
   let items=[];let total=parseFloat(document.getElementById('invd-total').value)||0;let ptId='';
   if(isPT){ptId=document.getElementById('invd-pt-inv').value;}
@@ -2866,7 +2889,7 @@ function saveInvD(){
       const deadline=cb.dataset.deadline||'';
       items.push({nama,qty,satuan,harga_dapur,hari,deadline});
     });
-    if(!items.length){showToast('Pilih minimal 1 item!',true);_savingInvD=false;return;}
+    if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);
   }
   const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,terima_status:'belum',payments:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};

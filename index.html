@@ -2276,16 +2276,18 @@ function saveInvV(){
   autoMaster('',vendor?[vendor]:[]);
   const done=()=>{
     clearTimeout(failsafe);
+    const invs=getInvV();invs.push(inv);setInvV(invs);
+    // Close modal and show success FIRST — always
+    closeModal('modal-invv');
+    resetBtn();
+    showToast('Invoice vendor disimpan!');
+    addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
+    // Render silently — errors here don't affect save result
     try{
-      const invs=getInvV();invs.push(inv);setInvV(invs);
-      closeModal('modal-invv');
-      showToast('Invoice vendor disimpan!');
-      addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
       if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
     }catch(e){
-      console.error('saveInvV done error:',e);
-      showToast('Tersimpan — coba refresh halaman',true);
-    }finally{resetBtn();}
+      console.error('render after saveInvV error — invoice was saved OK:',e.message,e.stack);
+    }
   };
   const file=document.getElementById('invv-file').files[0];
   if(file){
@@ -2296,7 +2298,6 @@ function saveInvV(){
   }else done();
   }catch(e){
     console.error('saveInvV error:',e);
-    showToast('Error: '+e.message,true);
     resetBtn();
   }
 }

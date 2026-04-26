@@ -331,7 +331,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- INVOICE VENDOR -->
 <div id="page-inv-vendor" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm bw" onclick="dedupInvV()" title="Hapus invoice duplikat">🧹 Bersihkan duplikat</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
+  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm bw" onclick="fixInvData()" title="Perbaiki data invoice bermasalah">🔧 Perbaiki data</button><button class="btn bsm bw" onclick="dedupInvV()" title="Hapus invoice duplikat">🧹 Bersihkan duplikat</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor..." id="srch-invv" oninput="renderInvV()">
@@ -2252,6 +2252,7 @@ function saveInvV(){
   if(_savingInvV)return;// prevent double submit
   const no=document.getElementById('invv-no').value.trim();const tgl=document.getElementById('invv-tgl').value;const vendor=document.getElementById('invv-vendor').value.trim();const poId=document.getElementById('invv-po').value;
   if(!no||!vendor||!poId){showToast('Isi no. invoice, vendor, dan PO!',true);_savingInvV=false;return;}
+  if(!tgl){showToast('Isi tanggal invoice!',true);_savingInvV=false;return;}
   const items=[];document.querySelectorAll('.invv-cb:checked').forEach(cb=>{
     const idx=parseInt(cb.dataset.idx);const hvEl=document.querySelector(`.invv-hv[data-idx="${idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;
     items.push({idx,nama:cb.dataset.nama,qty:parseFloat(cb.dataset.qty),satuan:cb.dataset.sat,harga_vendor:hv});
@@ -2489,6 +2490,21 @@ function filterInvDBln(){
   renderInvD();
 }
 
+// Fix invoice data issues — fill missing tgl, etc
+function fixInvData(){
+  const invVs=getInvV();let fixed=0;
+  invVs.forEach(iv=>{
+    if(!iv.tgl||iv.tgl.trim()===''){iv.tgl=iv.created?.split('T')[0]||today();fixed++;}
+    if(!iv.no)iv.no='INV-V-?';
+    if(!iv.vendor)iv.vendor='?';
+    if(!iv.bayar_status)iv.bayar_status='belum';
+    if(!iv.payments)iv.payments=[];
+    if(!iv.items)iv.items=[];
+  });
+  if(fixed>0){setInvV(invVs);showToast(`${fixed} invoice diperbaiki!`);}
+  else showToast('Tidak ada masalah ditemukan');
+  renderInvV();
+}
 function renderInvV(){
   const invs=getInvV();let bBayar=0,lunas=0,totalAll=0;
   invs.forEach(iv=>{const n=invVNet(iv);totalAll+=n.netTotal;if(iv.bayar_status==='lunas')lunas+=n.netTotal;else if(!isPassthrough(iv.id))bBayar+=n.sisa;});
@@ -2503,8 +2519,8 @@ function renderInvV(){
   const fB=document.getElementById('f-invv-bln')?.value||'';
   const fP=document.getElementById('f-invv-po')?.value||'';
   const pos=getPOs();
-  // Populate month filter
-  const bSet=new Set(invs.map(v=>v.tgl.substring(0,7)));
+  // Populate month filter - guard against missing tgl
+  const bSet=new Set(invs.filter(v=>v.tgl&&v.tgl.length>=7).map(v=>v.tgl.substring(0,7)));
   const fBE=document.getElementById('f-invv-bln');const cbv=fBE.value;
   fBE.innerHTML='<option value="">Semua bulan</option>'+[...bSet].sort().reverse().map(b=>`<option value="${b}" ${b===cbv?'selected':''}>${new Date(b+'-01').toLocaleDateString('id-ID',{year:'numeric',month:'long'})}</option>`).join('');
   // Populate PO filter — filtered by selected month
@@ -2543,12 +2559,13 @@ function renderInvV(){
     if(fP&&iv.po_id!==fP)return false;
     if(fK){const ks=getKirimStatus(iv);if(ks!==fK)return false;}
     return true;
-  }).sort((a,b)=>b.tgl.localeCompare(a.tgl));
+  }).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
 
   const el=document.getElementById('invv-list');
   if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';return;}
 
   el.innerHTML=filtered.map(iv=>{
+    try{
     const n=invVNet(iv);const po=pos.find(p=>p.id===iv.po_id);
     const vObj=getVendorObj(iv.vendor);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
 
@@ -2629,6 +2646,7 @@ function renderInvV(){
     ${(iv.edits||[]).length?`<div style="margin-top:4px;padding:4px 8px;background:var(--wbg);border-radius:var(--r);font-size:10px;color:var(--wt)">Revisi: ${iv.edits.map(e=>`${e.tgl} — ${e.catatan}`).join(' · ')}</div>`:''}
     ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num r">-${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
     </div>`;
+    }catch(e){console.error('renderInvV card error:',iv?.id,e);return`<div class="inv-card" style="color:var(--dn);font-size:12px;padding:10px">⚠ Error render invoice ${iv?.no||iv?.id||'?'} — coba hapus dan buat ulang</div>`;}
   }).join('');
 }
 function delInvV(id){
@@ -2931,13 +2949,14 @@ function renderInvD(){
     <div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${invs.length}</div></div>`;
   const srch=(document.getElementById('srch-invd')?.value||'').toLowerCase();const fS=document.getElementById('f-invd-stat')?.value||'';const fB=document.getElementById('f-invd-bln')?.value||'';const fP=document.getElementById('f-invd-po')?.value||'';
   const pos=getPOs();
-  const bSet=new Set(invs.map(v=>v.tgl.substring(0,7)));const fBE=document.getElementById('f-invd-bln');const cbv=fBE.value;
-  fBE.innerHTML='<option value="">Semua bulan</option>'+[...bSet].sort().reverse().map(b=>`<option value="${b}" ${b===cbv?'selected':''}>${new Date(b+'-01').toLocaleDateString('id-ID',{year:'numeric',month:'long'})}</option>`).join('');
+  const bSet=new Set(invs.filter(v=>v.tgl&&v.tgl.length>=7).map(v=>v.tgl.substring(0,7)));
+  const fBE=document.getElementById('f-invd-bln');const cbv=fBE?.value||'';
+  if(fBE)fBE.innerHTML='<option value="">Semua bulan</option>'+[...bSet].sort().reverse().map(b=>`<option value="${b}" ${b===cbv?'selected':''}>${new Date(b+'-01').toLocaleDateString('id-ID',{year:'numeric',month:'long'})}</option>`).join('');
   // PO filter by month
   const poSel=document.getElementById('f-invd-po');const curPo=poSel?.value||'';
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!iv.tgl.startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>b.tgl.localeCompare(a.tgl));
+  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
   const el=document.getElementById('invd-list');if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice ke dapur</div>';return;}
   el.innerHTML=filtered.map(iv=>{
     const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos.find(p=>p.id===iv.po_id);

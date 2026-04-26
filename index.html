@@ -2215,7 +2215,6 @@ function loadInvVItems(){
         <td style="padding:7px 8px">
           <div style="font-weight:500">${item.nama}</div>
           ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
-          ${item.vendor&&item.vendor!==vendor&&vendor?`<div style="font-size:10px;color:var(--in)">Vendor tercatat: ${item.vendor}</div>`:''}
         </td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;text-align:right"><input type="number" class="invv-hv" data-idx="${item._idx}" value="${defaultHarga||''}" placeholder="0" min="0" style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px" oninput="updateInvVHarga(this,${item._idx})"></td>

@@ -117,7 +117,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 .kbb{position:relative;display:inline-block}
 .kbb-btn{padding:3px 8px;font-size:13px;line-height:1;cursor:pointer;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);color:var(--tx)}
 .kbb-btn:hover{background:var(--s2)}
-.kbb-menu{display:none;position:absolute;right:0;top:100%;margin-top:3px;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);z-index:999;min-width:150px;box-shadow:0 4px 12px rgba(0,0,0,.12);padding:3px 0}
+.kbb-menu{display:none;position:fixed;z-index:9999;min-width:160px;max-width:220px;box-shadow:0 4px 16px rgba(0,0,0,.16);padding:3px 0;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r)}
 .kbb-menu.open{display:block}
 .kbb-menu button{display:block;width:100%;text-align:left;padding:6px 12px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--tx);font-family:var(--fn)}
 .kbb-menu button:hover{background:var(--s2)}
@@ -243,6 +243,7 @@ input[type=checkbox],input[type=radio]{width:auto}
       <button class="btn bsm" style="flex:1;font-size:10px" onclick="backupData()">⬇ Backup</button>
       <button class="btn bsm" style="flex:1;font-size:10px" onclick="restoreData()">⬆ Restore</button>
     </div>
+    <div id="save-status" style="font-size:10px;color:var(--t3);font-family:var(--mn);margin-bottom:4px">✓ Tersimpan</div>
     Data tersimpan di cloud · v5
   </div>
 </aside>
@@ -945,27 +946,97 @@ async function loadAllData(){
     };
     fixCtr(_cache.invv,'ctr_invv','INV-V-');
     fixCtr(_cache.invd,'ctr_invd','INV-D-');
+    _rc.invalidate();// rebuild cache with fresh data
   }catch(e){console.error('Load error:',e);}
 }
+// Strip undefined values — Firebase rejects them
+function stripUndefined(obj){
+  if(Array.isArray(obj))return obj.map(stripUndefined);
+  if(obj&&typeof obj==='object'){const r={};Object.keys(obj).forEach(k=>{if(obj[k]!==undefined)r[k]=stripUndefined(obj[k]);});return r;}
+  return obj;
+}
+
+// ===== BATCH FIREBASE WRITE =====
+// Collects all changes within 300ms window, sends as single write
+const _dirty=new Set();
+let _saveTimer=null;
+let _saving=false;
+let _pendingAfterSave=false;
+
 function saveData(keys){
-  // Firebase doesn't accept undefined — strip before saving
-  function stripUndefined(obj){
-    if(Array.isArray(obj))return obj.map(stripUndefined);
-    if(obj&&typeof obj==='object'){const r={};Object.keys(obj).forEach(k=>{if(obj[k]!==undefined)r[k]=stripUndefined(obj[k]);});return r;}
-    return obj;
-  }
   if(!_currentUser)return;
+  // Mark keys as dirty
+  (keys||Object.keys(_cache)).forEach(k=>{
+    if(k.startsWith('file_'))return;// files handled separately
+    _dirty.add(k);
+  });
+  // Debounce: reset timer on each call, fire after 300ms of silence
+  if(_saveTimer)clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(_flushSave,300);
+}
+
+function _setSaveStatus(msg,color){
+  const el=document.getElementById('save-status');
+  if(el){el.textContent=msg;el.style.color=color||'var(--t3)';}
+}
+
+async function _flushSave(){
+  if(!_currentUser||_dirty.size===0)return;
+  if(_saving){_pendingAfterSave=true;return;}
+  _saving=true;
+  _setSaveStatus('⟳ Menyimpan...','var(--wn)');
+  const keysToSave=[..._dirty];
+  _dirty.clear();
+  _saveTimer=null;
   const payload={};
-  (keys||Object.keys(_cache)).forEach(k=>{if(_cache[k]!==undefined)payload[k]=stripUndefined(_cache[k]);});
-  db.collection('sims').doc('data').set(payload,{merge:true}).catch(e=>console.error('Save:',e));
+  keysToSave.forEach(k=>{if(_cache[k]!==undefined)payload[k]=stripUndefined(_cache[k]);});
+  try{
+    await db.collection('sims').doc('data').set(payload,{merge:true});
+    _setSaveStatus('✓ Tersimpan','var(--ac)');
+    setTimeout(()=>_setSaveStatus('✓ Tersimpan','var(--t3)'),2000);
+  }catch(e){
+    console.error('Firebase save error:',e);
+    _setSaveStatus('✕ Gagal simpan','var(--dn)');
+    keysToSave.forEach(k=>_dirty.add(k));
+    if(_saveTimer)clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(_flushSave,2000);
+  }finally{
+    _saving=false;
+    if(_pendingAfterSave){_pendingAfterSave=false;_flushSave();}
+  }
+}
+
+// Force immediate save — call before critical operations
+async function flushNow(){
+  if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
+  if(_dirty.size>0)await _flushSave();
 }
 const ST={g:(k,d)=>_cache[k]!==undefined?_cache[k]:d,s:(k,v)=>{_cache[k]=v;saveData([k]);}};
-const getPOs=()=>_cache.po;const setPOs=d=>{_cache.po=d;saveData(['po']);};
-const getMaster=()=>_cache.master;const setMaster=m=>{_cache.master=m;saveData(['master']);};
-const getReks=()=>_cache.rek;const setReks=d=>{_cache.rek=d;saveData(['rek']);};
-const getInvV=()=>_cache.invv;const setInvV=d=>{_cache.invv=d;saveData(['invv']);};
-const getInvD=()=>_cache.invd;const setInvD=d=>{_cache.invd=d;saveData(['invd']);};
-function nextInvNo(type){const key=type==='v'?'ctr_invv':'ctr_invd';_cache[key]=(_cache[key]||0)+1;saveData([key]);return(type==='v'?'INV-V-':'INV-D-')+String(_cache[key]).padStart(3,'0');}
+const getPOs=()=>_cache.po;
+const setPOs=d=>{_cache.po=d;_rc.invalidate();saveData(['po']);};
+const getMaster=()=>_cache.master;
+const setMaster=m=>{_cache.master=m;saveData(['master']);};
+const getReks=()=>_cache.rek;
+const setReks=d=>{_cache.rek=d;saveData(['rek']);};
+const getInvV=()=>_cache.invv;
+const setInvV=d=>{_cache.invv=d;_rc.invalidate();saveData(['invv']);};
+const getInvD=()=>_cache.invd;
+const setInvD=d=>{_cache.invd=d;_rc.invalidate();saveData(['invd']);};
+
+// Batch setter — update multiple keys at once, single Firebase write
+function setBatch(updates){
+  Object.entries(updates).forEach(([k,v])=>{_cache[k]=v;});
+  // Invalidate if any key affects render cache
+  if(updates.invv||updates.invd||updates.po)_rc.invalidate();
+  saveData(Object.keys(updates));
+}
+
+function nextInvNo(type){
+  const key=type==='v'?'ctr_invv':'ctr_invd';
+  _cache[key]=(_cache[key]||0)+1;
+  saveData([key]);
+  return(type==='v'?'INV-V-':'INV-D-')+String(_cache[key]).padStart(3,'0');
+}
 // File storage — separate Firestore collection to avoid 1MB main doc limit
 const saveFile=async(key,dataUrl)=>{
   _cache['file_'+key]=dataUrl;
@@ -1021,11 +1092,52 @@ function poTotals(po){
       wv++;
     }
   });
-  // Subtract ongkos kirim from all invV for this PO
-  const totalOngkir=getInvV().filter(iv=>iv.po_id===po.id).reduce((s,iv)=>s+(iv.ongkir||0),0);
+  // Use cached ongkir map instead of re-scanning all invV
+  _rc._build();
+  const totalOngkir=_rc._ongkirMap.get(po.id)||0;
   return{tp:tpAll,tv,margin:tp-tv-totalOngkir,tpFilled:tp,wv,total:po.items.length,ongkir:totalOngkir};
 }
-function invVNet(iv){
+
+// ===== RENDER CACHE =====
+// Computed once per render cycle, invalidated on data change
+// Avoids O(n²) re-computation inside loops
+const _rc={
+  _ptSet:null,     // Set of passthrough invV ids
+  _netMap:null,    // Map of invV.id → invVNet result
+  _valid:false,
+
+  invalidate(){this._ptSet=null;this._netMap=null;this._ongkirMap=null;this._valid=false;},
+
+  _build(){
+    if(this._valid)return;
+    const invDs=getInvD();const invVs=getInvV();
+    // Build passthrough set — O(n) once
+    this._ptSet=new Set(invDs.filter(d=>d.type==='passthrough'&&d.pt_inv_id).map(d=>d.pt_inv_id));
+    // Build net map — O(n) once
+    this._netMap=new Map();
+    invVs.forEach(iv=>{
+      const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+      const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
+      const cb=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
+      const ongkir=iv.ongkir||0;
+      const netTotal=Math.max(0,iv.total-retur);
+      this._netMap.set(iv.id,{paid,retur,cb,ongkir,netTotal,sisa:Math.max(0,netTotal-paid)});
+    });
+    // Build ongkir-per-PO map — O(n) once (used by poTotals)
+    this._ongkirMap=new Map();
+    invVs.forEach(iv=>{
+      const cur=this._ongkirMap.get(iv.po_id)||0;
+      this._ongkirMap.set(iv.po_id,cur+(iv.ongkir||0));
+    });
+    this._valid=true;
+  },
+
+  isPassthrough(invVId){this._build();return this._ptSet.has(invVId);},
+  net(iv){this._build();return this._netMap.get(iv.id)||invVNet_compute(iv);}
+};
+
+// Raw compute (fallback, used by _rc internally on cache miss)
+function invVNet_compute(iv){
   const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
   const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
   const cb=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
@@ -1033,10 +1145,10 @@ function invVNet(iv){
   const netTotal=Math.max(0,iv.total-retur);
   return{paid,retur,cb,ongkir,netTotal,sisa:Math.max(0,netTotal-paid)};
 }
-// Returns true if this invV is referenced by a passthrough invD — payment goes dapur→vendor directly
-function isPassthrough(invVId){
-  return getInvD().some(d=>d.type==='passthrough'&&d.pt_inv_id===invVId);
-}
+
+// Public API — these are what the rest of the code calls
+function invVNet(iv){return _rc.net(iv);}
+function isPassthrough(invVId){return _rc.isPassthrough(invVId);}
 function catBadge(cat){return cat?`<span class="cat-badge cat-${cat}">${cat}</span>`:'';}
 function tipeTag(t){return t==='bulk'?'<span class="tag ttl">Bulk</span>':'<span class="tag twn">Fresh</span>';}
 function jenisBadge(j){return j==='operasional'?'<span class="tag tpu" style="font-size:9px">Operasional</span>':'<span class="tag tin" style="font-size:9px">Bahan Baku</span>';}
@@ -1389,7 +1501,16 @@ function itemKey(item){
 
 // ===== DETAIL PO =====
 // Build item→invoice lookup for a PO
+// buildLookup cache — keyed by poId, invalidated with render cache
+const _lookupCache=new Map();
+const _origInvalidate=_rc.invalidate.bind(_rc);
+_rc.invalidate=function(){_origInvalidate();_lookupCache.clear();};
+
+// Invalidate lookup for a specific PO only (faster than full invalidate)
+function invalidatePO(poId){_lookupCache.delete(poId);_rc.invalidate();}
+
 function buildLookup(poId){
+  if(_lookupCache.has(poId))return _lookupCache.get(poId);
   const invV=getInvV().filter(v=>v.po_id===poId);
   const invD=getInvD().filter(d=>d.po_id===poId);
   const po=getPOs().find(p=>p.id===poId);
@@ -1482,26 +1603,25 @@ function buildLookup(poId){
     });
   }
 
-  return{invV,invD,itemInvV,itemInvD,itemPassthrough};
+  const result={invV,invD,itemInvV,itemInvD,itemPassthrough};
+  _lookupCache.set(poId,result);
+  return result;
 }
 
 let _currentPoId=null;
-function showDetail(id){
-  _currentPoId=id;
-  const po=getPOs().find(p=>p.id===id);if(!po)return;
-  const t=poTotals(po);const m=t.margin;
-  const {invV,invD,itemInvV,itemInvD,itemPassthrough}=buildLookup(id);
+// ===== DETAIL PO — split into sub-functions for partial re-render =====
 
-  document.getElementById('det-t').textContent=po.no+' — '+po.dapur;
-  document.getElementById('det-s').innerHTML=po.date+' · '+t.total+' item'+(po.catatan?' · '+po.catatan:'')+' '+jenisBadge(po.jenis);
-  document.getElementById('det-act').innerHTML=`
-    <button class="btn bsm bt" onclick="openNewInvV('${id}')">+ Invoice Vendor</button>
-    <button class="btn bsm bpu" onclick="openNewInvD('${id}')">+ Invoice Dapur</button>
-    <button class="btn bsm bi" onclick="openTambahItem('${id}')">+ Tambah Item</button>
-    <button class="btn bsm" onclick="clonePO('${id}')">Clone PO</button>
-    <button class="btn bsm" onclick="openLaporanPO('${id}')">📄 Laporan</button>`;
+function detMetrics(po,t){
+  const m=t.margin;
+  return`<div class="mg">
+    <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
+    <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${t.wv<t.total?'a':''}">${t.wv>0?fmt(t.tv):'—'}</div><div class="ms">${t.wv}/${t.total} terisi</div></div>
+    <div class="met"><div class="ml">Margin estimasi</div><div class="mv num ${m>=0?'g':'r'}">${t.wv>0?fmt(m):'—'}</div><div class="ms">${t.wv>0&&t.wv<t.total?'dari item terisi saja':t.wv===t.total?'semua item':'—'}</div></div>
+    <div class="met"><div class="ml">Progres kirim</div><div class="mv">${po.items.filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
+  </div>`;
+}
 
-  // Next steps — specific per vendor & item, not abstract
+function detNextSteps(id,po,invV,invD){
   const vendors=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
   const noVendorItems=po.items.filter(i=>!i.vendor||!i.harga_vendor);
   const anyInvVUnpaid=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id));
@@ -1509,71 +1629,44 @@ function showDetail(id){
   const hasInvD=invD.length>0;
   const anyInvDUnpaid=invD.filter(d=>d.terima_status!=='lunas');
 
-  let nextRows=[];
-  // Step 1: items without vendor/harga
-  if(noVendorItems.length)nextRows.push({
-    label:`${noVendorItems.length} item belum ada vendor/harga: ${noVendorItems.slice(0,3).map(i=>i.nama).join(', ')}${noVendorItems.length>3?' +lainnya':''}`,
-    action:`<button class="btn bxs bt" onclick="openNewInvV('${id}')">+ Buat invoice vendor</button>`
-  });
-  // Step 2: vendors without invoice
-  const vendorsNoInv=vendors.filter(v=>!invV.some(iv=>iv.vendor===v));
-  vendorsNoInv.forEach(v=>nextRows.push({
-    label:`Vendor "${v}" belum ada invoice`,
-    action:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${v}')">+ Invoice untuk ${v}</button>`
-  }));
-  // Step 3: unpaid invoices
-  anyInvVUnpaid.forEach(iv=>nextRows.push({
-    label:`${iv.no} (${iv.vendor}) belum dibayar — sisa ${fmtF(invVNet(iv).sisa)}`,
-    action:!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar ${iv.no}</button>`:null
-  }));
-  // Step 4: items not yet shipped
+  let rows=[];
+  if(noVendorItems.length)rows.push({label:`${noVendorItems.length} item belum ada vendor/harga: ${noVendorItems.slice(0,3).map(i=>i.nama).join(', ')}${noVendorItems.length>3?' +lainnya':''}`,action:`<button class="btn bxs bt" onclick="openNewInvV('${id}')">+ Buat invoice vendor</button>`});
+  vendors.filter(v=>!invV.some(iv=>iv.vendor===v)).forEach(v=>rows.push({label:`Vendor "${v}" belum ada invoice`,action:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${v}')">+ Invoice untuk ${v}</button>`}));
+  anyInvVUnpaid.forEach(iv=>rows.push({label:`${iv.no} (${iv.vendor}) belum dibayar — sisa ${fmtF(invVNet(iv).sisa)}`,action:!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar ${iv.no}</button>`:null}));
   if(notKirim.length){
-    const urgentKirim=notKirim.filter(i=>i.deadline&&diffDays(i.deadline)<=0);
-    if(urgentKirim.length)nextRows.push({urgent:true,
-      label:`${urgentKirim.length} item terlambat/deadline hari ini: ${urgentKirim.map(i=>i.nama).join(', ')}`,
-      action:`<button class="btn bxs bt" onclick="document.querySelector('#det-body .tbl')?.scrollIntoView({behavior:'smooth'})">Lihat tabel ↓</button>`
-    });
-    else nextRows.push({
-      label:`${notKirim.length} item belum diterima dapur`,
-      action:`<button class="btn bxs bt" onclick="document.querySelector('#det-body .tbl')?.scrollIntoView({behavior:'smooth'})">Lihat tabel ↓</button>`
-    });
+    const urgent=notKirim.filter(i=>i.deadline&&diffDays(i.deadline)<=0);
+    rows.push(urgent.length
+      ?{urgent:true,label:`${urgent.length} item terlambat/deadline hari ini: ${urgent.map(i=>i.nama).join(', ')}`,action:`<button class="btn bxs bt" onclick="document.querySelector('#det-body .tbl')?.scrollIntoView({behavior:'smooth'})">Lihat tabel ↓</button>`}
+      :{label:`${notKirim.length} item belum diterima dapur`,action:`<button class="btn bxs bt" onclick="document.querySelector('#det-body .tbl')?.scrollIntoView({behavior:'smooth'})">Lihat tabel ↓</button>`});
   }
-  // Step 5: invoice dapur
-  if(!hasInvD)nextRows.push({
-    label:'Belum ada invoice ke dapur',
-    action:`<button class="btn bxs bpu" onclick="openNewInvD('${id}')">+ Invoice dapur</button>`
-  });
-  // Step 6: unpaid dapur
-  anyInvDUnpaid.forEach(d=>nextRows.push({
-    label:`${d.no} ke ${d.dapur} belum diterima — sisa ${fmtF(d.total-(d.payments||[]).reduce((a,p)=>a+p.jumlah,0))}`,
-    action:`<button class="btn bxs bp" onclick="openTerima('${d.id}')">Rekam terima</button>`
-  }));
+  if(!hasInvD)rows.push({label:'Belum ada invoice ke dapur',action:`<button class="btn bxs bpu" onclick="openNewInvD('${id}')">+ Invoice dapur</button>`});
+  anyInvDUnpaid.forEach(d=>rows.push({label:`${d.no} ke ${d.dapur} belum diterima — sisa ${fmtF(d.total-(d.payments||[]).reduce((a,p)=>a+p.jumlah,0))}`,action:`<button class="btn bxs bp" onclick="openTerima('${d.id}')">Rekam terima</button>`}));
 
-  const nextStepsHtml=nextRows.length
-    ?nextRows.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:${s.urgent?'var(--dbg)':'var(--wbg)'};border:1px solid ${s.urgent?'var(--dbd)':'var(--wb)'};border-radius:var(--r);margin-bottom:5px;flex-wrap:wrap;gap:8px">
+  const html=rows.length
+    ?rows.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:${s.urgent?'var(--dbg)':'var(--wbg)'};border:1px solid ${s.urgent?'var(--dbd)':'var(--wb)'};border-radius:var(--r);margin-bottom:5px;flex-wrap:wrap;gap:8px">
       <div style="width:14px;height:14px;border-radius:50%;background:${s.urgent?'var(--dn)':'var(--wn)'};flex-shrink:0;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:8px;font-weight:700">!</span></div>
       <span style="flex:1;font-size:12px;min-width:120px">${s.label}</span>
-      <div>${s.action}</div>
+      <div>${s.action||''}</div>
     </div>`).join('')
     :'<div style="padding:8px 10px;background:var(--abg);border:1px solid var(--ab);border-radius:var(--r);font-size:12px;color:var(--at)">✓ Semua tahap selesai untuk PO ini</div>';
+  return`<div class="card"><div class="ct">Langkah selanjutnya</div>${html}</div>`;
+}
 
-  // Group by hari
-  const byHari={};po.items.forEach((item,idx)=>{const k=item.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push({...item,_idx:idx});});
+function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
   const spekVisible=window._spekVisible!==false;
-
-  let itemsHtml=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
+  const byHari={};po.items.forEach((item,idx)=>{const k=item.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push({...item,_idx:idx});});
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
     <div style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:7px">
       ${statusIcon(true,false)} Selesai &nbsp; ${statusIcon(false,true)} Perlu aksi &nbsp; ${statusIcon(false,false)} Belum
     </div>
     <button class="btn bxs" onclick="window._spekVisible=!window._spekVisible;showDetail('${id}')">${spekVisible?'Hide spek':'Show spek'}</button>
   </div>`;
-
   Object.entries(byHari).forEach(([hari,items])=>{
     const hariId='hari-sec-'+hari.replace(/[^a-z0-9]/gi,'_');
     const dls=items.filter(i=>i.deadline).map(i=>i.deadline).sort();
     const dl=dls[0]||'';const diff=dl?diffDays(dl):null;
     const dlCls=diff===null?'':diff<0?'r':diff===0?'r':diff<=1?'a':'g';
-    itemsHtml+=`<div style="background:var(--s2);padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
+    html+=`<div style="background:var(--s2);padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
       <span style="font-size:12px;font-weight:600;color:var(--t2)">${hari}</span>
       <div style="display:flex;align-items:center;gap:10px">
         ${dl?`<span style="font-size:11px;font-family:var(--mn)" class="${dlCls}">Deadline: ${dl}${diff!==null?' ('+(diff===0?'Hari ini':diff<0?Math.abs(diff)+'h lalu':diff+'h lagi')+')':''}</span>`:''}
@@ -1581,13 +1674,12 @@ function showDetail(id){
       </div>
     </div>
     <div id="${hariId}" style="overflow:hidden;transition:max-height .25s ease;max-height:2000px">`;
-    itemsHtml+=`<div style="overflow-x:auto;margin-bottom:4px" class="det-tbl-wrap"><table class="tbl"><thead><tr>
+    html+=`<div style="overflow-x:auto;margin-bottom:4px" class="det-tbl-wrap"><table class="tbl"><thead><tr>
       <th>Nama</th><th>Kat</th><th>Tipe</th><th>Sat</th><th>Qty</th><th>Hrg PO</th>
       ${spekVisible?'<th style="min-width:130px">Spesifikasi</th>':''}
       <th>Deadline</th><th>Vendor</th><th>Hrg Vendor</th><th>Margin</th>
       <th title="Klik untuk detail status">Status</th><th>Aksi</th>
     </tr></thead><tbody>`;
-
     items.forEach(item=>{
       const idx=item._idx;
       const ip=(item.qty||0)*(item.harga_po||0);
@@ -1596,18 +1688,14 @@ function showDetail(id){
       const mc=im===null?'mzero':im>0?'mpos':'mneg';
       const nk=item.nota_key?getFile(item.nota_key):null;
       const ivObj=itemInvV[idx];const idObj=itemInvD[idx];
-      const isPT=itemPassthrough.has(idx);// pass-through: vendor paid directly by dapur, no invD needed
+      const isPT=itemPassthrough.has(idx);
       const s2w=ivObj&&ivObj.bayar_status!=='lunas';
       const s3=item.status_kirim==='diterima';const s3w=item.status_kirim==='dikirim';
       const s5w=idObj&&idObj.terima_status!=='lunas';
-      const allDone=isPT
-        ?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3)// pass-through: selesai saat vendor lunas + kirim diterima
-        :(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');
-      const hasWarn=!isPT&&(s2w||s5w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0))
-        ||isPT&&(s2w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0));
-
+      const allDone=isPT?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3):(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');
+      const hasWarn=!isPT&&(s2w||s5w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0))||isPT&&(s2w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0));
       const rowStatus=allDone?'done':hasWarn?'todo':'running';
-      itemsHtml+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
+      html+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
         <td style="font-weight:500;min-width:110px">${item.nama}${item.retur?`<br><span style="font-size:9px;color:var(--dn)">Retur: ${fmtF(item.retur.val)}</span>`:''}</td>
         <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${getCats().map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
         <td>${tipeTag(item.tipe_kirim)}</td>
@@ -1620,12 +1708,8 @@ function showDetail(id){
         <td>${item.harga_vendor?`<span class="num">${fmtF(item.harga_vendor)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${item.vendor||''}')">+ Isi via invoice</button>`}</td>
         <td class="${mc}">${im!==null?fmtF(im):'—'}</td>
         <td style="text-align:center">
-          <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" title="Lihat detail status & aksi">
-            ${statusIcon(allDone,hasWarn)}
-          </button>
-          <div style="margin-top:2px">
-            <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="width:auto;height:auto;border-radius:3px;padding:1px 5px;font-size:9px;font-family:var(--mn);color:${allDone?'var(--ac)':hasWarn?'var(--wn)':'var(--t3)'};text-decoration:underline;text-underline-offset:2px">${allDone?'✓ Selesai':hasWarn?'! Perlu aksi':'· Berjalan'}</button>
-          </div>
+          <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" title="Lihat detail status & aksi">${statusIcon(allDone,hasWarn)}</button>
+          <div style="margin-top:2px"><button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="width:auto;height:auto;border-radius:3px;padding:1px 5px;font-size:9px;font-family:var(--mn);color:${allDone?'var(--ac)':hasWarn?'var(--wn)':'var(--t3)'};text-decoration:underline;text-underline-offset:2px">${allDone?'✓ Selesai':hasWarn?'! Perlu aksi':'· Berjalan'}</button></div>
           ${nk?`<div style="margin-top:2px"><span class="tag tin" style="cursor:pointer;font-size:9px" onclick="viewNota('${item.nota_key}','${item.nama}')">📎</span></div>`:''}
         </td>
         <td>
@@ -1644,23 +1728,21 @@ function showDetail(id){
         </td>
       </tr>`;
     });
-    itemsHtml+='</tbody></table></div>';// close table wrap
-
-    // Mobile card view (hidden on desktop, shown on mobile via CSS)
-    itemsHtml+=`<div class="det-item-cards" style="display:none">`;
+    html+='</tbody></table></div>';
+    // Mobile cards
+    html+=`<div class="det-item-cards" style="display:none">`;
     items.forEach(item=>{
       const idx=item._idx;
       const ip=(item.qty||0)*(item.harga_po||0);
       const iv2=item.harga_vendor?(item.qty||0)*(item.harga_vendor||0):null;
       const im=iv2!==null?ip-iv2:null;
-      const ivObj2=itemInvV[idx];
-      const isPT2=itemPassthrough.has(idx);
+      const ivObj2=itemInvV[idx];const isPT2=itemPassthrough.has(idx);
       const allDone2=isPT2?(!!ivObj2&&ivObj2.bayar_status==='lunas'&&item.status_kirim==='diterima'):(!!ivObj2&&ivObj2.bayar_status==='lunas'&&item.status_kirim==='diterima'&&!!itemInvD[idx]&&itemInvD[idx].terima_status==='lunas');
       const hasWarn2=!allDone2&&((!ivObj2)||(ivObj2&&ivObj2.bayar_status!=='lunas')||(item.deadline&&diffDays(item.deadline)<=0));
       const statusLabel=allDone2?'✓ Selesai':hasWarn2?'! Perlu aksi':'· Berjalan';
       const statusColor=allDone2?'var(--ac)':hasWarn2?'var(--wn)':'var(--t3)';
       const statusBg=allDone2?'var(--abg)':hasWarn2?'var(--wbg)':'var(--s2)';
-      itemsHtml+=`<div style="padding:10px 0;border-bottom:1px solid var(--bd)">
+      html+=`<div style="padding:10px 0;border-bottom:1px solid var(--bd)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
           <div style="font-weight:500;font-size:13px;flex:1">${item.nama}</div>
           <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="flex-shrink:0;padding:2px 7px;font-size:10px;border-radius:9px;background:${statusBg};color:${statusColor};border:none;cursor:pointer">${statusLabel}</button>
@@ -1689,19 +1771,21 @@ function showDetail(id){
         </div>
       </div>`;
     });
-    itemsHtml+=`</div></div>`;// close cards + collapsible section
+    html+=`</div></div>`;
   });
+  return html;
+}
 
-  // Vendor summary
+function detVendorSummary(id,po,invV){
   const byVendor={};po.items.forEach((item,idx)=>{const v=item.vendor||'(Belum)';if(!byVendor[v])byVendor[v]=[];byVendor[v].push({...item,_idx:idx});});
-  let vendorHtml='';
+  let html='';
   Object.entries(byVendor).forEach(([vname,vitems])=>{
     const vInvV=invV.filter(iv=>iv.vendor===vname);
     const totalV=vitems.reduce((s,i)=>s+(i.qty||0)*(i.harga_vendor||0),0);
     const totalPO=vitems.reduce((s,i)=>s+(i.qty||0)*(i.harga_po||0),0);
     const margin=totalPO-totalV;const vObj=getVendorObj(vname);
     const allBayar=vInvV.length>0&&vInvV.every(iv=>iv.bayar_status==='lunas');
-    vendorHtml+=`<div class="vblock"><div class="vblock-hdr">
+    html+=`<div class="vblock"><div class="vblock-hdr">
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
         <span style="font-weight:600;font-size:13px">${vname}</span>
         ${vObj?.cashback?'<span class="tag tpu">Cashback</span>':''}
@@ -1715,114 +1799,120 @@ function showDetail(id){
       </div>
     </div></div>`;
   });
+  return`<div class="card"><div class="ct">Ringkasan per vendor</div>${html}</div>`;
+}
 
-  // Invoice vendor section
-  let invVHtml='';
-  if(invV.length){
-    invVHtml='<div class="card"><div class="ct">Invoice Vendor</div>'+invV.map(iv=>{
-      const n=invVNet(iv);const vObj=getVendorObj(iv.vendor);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
-      return`<div class="inv-card"><div class="inv-hdr">
-        <div>
-          <span style="font-weight:600;font-size:13px">${iv.no}</span>
-          <span class="tag ${iv.bayar_status==='lunas'?'tok':'tno'}" style="margin-left:4px">${iv.bayar_status==='lunas'?'Lunas':'Blm dibayar'}</span>
-          ${(vObj?.cashback||hasCashback(iv.vendor))?'<span class="tag tpu" style="margin-left:3px">Cashback</span>':''}
-          <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0">${iv.vendor} · ${iv.tgl}${iv.jatuh?' · Jt: '+iv.jatuh:''}</div>
-          <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
-            <span>Total: <strong class="num">${fmtF(iv.total)}</strong></span>
-            ${n.retur>0?`<span style="color:var(--dn)">Retur: -${fmtF(n.retur)}</span><span>Net: <strong class="num">${fmtF(n.netTotal)}</strong></span>`:''}
-            <span class="${n.sisa>0?'r':'g'}">Sisa: ${fmtF(n.sisa)}</span>
-            ${cbTotal>0?`<span style="color:var(--pu)">CB: +${fmtF(cbTotal)}</span>`:''}
-          </div>
-          <div style="font-size:10px;color:var(--t3);margin-top:3px">Item: ${(iv.items||[]).map(i=>`${i.nama} (${i.qty} ${i.satuan})`).join(', ')}</div>
+function detInvV(id,invV){
+  if(!invV.length)return'';
+  return'<div class="card"><div class="ct">Invoice Vendor</div>'+invV.map(iv=>{
+    const n=invVNet(iv);const vObj=getVendorObj(iv.vendor);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
+    return`<div class="inv-card"><div class="inv-hdr">
+      <div>
+        <span style="font-weight:600;font-size:13px">${iv.no}</span>
+        <span class="tag ${iv.bayar_status==='lunas'?'tok':'tno'}" style="margin-left:4px">${iv.bayar_status==='lunas'?'Lunas':'Blm dibayar'}</span>
+        ${(vObj?.cashback||hasCashback(iv.vendor))?'<span class="tag tpu" style="margin-left:3px">Cashback</span>':''}
+        <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0">${iv.vendor} · ${iv.tgl}${iv.jatuh?' · Jt: '+iv.jatuh:''}</div>
+        <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
+          <span>Total: <strong class="num">${fmtF(iv.total)}</strong></span>
+          ${n.retur>0?`<span style="color:var(--dn)">Retur: -${fmtF(n.retur)}</span><span>Net: <strong class="num">${fmtF(n.netTotal)}</strong></span>`:''}
+          <span class="${n.sisa>0?'r':'g'}">Sisa: ${fmtF(n.sisa)}</span>
+          ${cbTotal>0?`<span style="color:var(--pu)">CB: +${fmtF(cbTotal)}</span>`:''}
         </div>
-        <div class="bg">
-          ${iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)?`<button class="btn bsm bp" onclick="openBayarInvV('${iv.id}')">Rekam bayar</button>`:iv.bayar_status!=='lunas'?'<span class="tag ttl" style="font-size:10px">Pass-through</span>':''}
-          <button class="btn bsm bw" onclick="openEditInvV('${iv.id}')">Revisi harga</button>
-          <button class="btn bsm bw" onclick="openKonversiPT('${iv.id}')">Konversi PT</button>
-          ${(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button class="btn bsm bpu" onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
-          <button class="btn bsm bw" onclick="openRetur('${iv.id}')">+ Retur</button>
-          <button class="btn bsm" onclick="printInvV('${iv.id}')">🖨</button>
-        </div>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px">Item: ${(iv.items||[]).map(i=>`${i.nama} (${i.qty} ${i.satuan})`).join(', ')}</div>
       </div>
-      ${(iv.edits||[]).length?`<div style="margin-top:5px;padding:5px 8px;background:var(--wbg);border-radius:var(--r);font-size:10px;color:var(--wt)">Histori revisi: ${iv.edits.map(e=>`${e.tgl} — ${e.catatan||'Revisi harga'}`).join(' · ')}</div>`:''}
-      ${(iv.returs||[]).length?`<div style="margin-top:4px;padding:5px 8px;background:var(--dbg);border-radius:var(--r)">${iv.returs.map(r=>`<div style="font-size:10px;color:var(--dt)">${r.tgl}: Retur ${fmtF(r.val)} — ${r.ket}</div>`).join('')}</div>`:''}
-      ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num r">-${fmtF(p.jumlah)}</span>${p.catatan?`<span style="color:var(--t3);font-size:10px">${p.catatan}</span>`:''}</div>`).join('')}</div>`:''}
-      ${(iv.cashbacks||[]).length?`<div style="margin-top:4px;padding:4px 8px;background:var(--pbg);border-radius:var(--r)">${iv.cashbacks.map(c=>`<div style="font-size:10px;color:var(--pt)">${c.tgl}: CB ${fmtF(c.jumlah)} — ${getRekNama(c.rek_id)}</div>`).join('')}</div>`:''}
-      </div>`;
-    }).join('')+'</div>';
-  }
-
-  // Invoice dapur section
-  let invDHtml='';
-  if(invD.length){
-    invDHtml='<div class="card"><div class="ct">Invoice ke Dapur</div>'+invD.map(id2=>{
-      const recv=(id2.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=id2.total-recv;
-      return`<div class="inv-card"><div class="inv-hdr">
-        <div>
-          <span style="font-weight:600;font-size:13px">${id2.no}</span>
-          ${id2.type==='passthrough'?'<span class="tag tpu" style="margin-left:3px">Pass-through</span>':''}
-          <span class="tag ${id2.terima_status==='lunas'?'tok':'tno'}" style="margin-left:3px">${id2.terima_status==='lunas'?'Lunas':'Blm diterima'}</span>
-          <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0">${id2.dapur} · ${id2.tgl}${id2.jatuh?' · Jt: '+id2.jatuh:''}</div>
-          <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
-            <span>Total: <strong class="num">${fmtF(id2.total)}</strong></span>
-            <span class="${sisa>0?'a':'g'}">Sisa: ${fmtF(sisa)}</span>
-          </div>
-        </div>
-        <div class="bg">
-          ${id2.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${id2.id}')">Rekam terima</button>`:''}
-          ${id2.type==='passthrough'&&id2.pt_inv_id?`<button class="btn bsm bt" onclick="showInvVDetail('${id2.pt_inv_id}')">Lihat inv vendor</button>`:''}
-          ${id2.type==='passthrough'&&id2.terima_status==='lunas'&&id2.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===id2.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
-            ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();showDetail('${id}');showToast('Invoice vendor diupdate!')">Sync vendor lunas</button>`:''}
-          <button class="btn bsm" onclick="printInvD('${id2.id}')">🖨</button>
-        </div>
+      <div class="bg">
+        ${iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)?`<button class="btn bsm bp" onclick="openBayarInvV('${iv.id}')">Rekam bayar</button>`:iv.bayar_status!=='lunas'?'<span class="tag ttl" style="font-size:10px">Pass-through</span>':''}
+        <button class="btn bsm bw" onclick="openEditInvV('${iv.id}')">Revisi harga</button>
+        <button class="btn bsm bw" onclick="openKonversiPT('${iv.id}')">Konversi PT</button>
+        ${(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button class="btn bsm bpu" onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
+        <button class="btn bsm bw" onclick="openRetur('${iv.id}')">+ Retur</button>
+        <button class="btn bsm" onclick="printInvV('${iv.id}')">🖨</button>
       </div>
-      ${(id2.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${id2.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num g">+${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
-      </div>`;
-    }).join('')+'</div>';
-  }
-
-  // Revisions
-  let revHtml='';
-  if(po.revisions?.length){
-    revHtml='<div class="card"><div class="ct">Histori revisi PO</div>'+po.revisions.map((rev,ri)=>`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><div style="font-size:10px;font-family:var(--mn);color:var(--t3);margin-bottom:2px">Revisi #${ri+1} — ${rev.tgl}</div>${rev.changes.map(c=>`<div style="font-size:12px;margin:1px 0"><strong>${c.nama}</strong>: ${c.qty_lama!==c.qty_baru?`Qty ${c.qty_lama}→${c.qty_baru} `:''}${c.harga_lama!==c.harga_baru?`Hrg ${fmtF(c.harga_lama)}→${fmtF(c.harga_baru)} `:''}${c.alasan?`<span style="color:var(--t3)">(${c.alasan})</span>`:''}</div>`).join('')}</div>`).join('')+'</div>';
-  }
-
-  document.getElementById('det-body').innerHTML=`
-    <div class="mg">
-      <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
-      <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${t.wv<t.total?'a':''}">${t.wv>0?fmt(t.tv):'—'}</div><div class="ms">${t.wv}/${t.total} terisi</div></div>
-      <div class="met"><div class="ml">Margin estimasi</div><div class="mv num ${m>=0?'g':'r'}">${t.wv>0?fmt(m):'—'}</div><div class="ms">${t.wv>0&&t.wv<t.total?'dari item terisi saja':t.wv===t.total?'semua item':'—'}</div></div>
-      <div class="met"><div class="ml">Progres kirim</div><div class="mv">${po.items.filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
     </div>
-    <div class="card"><div class="ct">Langkah selanjutnya</div>${nextStepsHtml}</div>
-    <div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:8px">
-      <div class="ct" style="margin:0">Detail item per hari</div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <select id="det-f-stat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto">
-          <option value="">Semua status</option>
-          <option value="todo">Perlu aksi</option>
-          <option value="done">Selesai</option>
-          <option value="running">Berjalan</option>
-        </select>
-        <select id="det-f-kat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto">
-          <option value="">Semua kategori</option>
-          ${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}
-        </select>
-        <select id="det-f-vendor" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto">
-          <option value="">Semua vendor</option>
-          ${[...new Set(po.items.map(i=>i.vendor).filter(Boolean))].map(v=>`<option value="${v}">${v}</option>`).join('')}
-        </select>
-        <div style="display:flex;align-items:center;gap:5px">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="opacity:.4;flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="det-srch" placeholder="Cari item..." style="font-size:11px;padding:4px 7px;width:130px" oninput="filterDetItems()">
+    ${(iv.edits||[]).length?`<div style="margin-top:5px;padding:5px 8px;background:var(--wbg);border-radius:var(--r);font-size:10px;color:var(--wt)">Histori revisi: ${iv.edits.map(e=>`${e.tgl} — ${e.catatan||'Revisi harga'}`).join(' · ')}</div>`:''}
+    ${(iv.returs||[]).length?`<div style="margin-top:4px;padding:5px 8px;background:var(--dbg);border-radius:var(--r)">${iv.returs.map(r=>`<div style="font-size:10px;color:var(--dt)">${r.tgl}: Retur ${fmtF(r.val)} — ${r.ket}</div>`).join('')}</div>`:''}
+    ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num r">-${fmtF(p.jumlah)}</span>${p.catatan?`<span style="color:var(--t3);font-size:10px">${p.catatan}</span>`:''}</div>`).join('')}</div>`:''}
+    ${(iv.cashbacks||[]).length?`<div style="margin-top:4px;padding:4px 8px;background:var(--pbg);border-radius:var(--r)">${iv.cashbacks.map(c=>`<div style="font-size:10px;color:var(--pt)">${c.tgl}: CB ${fmtF(c.jumlah)} — ${getRekNama(c.rek_id)}</div>`).join('')}</div>`:''}
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function detInvD(id,invD){
+  if(!invD.length)return'';
+  return'<div class="card"><div class="ct">Invoice ke Dapur</div>'+invD.map(id2=>{
+    const recv=(id2.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=id2.total-recv;
+    return`<div class="inv-card"><div class="inv-hdr">
+      <div>
+        <span style="font-weight:600;font-size:13px">${id2.no}</span>
+        ${id2.type==='passthrough'?'<span class="tag tpu" style="margin-left:3px">Pass-through</span>':''}
+        <span class="tag ${id2.terima_status==='lunas'?'tok':'tno'}" style="margin-left:3px">${id2.terima_status==='lunas'?'Lunas':'Blm diterima'}</span>
+        <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0">${id2.dapur} · ${id2.tgl}${id2.jatuh?' · Jt: '+id2.jatuh:''}</div>
+        <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
+          <span>Total: <strong class="num">${fmtF(id2.total)}</strong></span>
+          <span class="${sisa>0?'a':'g'}">Sisa: ${fmtF(sisa)}</span>
         </div>
-        <span id="det-srch-cnt" style="font-size:10px;color:var(--t3);font-family:var(--mn);white-space:nowrap"></span>
       </div>
-    </div>${itemsHtml}</div>
-    <div class="card"><div class="ct">Ringkasan per vendor</div>${vendorHtml}</div>
-    ${invVHtml}${invDHtml}${revHtml}`;
+      <div class="bg">
+        ${id2.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${id2.id}')">Rekam terima</button>`:''}
+        ${id2.type==='passthrough'&&id2.pt_inv_id?`<button class="btn bsm bt" onclick="showInvVDetail('${id2.pt_inv_id}')">Lihat inv vendor</button>`:''}
+        ${id2.type==='passthrough'&&id2.terima_status==='lunas'&&id2.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===id2.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
+          ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();showDetail('${id}');showToast('Invoice vendor diupdate!')">Sync vendor lunas</button>`:''}
+        <button class="btn bsm" onclick="printInvD('${id2.id}')">🖨</button>
+      </div>
+    </div>
+    ${(id2.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${id2.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num g">+${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function detRevisions(po){
+  if(!po.revisions?.length)return'';
+  return'<div class="card"><div class="ct">Histori revisi PO</div>'+po.revisions.map((rev,ri)=>`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><div style="font-size:10px;font-family:var(--mn);color:var(--t3);margin-bottom:2px">Revisi #${ri+1} — ${rev.tgl}</div>${rev.changes.map(c=>`<div style="font-size:12px;margin:1px 0"><strong>${c.nama}</strong>: ${c.qty_lama!==c.qty_baru?`Qty ${c.qty_lama}→${c.qty_baru} `:''}${c.harga_lama!==c.harga_baru?`Hrg ${fmtF(c.harga_lama)}→${fmtF(c.harga_baru)} `:''}${c.alasan?`<span style="color:var(--t3)">(${c.alasan})</span>`:''}</div>`).join('')}</div>`).join('')+'</div>';
+}
+
+function showDetail(id){
+  _currentPoId=id;
+  const po=getPOs().find(p=>p.id===id);if(!po)return;
+  const t=poTotals(po);
+  const {invV,invD,itemInvV,itemInvD,itemPassthrough}=buildLookup(id);
+
+  // Header
+  document.getElementById('det-t').textContent=po.no+' — '+po.dapur;
+  document.getElementById('det-s').innerHTML=po.date+' · '+t.total+' item'+(po.catatan?' · '+po.catatan:'')+' '+jenisBadge(po.jenis);
+  document.getElementById('det-act').innerHTML=`
+    <button class="btn bsm bt" onclick="openNewInvV('${id}')">+ Invoice Vendor</button>
+    <button class="btn bsm bpu" onclick="openNewInvD('${id}')">+ Invoice Dapur</button>
+    <button class="btn bsm bi" onclick="openTambahItem('${id}')">+ Tambah Item</button>
+    <button class="btn bsm" onclick="clonePO('${id}')">Clone PO</button>
+    <button class="btn bsm" onclick="openLaporanPO('${id}')">📄 Laporan</button>`;
+
+  // Filter bar + items section with sub-function calls
+  const filterBar=`<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:8px">
+    <div class="ct" style="margin:0">Detail item per hari</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <select id="det-f-stat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua status</option><option value="todo">Perlu aksi</option><option value="done">Selesai</option><option value="running">Berjalan</option></select>
+      <select id="det-f-kat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua kategori</option>${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+      <select id="det-f-vendor" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua vendor</option>${[...new Set(po.items.map(i=>i.vendor).filter(Boolean))].map(v=>`<option value="${v}">${v}</option>`).join('')}</select>
+      <div style="display:flex;align-items:center;gap:5px">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="opacity:.4;flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="det-srch" placeholder="Cari item..." style="font-size:11px;padding:4px 7px;width:130px" oninput="filterDetItems()">
+      </div>
+      <span id="det-srch-cnt" style="font-size:10px;color:var(--t3);font-family:var(--mn);white-space:nowrap"></span>
+    </div>
+  </div>${detItems(id,po,itemInvV,itemInvD,itemPassthrough)}</div>`;
+
+  document.getElementById('det-body').innerHTML=
+    detMetrics(po,t)+
+    detNextSteps(id,po,invV,invD)+
+    filterBar+
+    detVendorSummary(id,po,invV)+
+    detInvV(id,invV)+
+    detInvD(id,invD)+
+    detRevisions(po);
+
   nav('detail-po');
 }
+
 
 function setItemKat(poId,idx,kat){const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po||!po.items[idx])return;po.items[idx].kat=kat;setPOs(pos);showToast('Kategori disimpan');}
 
@@ -2373,22 +2463,23 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
-  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;}}});setPOs(pos);}
+  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;}}});}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
   const done=()=>{
     clearTimeout(failsafe);
-    const invs=getInvV();invs.push(inv);setInvV(invs);
+    const invs=getInvV();invs.push(inv);
+    // Single batch write: PO + invV + counter in one Firebase round trip
+    setBatch({po:getPOs(),invv:invs,ctr_invv:_cache.ctr_invv});
+    if(poId)invalidatePO(poId);
     closeModal('modal-invv');
     resetBtn();
     showToast('Invoice vendor disimpan!');
     addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
     try{
       if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
-    }catch(e){
-      console.error('render after saveInvV error:',e.message,e.stack);
-    }
+    }catch(e){console.error('render after saveInvV:',e);}
   };
   const file=document.getElementById('invv-file').files[0];
   if(file){
@@ -2445,8 +2536,8 @@ function saveEditInvV(){
   inv.edits.push({tgl:today(),total_lama:oldTotal,total_baru:newTotal,catatan:catRev||'Revisi harga vendor'});
   // Sync harga_vendor back ke PO items
   const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
-  if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=i.harga_vendor;});setPOs(pos);
-  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setInvV(invs);closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=i.harga_vendor;});
+  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setBatch({po:pos,invv:invs});closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 
 // ===== BAYAR INVOICE VENDOR =====
@@ -3042,7 +3133,11 @@ function saveInvD(){
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);
   }
   const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,terima_status:'belum',payments:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
-  const invs=getInvD();invs.push(inv);setInvD(invs);autoMaster(dapur,[]);
+  const invs=getInvD();invs.push(inv);
+  // Batch write invD + counter in one round trip
+  setBatch({invd:invs,ctr_invd:_cache.ctr_invd});
+  if(poId)invalidatePO(poId);
+  autoMaster(dapur,[]);
   addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));_savingInvD=false;closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
 }
 
@@ -3107,7 +3202,8 @@ function saveTerima(){
       if(ivObj){if(!ivObj.cashbacks)ivObj.cashbacks=[];ivObj.cashbacks.push({id:uid(),jumlah:cbJml,tgl,rek_id:cbRekId,catatan:'Cashback setelah dapur bayar'});setInvV(invVs);showToast('Penerimaan & cashback direkam!');}
     } else showToast('Penerimaan direkam!');
   }
-  addLog('terima_invd','Terima dari dapur','invd',inv.id,inv.no,fmtF(jml)+' dari '+inv.dapur);closeModal('modal-terima');if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
+  addLog('terima_invd','Terima dari dapur','invd',inv.id,inv.no,fmtF(jml)+' dari '+inv.dapur);
+  closeModal('modal-terima');if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
 }
 
 // ===== RENDER INVOICE DAPUR =====
@@ -3680,8 +3776,21 @@ function toggleAgendaSec(id){
 }
 function openKbb(id,event){
   event.stopPropagation();
-  document.querySelectorAll('.kbb-menu.open').forEach(m=>{if(m.id!==id)m.classList.remove('open');});
-  document.getElementById(id)?.classList.toggle('open');
+  document.querySelectorAll('.kbb-menu.open').forEach(m=>m.classList.remove('open'));
+  const menu=document.getElementById(id);if(!menu)return;
+  const btn=event.currentTarget;
+  const r=btn.getBoundingClientRect();
+  // Position below the button
+  menu.style.top=(r.bottom+4)+'px';
+  // Default: align right edge of menu to right edge of button
+  const menuW=Math.max(menu.offsetWidth||160,160);
+  let left=r.right-menuW;
+  // Clamp to viewport
+  if(left<8)left=8;
+  if(left+menuW>window.innerWidth-8)left=window.innerWidth-8-menuW;
+  menu.style.left=left+'px';
+  menu.style.right='auto';
+  menu.classList.add('open');
 }
 document.addEventListener('click',()=>document.querySelectorAll('.kbb-menu.open').forEach(m=>m.classList.remove('open')));
 

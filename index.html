@@ -946,6 +946,23 @@ async function loadAllData(){
     };
     fixCtr(_cache.invv,'ctr_invv','INV-V-');
     fixCtr(_cache.invd,'ctr_invd','INV-D-');
+    // Auto-fix invoices stuck in 'belum' despite being fully paid
+    let statusFixed=0;
+    (_cache.invv||[]).forEach(iv=>{
+      if(iv.bayar_status!=='lunas'){
+        const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+        const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
+        const netTotal=Math.max(0,(iv.total||0)-retur);
+        if(paid>=netTotal&&netTotal>0){iv.bayar_status='lunas';statusFixed++;}
+      }
+    });
+    (_cache.invd||[]).forEach(id=>{
+      if(id.terima_status!=='lunas'){
+        const recv=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+        if(recv>=(id.total||0)&&id.total>0){id.terima_status='lunas';statusFixed++;}
+      }
+    });
+    if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
     _rc.invalidate();// rebuild cache with fresh data
   }catch(e){console.error('Load error:',e);}
 }
@@ -2561,7 +2578,11 @@ function saveBayarInvV(){
   const invs=getInvV();const inv=invs.find(v=>v.id===invId);if(!inv)return;
   if(!inv.payments)inv.payments=[];
   inv.payments.push({id:uid(),jumlah:jml,tgl:document.getElementById('bayar-invv-tgl').value,rek_id:rekId,catatan:document.getElementById('bayar-invv-cat').value});
-  const n=invVNet(inv);if(n.paid>=n.netTotal)inv.bayar_status='lunas';
+  // Calculate from updated payments directly — not from cache which is stale
+  const totalPaid=inv.payments.reduce((s,p)=>s+p.jumlah,0);
+  const totalRetur=(inv.returs||[]).reduce((s,r)=>s+r.val,0);
+  const netTotal=Math.max(0,inv.total-totalRetur);
+  if(totalPaid>=netTotal)inv.bayar_status='lunas';
   const cbJml=parseFloat(document.getElementById('bayar-cb-jml').value)||0;
   if(cbJml>0){if(!inv.cashbacks)inv.cashbacks=[];inv.cashbacks.push({id:uid(),jumlah:cbJml,tgl:document.getElementById('bayar-cb-tgl').value,rek_id:rekId,catatan:'Cashback saat bayar'});}
   addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);

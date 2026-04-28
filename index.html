@@ -1096,7 +1096,7 @@ let CATS=getCats();let CAT_OPTS=getCatOpts();
 const today=()=>new Date().toISOString().split('T')[0];
 const uid=()=>'ID'+Date.now()+Math.floor(Math.random()*9999);
 const fmt=n=>{n=Math.round(n||0);if(Math.abs(n)>=1e9)return'Rp '+(n/1e9).toFixed(2)+'M';if(Math.abs(n)>=1e6)return'Rp '+(n/1e6).toFixed(1)+'jt';return'Rp '+n.toLocaleString('id-ID')};
-const fmtF=n=>'Rp '+Math.round(n||0).toLocaleString('id-ID');
+const fmtF=n=>'Rp\u00a0'+Math.round(n||0).toLocaleString('id-ID');
 const diffDays=tgl=>tgl?Math.ceil((new Date(tgl)-new Date(today()))/(864e5)):null;
 
 function poTotals(po){
@@ -4145,12 +4145,12 @@ function printRekapVendor(){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#222;padding:28px 36px}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#222;padding:28px 36px}
       h2{font-size:20px;margin-bottom:16px}
       table{width:100%;border-collapse:collapse}
-      th,td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:middle}
-      th{background:#f5f5f5;font-weight:600;white-space:nowrap}
-      th:first-child,td:first-child{text-align:left}
+      th,td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:middle;white-space:nowrap}
+      th{background:#f5f5f5;font-weight:600}
+      th:first-child,td:first-child{text-align:left;white-space:normal;min-width:120px}
       th:not(:first-child),td:not(:first-child){text-align:right}
       button{display:none!important}
       @media print{body{padding:16px}}
@@ -4441,11 +4441,11 @@ function printLaporan(){
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan PO</title>
     <style>
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#222;padding:28px 36px}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#222;padding:28px 36px}
       table{width:100%;border-collapse:collapse}
-      th,td{padding:4px 8px;border-bottom:1px solid #eee;vertical-align:middle}
-      th{background:#f5f5f5;font-weight:600;white-space:nowrap}
-      th:first-child,td:first-child{text-align:left}
+      th,td{padding:4px 8px;border-bottom:1px solid #eee;vertical-align:middle;white-space:nowrap}
+      th{background:#f5f5f5;font-weight:600}
+      th:first-child,td:first-child{text-align:left;white-space:normal;min-width:120px}
       th:not(:first-child),td:not(:first-child){text-align:right}
       button{display:none!important}
       @media print{body{padding:16px}}

@@ -361,7 +361,7 @@ input[type=checkbox],input[type=radio]{width:auto}
   <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm bw" onclick="fixInvData()" title="Perbaiki data invoice bermasalah">🔧 Perbaiki data</button><button class="btn bsm bw" onclick="dedupInvV()" title="Hapus invoice duplikat">🧹 Bersihkan duplikat</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
-      <input type="text" placeholder="Cari no. invoice / vendor..." id="srch-invv" oninput="renderInvV()">
+      <input type="text" placeholder="Cari no. invoice / vendor / item..." id="srch-invv" oninput="renderInvV()">
       <select id="f-invv-stat" onchange="renderInvV()"><option value="">Semua status bayar</option><option value="belum">Belum dibayar</option><option value="lunas">Lunas</option></select>
       <select id="f-invv-kirim" onchange="renderInvV()"><option value="">Semua status kirim</option><option value="belum">Belum dikirim</option><option value="sebagian">Sebagian dikirim</option><option value="semua">Semua diterima</option></select>
       <select id="f-invv-bln" onchange="filterInvVBln()"><option value="">Semua bulan</option></select>
@@ -376,7 +376,7 @@ input[type=checkbox],input[type=radio]{width:auto}
   <div class="ph"><div><div class="ph-t">Invoice ke Dapur</div><div class="ph-s">Invoice yang kamu kirim ke dapur MBG</div></div><button class="btn bp bsm" onclick="openNewInvD('')">+ Buat Invoice Dapur</button></div>
   <div class="pc"><div class="mg" id="invd-met"></div>
     <div class="fbar">
-      <input type="text" placeholder="Cari no. invoice / dapur..." id="srch-invd" oninput="renderInvD()">
+      <input type="text" placeholder="Cari no. invoice / dapur / item..." id="srch-invd" oninput="renderInvD()">
       <select id="f-invd-stat" onchange="renderInvD()"><option value="">Semua status</option><option value="belum">Belum diterima</option><option value="lunas">Lunas</option></select>
       <select id="f-invd-bln" onchange="filterInvDBln()"><option value="">Semua bulan</option></select>
       <select id="f-invd-po" onchange="renderInvD()"><option value="">Semua PO</option></select>
@@ -2835,7 +2835,7 @@ function renderInvV(){
   };
 
   let filtered=invs.filter(iv=>{
-    if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.vendor.toLowerCase().includes(srch))return false;
+    if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.vendor.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;
     if(fS&&iv.bayar_status!==fS)return false;
     if(fB&&!iv.tgl.startsWith(fB))return false;
     if(fP&&iv.po_id!==fP)return false;
@@ -3245,7 +3245,7 @@ function renderInvD(){
   const poSel=document.getElementById('f-invd-po');const curPo=poSel?.value||'';
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
+  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
   const el=document.getElementById('invd-list');if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice ke dapur</div>';return;}
   el.innerHTML=filtered.map(iv=>{
     const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos.find(p=>p.id===iv.po_id);
@@ -4143,10 +4143,33 @@ function printRekapVendor(){
   const title=document.getElementById('rekap-vendor-title').textContent;
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
-    <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;padding:28px 36px}
-    table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border-bottom:1px solid #eee}th{background:#f5f5f5;text-align:right}th:first-child,td:first-child{text-align:left}
-    @media print{body{padding:16px}}</style>
-  </head><body><h2 style="margin-bottom:16px">${title}</h2>${body}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#222;padding:24px 32px}
+      h2{font-size:18px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;table-layout:fixed}
+      th,td{padding:5px 8px;border:1px solid #ddd;word-wrap:break-word}
+      th{background:#f0f0f0;font-weight:600;text-align:left}
+      /* Column alignment by position */
+      th:nth-child(1),td:nth-child(1){width:35%;text-align:left}
+      th:nth-child(2),td:nth-child(2){width:15%;text-align:right}
+      th:nth-child(3),td:nth-child(3){width:10%;text-align:left}
+      th:nth-child(4),td:nth-child(4){width:15%;text-align:right}
+      th:nth-child(5),td:nth-child(5){width:15%;text-align:right}
+      th:nth-child(6),td:nth-child(6){width:15%;text-align:right}
+      /* Override inline styles in print */
+      .num,.inv-det-tbl td:not(:first-child){text-align:right}
+      /* Section headers */
+      .ct,.sec-label,[style*="text-transform:uppercase"]{font-weight:700;margin:14px 0 6px;font-size:11px;letter-spacing:.06em;color:#666;text-transform:uppercase}
+      /* Cards */
+      [style*="background:var"],[style*="border-radius"]{background:#f9f9f9!important;border:1px solid #e0e0e0!important;border-radius:4px!important;padding:8px!important;margin-bottom:8px!important}
+      /* Hide interactive elements */
+      button,.kbb,.bg{display:none!important}
+      /* Metric cards */
+      [style*="grid-template-columns"]{display:flex!important;gap:16px!important;flex-wrap:wrap!important}
+      @media print{body{padding:12px}@page{margin:1cm}}
+    </style>
+  </head><body><h2>${title}</h2>${body}<script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }
 
@@ -4430,8 +4453,22 @@ function printLaporan(){
   const body=document.getElementById('laporan-body').innerHTML;
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan PO</title>
-    <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;font-size:13px;color:#222;padding:28px 36px}
-    table{width:100%;border-collapse:collapse}th,td{padding:4px 8px}@media print{body{padding:16px}}</style>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#222;padding:24px 32px}
+      table{width:100%;border-collapse:collapse;table-layout:auto}
+      th,td{padding:5px 8px;border:1px solid #ddd}
+      th{background:#f0f0f0;font-weight:600}
+      /* Preserve inline text-align from rendered HTML */
+      [style*="text-align:right"]{text-align:right!important}
+      [style*="text-align:center"]{text-align:center!important}
+      [style*="font-family:monospace"]{font-family:monospace!important}
+      /* Section dividers */
+      [style*="text-transform:uppercase"]{font-weight:700;color:#555;font-size:11px;letter-spacing:.06em}
+      /* Hide buttons */
+      button{display:none!important}
+      @media print{body{padding:12px}@page{margin:1cm;size:A4}}
+    </style>
   </head><body>${body}<script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
 }

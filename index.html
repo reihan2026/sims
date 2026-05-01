@@ -4180,13 +4180,13 @@ function downloadRekapVendorExcel(){
     (iv.items||[]).forEach(i=>{
       const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
       const hpo=poItem?.harga_po||0;
-      const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):'';
-      if(typeof mg==='number')ivMargin+=mg;
-      rows.push([i.nama,i.qty,i.satuan,hpo,i.harga_vendor,mg]);
+      const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):0;
+      ivMargin+=mg;
+      rows.push([i.nama,i.qty,i.satuan,hpo,i.harga_vendor||0,mg]);
     });
-    rows.push(['','','','Total modal',iv.total,'']);
-    rows.push(['','','','Total margin','',ivMargin]);
-    if(n.ongkir)rows.push(['','','','Ongkir','',-n.ongkir]);
+    rows.push(['','','','Total modal',iv.total,0]);
+    rows.push(['','','','Total margin',0,ivMargin]);
+    if(n.ongkir)rows.push(['','','','Ongkir',0,-n.ongkir]);
     totalModal+=iv.total;totalMargin+=ivMargin;totalOngkir+=n.ongkir||0;
     totalCashback+=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
     br();
@@ -4370,68 +4370,6 @@ function renderLaporanHTML(d){
     html+=sec('Detail per Vendor',vendorHtml);
   }
 
-  // Detail item per hari
-  let itemHtml='';
-  Object.entries(byHari).forEach(([hari,items])=>{
-    itemHtml+=`<div style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 5px">${hari}</div>`;
-    itemHtml+=`<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px">
-      <thead><tr style="background:#f5f5f5">
-        <th style="padding:4px 8px;text-align:left">Item</th>
-        <th style="padding:4px 8px;text-align:left">Kat</th>
-        <th style="padding:4px 8px;text-align:right">Qty</th>
-        <th style="padding:4px 8px;text-align:right">Hrg PO</th>
-        <th style="padding:4px 8px;text-align:right">Hrg vendor</th>
-        <th style="padding:4px 8px;text-align:right">Margin/item</th>
-        <th style="padding:4px 8px;text-align:center">Kirim</th>
-        <th style="padding:4px 8px;text-align:left">Vendor</th>
-      </tr></thead>
-      <tbody>${items.map(item=>{
-        const marginItem=item.harga_vendor>0?((item.harga_po-item.harga_vendor)*item.qty):null;
-        const kirimLabel=item.status_kirim==='diterima'?'✓':item.status_kirim==='dikirim'?'→':'○';
-        const kirimColor=item.status_kirim==='diterima'?'#16a34a':item.status_kirim==='dikirim'?'#d97706':'#888';
-        return`<tr style="border-bottom:1px solid #eee">
-          <td style="padding:4px 8px;font-weight:500">${item.nama}${item.deadline?`<div style="font-size:10px;color:#888">Deadline: ${item.deadline}</div>`:''}</td>
-          <td style="padding:4px 8px;color:#666">${item.kat||'—'}</td>
-          <td style="padding:4px 8px;text-align:right;font-family:monospace">${item.qty} ${item.satuan}</td>
-          <td style="padding:4px 8px;text-align:right;font-family:monospace">${fmtF(item.harga_po)}</td>
-          <td style="padding:4px 8px;text-align:right;font-family:monospace">${item.harga_vendor>0?fmtF(item.harga_vendor):'—'}</td>
-          <td style="padding:4px 8px;text-align:right;font-family:monospace;color:${marginItem===null?'#ccc':marginItem>=0?'#16a34a':'#dc2626'}">${marginItem===null?'—':fmtF(marginItem)}</td>
-          <td style="padding:4px 8px;text-align:center;color:${kirimColor}">${kirimLabel}</td>
-          <td style="padding:4px 8px;font-size:11px;color:#666">${item.vendor||'—'}</td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>`;
-  });
-  html+=sec('Detail Item per Hari',itemHtml);
-
-  // Invoice dapur
-  if(invDs.length){
-    let invDHtml=`<table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f5f5f5">
-        <th style="padding:4px 8px;text-align:left">No. Invoice</th>
-        <th style="padding:4px 8px;text-align:left">Dapur</th>
-        <th style="padding:4px 8px;text-align:left">Tipe</th>
-        <th style="padding:4px 8px;text-align:right">Total</th>
-        <th style="padding:4px 8px;text-align:right">Diterima</th>
-        <th style="padding:4px 8px;text-align:right">Sisa</th>
-        <th style="padding:4px 8px;text-align:center">Status</th>
-      </tr></thead><tbody>`;
-    invDs.forEach(d=>{
-      const recv=(d.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-      invDHtml+=`<tr style="border-bottom:1px solid #eee">
-        <td style="padding:4px 8px;font-weight:500">${d.no}</td>
-        <td style="padding:4px 8px">${d.dapur}</td>
-        <td style="padding:4px 8px;color:#666">${d.type==='passthrough'?'Pass-through':'Langsung'}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:monospace">${fmtF(d.total)}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:monospace">${fmtF(recv)}</td>
-        <td style="padding:4px 8px;text-align:right;font-family:monospace;color:${d.total-recv>0?'#dc2626':'#16a34a'}">${fmtF(Math.max(0,d.total-recv))}</td>
-        <td style="padding:4px 8px;text-align:center;color:${d.terima_status==='lunas'?'#16a34a':'#d97706'}">${d.terima_status==='lunas'?'✓ Lunas':'Belum'}</td>
-      </tr>`;
-    });
-    invDHtml+='</tbody></table>';
-    html+=sec('Invoice ke Dapur',invDHtml);
-  }
-
 
   // Margin by item
   const allItems=[];
@@ -4494,6 +4432,28 @@ function renderLaporanHTML(d){
     </tr>`;
   });
   vendorMarginHtml+='</tbody></table>';
+  // Add total row
+  const grandModal=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
+  const grandMargin=Object.entries(vendorMap).reduce((s,[,v])=>{
+    return s+v.invs.flatMap(iv=>(iv.items||[])).reduce((s2,i)=>{
+      const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
+      return poItem&&i.harga_vendor>0?s2+(poItem.harga_po-i.harga_vendor)*(i.qty||0):s2;
+    },0);
+  },0);
+  const grandOngkir=Object.values(vendorMap).reduce((s,v)=>s+(v.ongkir||0),0);
+  const grandCashback=Object.values(vendorMap).reduce((s,v)=>s+(v.cashback||0),0);
+  const grandBersih=grandMargin-grandOngkir+grandCashback;
+  const grandPct=grandModal>0?(grandBersih/grandModal*100).toFixed(1):null;
+  vendorMarginHtml+=`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 8px;border-top:2px solid #222;margin-top:2px;font-weight:600;font-size:13px">
+    <span>Total keseluruhan</span>
+    <div style="display:flex;gap:20px;font-family:monospace">
+      <span style="color:#555">Modal: ${fmtF(grandModal)}</span>
+      <span style="color:${grandMargin>=0?'#16a34a':'#dc2626'}">Margin: ${fmtF(grandMargin)}</span>
+      ${grandOngkir?`<span style="color:#dc2626">Ongkir: -${fmtF(grandOngkir)}</span>`:''}
+      ${grandCashback?`<span style="color:#7c3aed">CB: +${fmtF(grandCashback)}</span>`:''}
+      <span style="color:${grandBersih>=0?'#16a34a':'#dc2626'}">Bersih: ${fmtF(grandBersih)}${grandPct?' ('+grandPct+'%)':''}</span>
+    </div>
+  </div>`;
   html+=sec('Margin per Vendor',vendorMarginHtml);
 
   return html;
@@ -4574,29 +4534,7 @@ function downloadLaporanExcel(){
     br();
   });
 
-  // Item per hari
-  pushH('DETAIL ITEM PER HARI');
-  pushH('Hari','Item','Kategori','Qty','Satuan','Hrg PO','Hrg vendor','Margin/item','Total margin','Status kirim','Vendor','Deadline');
-  Object.entries(byHari).forEach(([hari,items])=>{
-    items.forEach(item=>{
-      const marginUnit=item.harga_vendor>0?item.harga_po-item.harga_vendor:0;
-      const marginTotal=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*item.qty:0;
-      push([hari,item.nama,item.kat||'',item.qty,item.satuan,item.harga_po,item.harga_vendor||0,marginUnit,marginTotal,item.status_kirim,item.vendor||'',item.deadline||'']);
-    });
-  });
-  br();
-
-  // Invoice dapur
-  if(invDs.length){
-    pushH('INVOICE KE DAPUR');
-    pushH('No. Invoice','Dapur','Tipe','Total','Diterima','Sisa','Status');
-    invDs.forEach(d=>{
-      const recv=(d.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-      push([d.no,d.dapur,d.type==='passthrough'?'Pass-through':'Langsung',d.total,recv,Math.max(0,d.total-recv),d.terima_status==='lunas'?'Lunas':'Belum']);
-    });
-  }
-
-  // Build workbook - main sheet
+  // Build workbook - main sheet (ringkasan + detail per vendor)
   const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[{wch:20},{wch:30},{wch:14},{wch:10},{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:12},{wch:16},{wch:12}];
   const wb=XLSX.utils.book_new();
@@ -4618,6 +4556,7 @@ function downloadLaporanExcel(){
 
   // Sheet: Margin per Vendor
   const rowsVendor=[['Vendor','Total modal','Total margin','Ongkir','Cashback','Margin bersih','%']];
+  let gModal=0,gMargin=0,gOngkir=0,gCashback=0;
   Object.entries(vendorMap).forEach(([nama,v])=>{
     const vMargin=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
       const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
@@ -4626,7 +4565,10 @@ function downloadLaporanExcel(){
     const vMB=vMargin-(v.ongkir||0)+(v.cashback||0);
     const pctV=v.total>0?parseFloat((vMB/v.total*100).toFixed(1)):0;
     rowsVendor.push([nama,v.total,vMargin,-(v.ongkir||0),v.cashback||0,vMB,pctV]);
+    gModal+=v.total;gMargin+=vMargin;gOngkir+=v.ongkir||0;gCashback+=v.cashback||0;
   });
+  const gBersih=gMargin-gOngkir+gCashback;
+  rowsVendor.push(['TOTAL',gModal,gMargin,-gOngkir,gCashback,gBersih,gModal>0?parseFloat((gBersih/gModal*100).toFixed(1)):0]);
   const wsVendor=XLSX.utils.aoa_to_sheet(rowsVendor);
   wsVendor['!cols']=[{wch:28},{wch:16},{wch:16},{wch:12},{wch:12},{wch:16},{wch:8}];
   XLSX.utils.book_append_sheet(wb,wsVendor,'Margin per Vendor');

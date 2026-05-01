@@ -1628,12 +1628,14 @@ function buildLookup(poId){
 let _currentPoId=null;
 // ===== DETAIL PO — split into sub-functions for partial re-render =====
 
-function detMetrics(po,t){
+function detMetrics(po,t,invVs){
   const m=t.margin;
+  const totalCB=(invVs||[]).reduce((s,iv)=>(iv.cashbacks||[]).reduce((a,cb)=>a+cb.jumlah,s),0);
+  const mBersih=m+totalCB;
   return`<div class="mg">
     <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
     <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${t.wv<t.total?'a':''}">${t.wv>0?fmt(t.tv):'—'}</div><div class="ms">${t.wv}/${t.total} terisi</div></div>
-    <div class="met"><div class="ml">Margin estimasi</div><div class="mv num ${m>=0?'g':'r'}">${t.wv>0?fmt(m):'—'}</div><div class="ms">${t.wv>0&&t.wv<t.total?'dari item terisi saja':t.wv===t.total?'semua item':'—'}</div></div>
+    <div class="met"><div class="ml">Margin</div><div class="mv num ${mBersih>=0?'g':'r'}">${t.wv>0?fmt(mBersih):'—'}</div><div class="ms">${t.wv>0&&t.wv<t.total?'dari item terisi':'semua item terisi'}</div></div>
     <div class="met"><div class="ml">Progres kirim</div><div class="mv">${po.items.filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
   </div>`;
 }
@@ -1919,7 +1921,7 @@ function showDetail(id){
   </div>${detItems(id,po,itemInvV,itemInvD,itemPassthrough)}</div>`;
 
   document.getElementById('det-body').innerHTML=
-    detMetrics(po,t)+
+    detMetrics(po,t,invV)+
     detNextSteps(id,po,invV,invD)+
     filterBar+
     detVendorSummary(id,po,invV)+
@@ -3687,13 +3689,13 @@ function filterDetItems(){
   let visible=0,total=rows.length;
   rows.forEach(tr=>{
     const nama=tr.dataset.nama||'';
-    const kat=tr.dataset.kat||'';
+    const kat=(tr.dataset.kat||'').toLowerCase();
     const vendor=tr.dataset.vendor||'';
     const stat=tr.dataset.status||'';
     const show=(
-      (!q||nama.includes(q)||tr.textContent.toLowerCase().includes(q))&&
+      (!q||nama.includes(q)||kat.includes(q)||vendor.includes(q))&&
       (!fStat||stat===fStat)&&
-      (!fKat||kat===fKat)&&
+      (!fKat||(tr.dataset.kat||'')===fKat)&&
       (!fVendor||vendor===fVendor.toLowerCase())
     );
     tr.style.display=show?'':'none';
@@ -3704,13 +3706,11 @@ function filterDetItems(){
     const anyVisible=[...tbl.querySelectorAll('tbody tr')].some(r=>r.style.display!=='none');
     const tableWrap=tbl.closest('div[style*="overflow-x"]');
     if(tableWrap)tableWrap.style.display=anyVisible?'':'none';
-    // Find the collapsible section and its header
     const section=tableWrap?.parentElement;
     if(section&&section.id&&section.id.startsWith('hari-sec-')){
       const hdr=section.previousElementSibling;
       if(hdr)hdr.style.display=anyVisible?'':'none';
-      if(!anyVisible)section.style.display='none';
-      else section.style.display='';
+      section.style.display=anyVisible?'':'none';
     }
   });
   const cnt=document.getElementById('det-srch-cnt');
@@ -4432,6 +4432,70 @@ function renderLaporanHTML(d){
     html+=sec('Invoice ke Dapur',invDHtml);
   }
 
+
+  // Margin by item
+  const allItems=[];
+  Object.entries(byHari).forEach(([hari,items])=>items.forEach(item=>{
+    const margin=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*(item.qty||0):null;
+    allItems.push({...item,hari,margin});
+  }));
+  let itemMarginHtml=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:5px 8px;text-align:left">Item</th>
+      <th style="padding:5px 8px;text-align:left">Hari</th>
+      <th style="padding:5px 8px;text-align:right">Qty</th>
+      <th style="padding:5px 8px;text-align:right">Hrg PO</th>
+      <th style="padding:5px 8px;text-align:right">Hrg vendor</th>
+      <th style="padding:5px 8px;text-align:right">Margin</th>
+    </tr></thead><tbody>`;
+  allItems.forEach(item=>{
+    itemMarginHtml+=`<tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:5px 8px;font-weight:500">${item.nama}${item.kat?` <span style="font-size:10px;color:#888">${item.kat}</span>`:''}</td>
+      <td style="padding:5px 8px;color:#666;font-size:11px">${item.hari||'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.qty} ${item.satuan}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${fmtF(item.harga_po)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.harga_vendor?fmtF(item.harga_vendor):'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${item.margin===null?'#ccc':item.margin>=0?'#16a34a':'#dc2626'}">${item.margin===null?'—':fmtF(item.margin)}</td>
+    </tr>`;
+  });
+  const totalItemMargin=allItems.reduce((s,i)=>s+(i.margin||0),0);
+  itemMarginHtml+=`<tr style="border-top:2px solid #222;font-weight:600">
+    <td colspan="5" style="padding:6px 8px;text-align:right">Total margin</td>
+    <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${totalItemMargin>=0?'#16a34a':'#dc2626'}">${fmtF(totalItemMargin)}</td>
+  </tr></tbody></table>`;
+  html+=sec('Margin per Item',itemMarginHtml);
+
+  // Margin by vendor
+  let vendorMarginHtml=`<table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#f5f5f5">
+      <th style="padding:5px 8px;text-align:left">Vendor</th>
+      <th style="padding:5px 8px;text-align:right">Total modal</th>
+      <th style="padding:5px 8px;text-align:right">Total margin</th>
+      <th style="padding:5px 8px;text-align:right">Ongkir</th>
+      <th style="padding:5px 8px;text-align:right">Cashback</th>
+      <th style="padding:5px 8px;text-align:right">Margin bersih</th>
+      <th style="padding:5px 8px;text-align:right">%</th>
+    </tr></thead><tbody>`;
+  Object.entries(vendorMap).forEach(([nama,v])=>{
+    const vMargin=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
+      const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
+      return poItem&&i.harga_vendor>0?s+(poItem.harga_po-i.harga_vendor)*(i.qty||0):s;
+    },0);
+    const vMarginBersih=vMargin-(v.ongkir||0)+(v.cashback||0);
+    const pctV=v.total>0?(vMarginBersih/v.total*100).toFixed(1):null;
+    vendorMarginHtml+=`<tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:5px 8px;font-weight:500">${nama}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${fmtF(v.total)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;color:${vMargin>=0?'#16a34a':'#dc2626'}">${fmtF(vMargin)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;color:#dc2626">${v.ongkir?'-'+fmtF(v.ongkir):'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;color:#7c3aed">${v.cashback?'+'+fmtF(v.cashback):'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${vMarginBersih>=0?'#16a34a':'#dc2626'}">${fmtF(vMarginBersih)}</td>
+      <td style="padding:5px 8px;text-align:right;color:#666">${pctV?pctV+'%':'—'}</td>
+    </tr>`;
+  });
+  vendorMarginHtml+='</tbody></table>';
+  html+=sec('Margin per Vendor',vendorMarginHtml);
+
   return html;
 }
 
@@ -4460,7 +4524,7 @@ function downloadLaporanExcel(){
   const marginBersih=t.margin+totalCashback;
   const rows=[];
   const push=(...cols)=>rows.push(cols);
-  const pushH=(...cols)=>rows.push(cols.map(c=>({v:c,s:{font:{bold:true},fill:{fgColor:{rgb:'E5E7EB'}}}})));
+  const pushH=(...cols)=>rows.push(cols);// plain headers, styling causes Excel corruption
   const br=()=>rows.push([]);
 
   // Header
@@ -4476,7 +4540,7 @@ function downloadLaporanExcel(){
   push(['Total modal vendor',t.tv||0]);
   if(totalOngkir)push(['Total ongkos kirim',-totalOngkir]);
   if(totalCashback)push(['Total cashback diterima',totalCashback]);
-  push(['Estimasi margin bersih',marginBersih]);
+  push(['Margin bersih',marginBersih]);
   push(['Total invoice ke dapur',totalInvD]);
   push(['Sudah diterima dari dapur',totalTerima]);
   br();
@@ -4531,12 +4595,41 @@ function downloadLaporanExcel(){
     });
   }
 
-  // Build workbook
-  const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(c=>typeof c==='object'&&c.v!==undefined?c.v:c)));
-  // Column widths
+  // Build workbook - main sheet
+  const ws=XLSX.utils.aoa_to_sheet(rows);
   ws['!cols']=[{wch:20},{wch:30},{wch:14},{wch:10},{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:12},{wch:16},{wch:12}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Laporan PO');
+
+  // Sheet: Margin per Item
+  const rowsItem=[['Item','Kategori','Hari','Qty','Satuan','Hrg PO','Hrg vendor','Margin']];
+  Object.entries(byHari).forEach(([hari,items])=>{
+    items.forEach(item=>{
+      const m=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*(item.qty||0):'';
+      rowsItem.push([item.nama,item.kat||'',hari,item.qty,item.satuan,item.harga_po,item.harga_vendor||0,m]);
+    });
+  });
+  const totalIM=rowsItem.slice(1).reduce((s,r)=>s+(typeof r[7]==='number'?r[7]:0),0);
+  rowsItem.push(['','','','','','','Total margin',totalIM]);
+  const wsItem=XLSX.utils.aoa_to_sheet(rowsItem);
+  wsItem['!cols']=[{wch:28},{wch:12},{wch:16},{wch:8},{wch:8},{wch:14},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,wsItem,'Margin per Item');
+
+  // Sheet: Margin per Vendor
+  const rowsVendor=[['Vendor','Total modal','Total margin','Ongkir','Cashback','Margin bersih','%']];
+  Object.entries(vendorMap).forEach(([nama,v])=>{
+    const vMargin=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
+      const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
+      return poItem&&i.harga_vendor>0?s+(poItem.harga_po-i.harga_vendor)*(i.qty||0):s;
+    },0);
+    const vMB=vMargin-(v.ongkir||0)+(v.cashback||0);
+    const pctV=v.total>0?parseFloat((vMB/v.total*100).toFixed(1)):0;
+    rowsVendor.push([nama,v.total,vMargin,-(v.ongkir||0),v.cashback||0,vMB,pctV]);
+  });
+  const wsVendor=XLSX.utils.aoa_to_sheet(rowsVendor);
+  wsVendor['!cols']=[{wch:28},{wch:16},{wch:16},{wch:12},{wch:12},{wch:16},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,wsVendor,'Margin per Vendor');
+
   XLSX.writeFile(wb,`Laporan-${po.no.replace(/[^a-z0-9]/gi,'_')}.xlsx`);
   showToast('File Excel berhasil didownload!');
 }

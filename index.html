@@ -4199,7 +4199,8 @@ function downloadRekapVendorExcel(){
   if(totalCashback)rows.push(['Cashback',totalCashback]);
   rows.push(['Margin bersih',totalMargin-totalOngkir+totalCashback]);
 
-  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const safe2=v=>{if(v===null||v===undefined)return '';if(typeof v==='number')return v;return String(v).replace(/^[=+\-@\t\r]/,'');};
+  const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(safe2)));
   ws['!cols']=[{wch:28},{wch:8},{wch:8},{wch:14},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Rekap Vendor');
@@ -4534,8 +4535,10 @@ function downloadLaporanExcel(){
     br();
   });
 
-  // Build workbook - main sheet (ringkasan + detail per vendor)
-  const ws=XLSX.utils.aoa_to_sheet(rows);
+  // Sanitize: strip formula prefix chars that cause Excel to treat cells as formulas
+  const safe=v=>{if(v===null||v===undefined)return '';if(typeof v==='number')return v;return String(v).replace(/^[=+\-@\t\r]/,'');};
+  const safeRows=rows.map(r=>r.map(safe));
+  const ws=XLSX.utils.aoa_to_sheet(safeRows);
   ws['!cols']=[{wch:20},{wch:30},{wch:14},{wch:10},{wch:10},{wch:14},{wch:14},{wch:14},{wch:14},{wch:12},{wch:16},{wch:12}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Laporan PO');
@@ -4550,7 +4553,7 @@ function downloadLaporanExcel(){
   });
   const totalIM=rowsItem.slice(1).reduce((s,r)=>s+(typeof r[7]==='number'?r[7]:0),0);
   rowsItem.push(['','','','','','','Total margin',totalIM]);
-  const wsItem=XLSX.utils.aoa_to_sheet(rowsItem);
+  const wsItem=XLSX.utils.aoa_to_sheet(rowsItem.map(r=>r.map(safe)));
   wsItem['!cols']=[{wch:28},{wch:12},{wch:16},{wch:8},{wch:8},{wch:14},{wch:14},{wch:14}];
   XLSX.utils.book_append_sheet(wb,wsItem,'Margin per Item');
 
@@ -4569,7 +4572,7 @@ function downloadLaporanExcel(){
   });
   const gBersih=gMargin-gOngkir+gCashback;
   rowsVendor.push(['TOTAL',gModal,gMargin,-gOngkir,gCashback,gBersih,gModal>0?parseFloat((gBersih/gModal*100).toFixed(1)):0]);
-  const wsVendor=XLSX.utils.aoa_to_sheet(rowsVendor);
+  const wsVendor=XLSX.utils.aoa_to_sheet(rowsVendor.map(r=>r.map(safe)));
   wsVendor['!cols']=[{wch:28},{wch:16},{wch:16},{wch:12},{wch:12},{wch:16},{wch:8}];
   XLSX.utils.book_append_sheet(wb,wsVendor,'Margin per Vendor');
 

@@ -4558,19 +4558,19 @@ function downloadLaporanExcel(){
     v.invs.flatMap(iv=>(iv.items||[])).forEach(i=>{
       const poItem=d.po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
       const hpo=poItem?.harga_po||0;
-      const marginTotal=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):'';
-      push([i.nama,i.qty,i.satuan,hpo,i.harga_vendor,marginTotal]);
+      const marginTotal=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):0;
+      push([i.nama,i.qty,i.satuan,hpo,i.harga_vendor||0,marginTotal]);
     });
     const vendorMarginExcel=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
       const poItem=d.po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
       const hpo=poItem?.harga_po||0;
       return hpo&&i.harga_vendor>0?s+(hpo-i.harga_vendor)*(i.qty||0):s;
     },0);
-    push(['','','','Total modal vendor',v.total,'']);
-    push(['','','','Total margin','',vendorMarginExcel]);
-    if(v.ongkir)push(['','','','Ongkos kirim','',-v.ongkir]);
-    if(v.cashback)push(['','','','Cashback','',v.cashback]);
-    if(v.ongkir||v.cashback)push(['','','','Margin bersih','',vendorMarginExcel-v.ongkir+v.cashback]);
+    push(['','','','Total modal vendor',v.total,0]);
+    push(['','','','Total margin',0,vendorMarginExcel]);
+    if(v.ongkir)push(['','','','Ongkos kirim',0,-v.ongkir]);
+    if(v.cashback)push(['','','','Cashback',0,v.cashback]);
+    if(v.ongkir||v.cashback)push(['','','','Margin bersih',0,vendorMarginExcel-v.ongkir+v.cashback]);
     br();
   });
 
@@ -4579,8 +4579,9 @@ function downloadLaporanExcel(){
   pushH('Hari','Item','Kategori','Qty','Satuan','Hrg PO','Hrg vendor','Margin/item','Total margin','Status kirim','Vendor','Deadline');
   Object.entries(byHari).forEach(([hari,items])=>{
     items.forEach(item=>{
-      const m=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*item.qty:null;
-      push([hari,item.nama,item.kat||'',item.qty,item.satuan,item.harga_po,item.harga_vendor||0,item.harga_vendor>0?item.harga_po-item.harga_vendor:'',m??'',item.status_kirim,item.vendor||'',item.deadline||'']);
+      const marginUnit=item.harga_vendor>0?item.harga_po-item.harga_vendor:0;
+      const marginTotal=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*item.qty:0;
+      push([hari,item.nama,item.kat||'',item.qty,item.satuan,item.harga_po,item.harga_vendor||0,marginUnit,marginTotal,item.status_kirim,item.vendor||'',item.deadline||'']);
     });
   });
   br();

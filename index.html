@@ -1130,7 +1130,17 @@ const today=()=>new Date().toISOString().split('T')[0];
 const uid=()=>'ID'+Date.now()+Math.floor(Math.random()*9999);
 const fmt=n=>{n=Math.round(n||0);if(Math.abs(n)>=1e9)return'Rp '+(n/1e9).toFixed(2)+'M';if(Math.abs(n)>=1e6)return'Rp '+(n/1e6).toFixed(1)+'jt';return'Rp '+n.toLocaleString('id-ID')};
 const fmtF=n=>'Rp\u00a0'+Math.round(n||0).toLocaleString('id-ID');
-const diffDays=tgl=>tgl?Math.ceil((new Date(tgl)-new Date(today()))/(864e5)):null;
+const _BULAN={'Januari':1,'Februari':2,'Maret':3,'April':4,'Mei':5,'Juni':6,'Juli':7,'Agustus':8,'September':9,'Oktober':10,'November':11,'Desember':12};
+function parseDeadline(tgl){
+  if(!tgl)return null;
+  // Already YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(tgl))return tgl;
+  // Format: "Senin, 3 Mei 2026" or "3 Mei 2026"
+  const m=tgl.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if(m){const bln=_BULAN[m[2]];if(bln)return m[3]+'-'+String(bln).padStart(2,'0')+'-'+m[1].padStart(2,'0');}
+  return null;
+}
+const diffDays=tgl=>{const p=parseDeadline(tgl);return p?Math.ceil((new Date(p)-new Date(today()))/(864e5)):null;};
 
 function poTotals(po){
   let tp=0,tv=0,tpAll=0,wv=0;
@@ -1725,7 +1735,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <span id="${hariId}-arrow" style="font-size:11px;color:var(--t3)">▲</span>
       </div>
     </div>
-    <div id="${hariId}" style="overflow:hidden;transition:max-height .25s ease;max-height:2000px">`;
+    <div id="${hariId}" style="overflow:hidden;transition:max-height .35s ease;max-height:99999px">`;
     html+=`<div style="overflow-x:auto;margin-bottom:4px" class="det-tbl-wrap"><table class="tbl"><thead><tr>
       <th>Nama</th><th>Kat</th><th>Tipe</th><th>Sat</th><th>Qty</th><th>Hrg PO</th>
       ${spekVisible?'<th style="min-width:130px">Spesifikasi</th>':''}
@@ -3880,7 +3890,7 @@ function toggleHariSec(id){
   const body=document.getElementById(id);const arrow=document.getElementById(id+'-arrow');
   if(!body)return;
   const isCollapsed=body.style.maxHeight==='0px';
-  body.style.maxHeight=isCollapsed?'2000px':'0px';
+  body.style.maxHeight=isCollapsed?body.scrollHeight+200+'px':'0px';
   if(arrow)arrow.textContent=isCollapsed?'▲':'▼';
 }
 

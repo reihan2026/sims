@@ -76,6 +76,14 @@ input[type=checkbox],input[type=radio]{width:auto}
 .tbl tr:last-child td{border-bottom:none}.tbl tr:hover td{background:var(--bg)}
 .divider{height:1px;background:var(--bd);margin:11px 0}
 .empty{text-align:center;padding:22px 16px;color:var(--t3);font-size:12px}
+.invv-edit-panel{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin:4px 0 6px;font-size:12px;display:none}
+.invv-edit-panel.open{display:block}
+.invv-edit-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px}
+.invv-edit-row .fg{flex:1;min-width:80px}
+.invv-edit-row label{font-size:10px;color:var(--t3);display:block;margin-bottom:2px;font-weight:600}
+.invv-edit-row input{width:100%;font-size:12px;padding:4px 6px;font-family:var(--mn)}
+.invv-konv-info{font-size:11px;color:var(--in);margin-top:4px;min-height:16px}
+.invv-sat-warn{font-size:10px;color:var(--wt);margin-top:3px}
 .toast{position:fixed;bottom:18px;right:18px;background:var(--tx);color:#fff;padding:9px 14px;border-radius:var(--r);font-size:12px;font-weight:500;z-index:9999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;max-width:300px}
 .toast.show{opacity:1;transform:translateY(0)}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(26,24,20,.52);z-index:200;align-items:center;justify-content:center;padding:12px}
@@ -2422,6 +2430,81 @@ function openNewInvVForVendor(poId,vendor){
   const pos=getPOs();document.getElementById('invv-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   updateDL();if(poId)loadInvVItems();openModal('modal-invv');
 }
+
+// ===== EDIT QTY/SATUAN INVOICE VENDOR =====
+function toggleInvVEdit(idx, satPO){
+  const panel=document.getElementById('invv-ep-'+idx);
+  if(!panel)return;
+  const isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open');
+  // If opening: refresh the satuan label in konv field
+  if(!isOpen){
+    const esLbl=document.getElementById('invv-es-lbl-'+idx);
+    const esEl=document.getElementById('invv-es-'+idx);
+    if(esLbl&&esEl)esLbl.textContent=esEl.value||satPO;
+    onInvVEditChange(idx,satPO);
+  }
+}
+
+function onInvVEditChange(idx, satPO){
+  const eqEl=document.getElementById('invv-eq-'+idx);
+  const esEl=document.getElementById('invv-es-'+idx);
+  const ekEl=document.getElementById('invv-ek-'+idx);
+  const kiEl=document.getElementById('invv-ki-'+idx);
+  const swEl=document.getElementById('invv-sw-'+idx);
+  const displayEl=document.getElementById('invv-qty-display-'+idx);
+  const esLblEl=document.getElementById('invv-es-lbl-'+idx);
+  const cb=document.querySelector('.invv-cb[data-idx="'+idx+'"]');
+  if(!eqEl||!esEl||!cb)return;
+
+  const qtyInv=parseFloat(eqEl.value)||0;
+  const satInv=esEl.value.trim()||satPO;
+  const konv=parseFloat(ekEl?.value)||0;
+  const qtyOrig=parseFloat(cb.dataset.qtyOrig)||qtyInv;
+
+  // Update satuan label in konv field
+  if(esLblEl)esLblEl.textContent=satInv;
+
+  const satChanged=satInv.toLowerCase()!==satPO.toLowerCase();
+
+  // Update cb data-qty and data-sat (used for subtotal calc)
+  cb.dataset.qty=qtyInv;
+  cb.dataset.sat=satInv;
+
+  // Konversi info
+  if(konv>0&&satChanged){
+    const hv=parseFloat(document.querySelector('.invv-hv[data-idx="'+idx+'"]')?.value)||0;
+    const hvPerPO=hv/konv;
+    if(kiEl)kiEl.innerHTML='✓ Konversi: 1 '+satInv+' = '+konv+' '+satPO+' → harga per '+satPO+' PO = <strong>'+fmtF(hvPerPO)+'</strong>';
+    cb.dataset.konv=konv;
+    if(swEl)swEl.textContent='';
+  } else if(satChanged){
+    if(kiEl)kiEl.innerHTML='';
+    cb.dataset.konv='';
+    if(swEl)swEl.textContent='⚠ Satuan berbeda dari PO ('+satPO+'). Isi konversi agar margin akurat.';
+  } else {
+    if(kiEl)kiEl.innerHTML='';
+    cb.dataset.konv='';
+    if(swEl)swEl.textContent='';
+  }
+
+  // Update qty display label above the panel
+  if(displayEl){
+    if(satChanged||qtyInv!==qtyOrig){
+      displayEl.innerHTML='PO: '+qtyOrig+' '+satPO+' → Invoice: <strong>'+qtyInv+' '+satInv+'</strong>'+(satChanged&&!konv?' <span style="color:var(--wt)">⚠</span>':satChanged&&konv?' <span style="color:var(--ac)">✓</span>':'');
+    } else {
+      displayEl.textContent=qtyOrig+' '+satPO;
+    }
+  }
+
+  // Update subtotal
+  const hv=parseFloat(document.querySelector('.invv-hv[data-idx="'+idx+'"]')?.value)||0;
+  const sub=qtyInv*hv;
+  const subEl=document.getElementById('invv-sub-'+idx);
+  if(subEl)subEl.textContent=hv>0&&qtyInv>0?fmtF(sub):'—';
+  calcInvVTotal();
+}
+
 // ===== AUTO-SUGGEST HARGA VENDOR DARI HISTORI =====
 function getHistoriHargaVendor(nama,vendor){
   // Returns most recent invoice price for this item+vendor combo
@@ -2468,7 +2551,7 @@ function loadInvVItems(){
 
   const byHari={};available.forEach(i=>{const k=i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
   let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html+='<thead><tr style="background:var(--s2)"><th style="padding:6px 8px;width:30px;border-bottom:1px solid var(--bd)"><input type="checkbox" id="invv-all" checked onchange="document.querySelectorAll(\'.invv-cb\').forEach(c=>c.checked=this.checked);calcInvVTotal()"></th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Nama item</th><th style="padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Qty</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Harga vendor (Rp/satuan)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Subtotal</th></tr></thead><tbody>';
+  html+='<thead><tr style="background:var(--s2)"><th style="padding:6px 8px;width:30px;border-bottom:1px solid var(--bd)"><input type="checkbox" id="invv-all" checked onchange="document.querySelectorAll(\'.invv-cb\').forEach(c=>c.checked=this.checked);calcInvVTotal()"></th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Nama item</th><th style="padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Qty (PO)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Harga vendor (Rp/sat)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Subtotal</th><th style="padding:6px 8px;width:28px;border-bottom:1px solid var(--bd)"></th></tr></thead><tbody>'';
 
   Object.entries(byHari).forEach(([hari,items])=>{
     if(Object.keys(byHari).length>1)html+=`<tr><td colspan="5" style="padding:3px 8px;background:var(--bg);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">${hari}</td></tr>`;
@@ -2481,15 +2564,25 @@ function loadInvVItems(){
       const suggestHarga=_histH&&!hv?_histH.harga:null;
       const useHarga=hv||(suggestHarga||item.harga_po||0);
       const suggestBadge=suggestHarga?`<div title="Histori: ${fmtF(suggestHarga)} (${_histH.no} - ${_histH.vendor})" style="font-size:9px;color:var(--in);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${suggestHarga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">💡 Histori: ${fmtF(suggestHarga)}</div>`:'';
-      html+=`<tr style="border-bottom:1px solid var(--bd)">
-        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
-        <td style="padding:7px 8px">
+      html+=`<tr id="invv-tr-${item._idx}">
+        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
+        <td style="padding:7px 8px" colspan="2">
           <div style="font-weight:500">${item.nama}</div>
           ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
+          <div id="invv-qty-display-${item._idx}" style="font-size:11px;font-family:var(--mn);color:var(--t2);margin-top:2px">${item.qty} ${item.satuan}</div>
+          <div class="invv-edit-panel" id="invv-ep-${item._idx}">
+            <div class="invv-edit-row">
+              <div class="fg"><label>Qty invoice</label><input type="number" id="invv-eq-${item._idx}" value="${item.qty}" min="0" step="any" style="font-size:12px;padding:4px 6px;width:100%;font-family:var(--mn)" oninput="onInvVEditChange(${item._idx},'${item.satuan}')"></div>
+              <div class="fg"><label>Satuan invoice</label><input type="text" id="invv-es-${item._idx}" value="${item.satuan}" style="font-size:12px;padding:4px 6px;width:100%" oninput="onInvVEditChange(${item._idx},'${item.satuan}')"></div>
+              <div class="fg" style="min-width:140px"><label>1 <span id="invv-es-lbl-${item._idx}">${item.satuan}</span> invoice = <span style="color:var(--ac);font-weight:600">? ${item.satuan}</span> PO</label><input type="number" id="invv-ek-${item._idx}" placeholder="cth: 21.67" min="0" step="any" style="font-size:12px;padding:4px 6px;width:100%;font-family:var(--mn)" oninput="onInvVEditChange(${item._idx},'${item.satuan}')"></div>
+            </div>
+            <div id="invv-ki-${item._idx}" class="invv-konv-info"></div>
+            <div id="invv-sw-${item._idx}" class="invv-sat-warn"></div>
+          </div>
         </td>
-        <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;text-align:right"><input type="number" class="invv-hv" data-idx="${item._idx}" value="${useHarga||''}" placeholder="0" min="0" style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px" oninput="updateInvVHarga(this,${item._idx})">${suggestBadge}</td>
         <td style="padding:7px 8px;text-align:right;font-family:var(--mn);white-space:nowrap" id="invv-sub-${item._idx}">${defaultHarga>0?fmtF((item.qty||0)*defaultHarga):'—'}</td>
+        <td style="padding:7px 8px;text-align:center"><button title="Edit qty/satuan invoice" style="background:none;border:1px solid var(--bd);border-radius:4px;cursor:pointer;padding:3px 6px;font-size:12px;color:var(--t3);line-height:1;transition:all .15s" onmouseenter="this.style.background='var(--s2)'" onmouseleave="this.style.background='none'" onclick="toggleInvVEdit(${item._idx},'${item.satuan}')">✏</button></td>
       </tr>`;
     });
   });
@@ -2540,7 +2633,14 @@ function saveInvV(){
   if(!tgl){showToast('Isi tanggal invoice!',true);return;}
   const items=[];document.querySelectorAll('.invv-cb:checked').forEach(cb=>{
     const idx=parseInt(cb.dataset.idx);const hvEl=document.querySelector(`.invv-hv[data-idx="${idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;
-    items.push({idx,nama:cb.dataset.nama,qty:parseFloat(cb.dataset.qty),satuan:cb.dataset.sat,harga_vendor:hv});
+    const qtyInv=parseFloat(cb.dataset.qty)||parseFloat(cb.dataset.qtyOrig)||0;
+    const satInv=cb.dataset.sat||cb.dataset.satOrig||cb.dataset.sat;
+    const konv=parseFloat(cb.dataset.konv)||0;
+    const satOrig=cb.dataset.satOrig||cb.dataset.sat;
+    const satChanged=satInv&&satOrig&&satInv.toLowerCase()!==satOrig.toLowerCase();
+    // harga_vendor saved to PO: if konv given, convert to PO satuan basis; else use as-is
+    const hvForPO=konv>0&&satChanged?hv/konv:hv;
+    items.push({idx,nama:cb.dataset.nama,qty:qtyInv,satuan:satInv,satuan_po:satOrig,harga_vendor:hv,harga_vendor_po:hvForPO,konv:konv||null,sat_changed:satChanged||false});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
   // All valid — now disable button
@@ -2550,7 +2650,7 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
-  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;}}});}
+  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor_po||i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;if(i.konv)po.items[i.idx].satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}}}); }
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);

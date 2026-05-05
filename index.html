@@ -69,8 +69,10 @@ input[type=checkbox],input[type=radio]{width:auto}
 .tok{background:var(--abg);color:var(--at)}.tno{background:var(--dbg);color:var(--dt)}.twn{background:var(--wbg);color:var(--wt)}
 .tin{background:var(--ibg);color:var(--it)}.tpu{background:var(--pbg);color:var(--pt)}.ttl{background:var(--tbg);color:var(--tt)}.tgr{background:var(--s2);color:var(--t2)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}
-.tbl td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:top;word-break:break-word}
+.tbl th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);white-space:nowrap}
+.tbl td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.tbl td.num-cell{white-space:nowrap;font-family:var(--mn);text-align:right}
+.tbl td.txt-cell{word-break:break-word;min-width:60px}
 .tbl tr:last-child td{border-bottom:none}.tbl tr:hover td{background:var(--bg)}
 .divider{height:1px;background:var(--bd);margin:11px 0}
 .empty{text-align:center;padding:22px 16px;color:var(--t3);font-size:12px}
@@ -160,6 +162,8 @@ input[type=checkbox],input[type=radio]{width:auto}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:99}
 .overlay.show{display:block}
 @media(max-width:720px){.sidebar{transform:translateX(-220px)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.mob-hdr{display:flex}.r2,.r3,.r4{grid-template-columns:1fr}}
+@media(max-width:1100px){.col-margin{display:none!important}}
+@media(max-width:900px){.col-vendor{display:none!important}}
 
 /* Mobile styles for detail PO and invoice modals */
 @media(max-width:600px){
@@ -1737,11 +1741,11 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       </div>
     </div>
     <div id="${hariId}" style="overflow:hidden;transition:max-height .35s ease;max-height:99999px">`;
-    html+=`<div class="det-tbl-wrap" style="margin-bottom:4px"><table class="tbl" style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:18%">Nama</th><th style="width:7%">Kat</th><th style="width:6%">Tipe</th><th style="width:5%">Sat</th><th style="width:5%">Qty</th><th style="width:9%">Hrg PO</th>
-      ${spekVisible?'<th style="width:13%">Spesifikasi</th>':''}
-      <th style="width:12%">Vendor</th><th style="width:9%">Hrg Vendor</th><th style="width:8%">Margin</th>
-      <th style="width:8%" title="Klik untuk detail status">Status</th><th style="width:9%">Aksi</th>
+    html+=`<div class="det-tbl-wrap" style="margin-bottom:4px"><table class="tbl" style="width:100%"><thead><tr>
+      <th>Nama</th><th>Kat</th><th style="white-space:nowrap">Tipe</th><th style="white-space:nowrap">Sat</th><th style="white-space:nowrap">Qty</th><th style="white-space:nowrap">Hrg PO</th>
+      ${spekVisible?'<th>Spesifikasi</th>':''}
+      <th class="col-vendor">Vendor</th><th style="white-space:nowrap">Hrg Vendor</th><th class="col-margin" style="white-space:nowrap">Margin</th>
+      <th style="white-space:nowrap" title="Klik untuk detail status">Status</th><th>Aksi</th>
     </tr></thead><tbody>`;
     items.forEach(item=>{
       const idx=item._idx;
@@ -1763,12 +1767,12 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${getCats().map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
         <td>${tipeTag(item.tipe_kirim)}</td>
         <td style="white-space:nowrap">${item.satuan}</td>
-        <td class="num">${item.qty}</td>
-        <td class="num">${fmtF(item.harga_po)}</td>
+        <td class="num" style="white-space:nowrap">${item.qty}</td>
+        <td class="num" style="white-space:nowrap">${fmtF(item.harga_po)}</td>
         ${spekVisible?`<td style="font-size:11px;color:var(--t2);max-width:150px;word-break:break-word">${item.spek||'—'}</td>`:''}
-        <td style="font-size:12px">${item.vendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
-        <td>${item.harga_vendor?`<span class="num">${fmtF(item.harga_vendor)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${item.vendor||''}')">+ Isi via invoice</button>`}</td>
-        <td class="${mc}">${im!==null?fmtF(im):'—'}</td>
+        <td class="col-vendor" style="font-size:12px">${item.vendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
+        <td style="white-space:nowrap">${item.harga_vendor?`<span class="num">${fmtF(item.harga_vendor)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${item.vendor||''}')">+ Isi via invoice</button>`}</td>
+        <td class="col-margin ${mc}" style="white-space:nowrap">${im!==null?fmtF(im):'—'}</td>
         <td style="text-align:center">
           <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" title="Lihat detail status & aksi">${statusIcon(allDone,hasWarn)}</button>
           <div style="margin-top:2px"><button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="width:auto;height:auto;border-radius:3px;padding:1px 5px;font-size:9px;font-family:var(--mn);color:${allDone?'var(--ac)':hasWarn?'var(--wn)':'var(--t3)'};text-decoration:underline;text-underline-offset:2px">${allDone?'✓ Selesai':hasWarn?'! Perlu aksi':'· Berjalan'}</button></div>

@@ -69,8 +69,8 @@ input[type=checkbox],input[type=radio]{width:auto}
 .tok{background:var(--abg);color:var(--at)}.tno{background:var(--dbg);color:var(--dt)}.twn{background:var(--wbg);color:var(--wt)}
 .tin{background:var(--ibg);color:var(--it)}.tpu{background:var(--pbg);color:var(--pt)}.ttl{background:var(--tbg);color:var(--tt)}.tgr{background:var(--s2);color:var(--t2)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);white-space:nowrap}
-.tbl td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
+.tbl th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}
+.tbl td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:top;word-break:break-word}
 .tbl tr:last-child td{border-bottom:none}.tbl tr:hover td{background:var(--bg)}
 .divider{height:1px;background:var(--bd);margin:11px 0}
 .empty{text-align:center;padding:22px 16px;color:var(--t3);font-size:12px}
@@ -1669,6 +1669,7 @@ function buildLookup(poId){
 }
 
 let _currentPoId=null;
+window._spekVisible=false; // default: spek tersembunyi
 // ===== DETAIL PO — split into sub-functions for partial re-render =====
 
 function detMetrics(po,t,invVs){
@@ -1715,7 +1716,7 @@ function detNextSteps(id,po,invV,invD){
 }
 
 function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
-  const spekVisible=window._spekVisible!==false;
+  const spekVisible=window._spekVisible===true;
   const byHari={};po.items.forEach((item,idx)=>{const k=item.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push({...item,_idx:idx});});
   let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
     <div style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:7px">
@@ -1736,11 +1737,11 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       </div>
     </div>
     <div id="${hariId}" style="overflow:hidden;transition:max-height .35s ease;max-height:99999px">`;
-    html+=`<div style="overflow-x:auto;margin-bottom:4px" class="det-tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Nama</th><th>Kat</th><th>Tipe</th><th>Sat</th><th>Qty</th><th>Hrg PO</th>
-      ${spekVisible?'<th style="min-width:130px">Spesifikasi</th>':''}
-      <th>Deadline</th><th>Vendor</th><th>Hrg Vendor</th><th>Margin</th>
-      <th title="Klik untuk detail status">Status</th><th>Aksi</th>
+    html+=`<div class="det-tbl-wrap" style="margin-bottom:4px"><table class="tbl" style="table-layout:fixed;width:100%"><thead><tr>
+      <th style="width:18%">Nama</th><th style="width:7%">Kat</th><th style="width:6%">Tipe</th><th style="width:5%">Sat</th><th style="width:5%">Qty</th><th style="width:9%">Hrg PO</th>
+      ${spekVisible?'<th style="width:13%">Spesifikasi</th>':''}
+      <th style="width:12%">Vendor</th><th style="width:9%">Hrg Vendor</th><th style="width:8%">Margin</th>
+      <th style="width:8%" title="Klik untuk detail status">Status</th><th style="width:9%">Aksi</th>
     </tr></thead><tbody>`;
     items.forEach(item=>{
       const idx=item._idx;
@@ -1765,7 +1766,6 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <td class="num">${item.qty}</td>
         <td class="num">${fmtF(item.harga_po)}</td>
         ${spekVisible?`<td style="font-size:11px;color:var(--t2);max-width:150px;word-break:break-word">${item.spek||'—'}</td>`:''}
-        <td style="font-size:11px;font-family:var(--mn);white-space:nowrap">${item.deadline||'—'}</td>
         <td style="font-size:12px">${item.vendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
         <td>${item.harga_vendor?`<span class="num">${fmtF(item.harga_vendor)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${item.vendor||''}')">+ Isi via invoice</button>`}</td>
         <td class="${mc}">${im!==null?fmtF(im):'—'}</td>
@@ -3435,7 +3435,7 @@ function renderDashboard(){
     </div>`;
   } else cfEl.innerHTML='';
 
-  // Agenda
+  // ===== AGENDA / DASHBOARD METRICS BARU =====
   const agendaSections=[];
   const kirimTerlambat=[];const kirimHariIni=[];
   pos.forEach(po=>{po.items.forEach((item,idx)=>{
@@ -3444,61 +3444,74 @@ function renderDashboard(){
     if(diff<0)kirimTerlambat.push({po,item,idx,diff});
     else if(diff===0)kirimHariIni.push({po,item,idx});
   });});
-  if(kirimTerlambat.length)agendaSections.push({title:'⚠ Pengiriman terlambat ('+kirimTerlambat.length+')',items:kirimTerlambat.map(x=>`<div class="agenda-item ai-urgent">
-    <div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Deadline: ${x.item.deadline} (${Math.abs(x.diff)}h lalu)</span></div>
-    <button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update kirim</button>
-  </div>`)});
-  if(kirimHariIni.length)agendaSections.push({title:'📦 Harus dikirim hari ini ('+kirimHariIni.length+')',items:kirimHariIni.map(x=>`<div class="agenda-item ai-warn">
-    <div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)} ${tipeTag(x.item.tipe_kirim)}</span></div>
-    <button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update kirim</button>
-  </div>`)});
+  if(kirimTerlambat.length)agendaSections.push({id:'ag-late',icon:'⚠',label:'Pengiriman terlambat',count:kirimTerlambat.length,urgent:true,items:kirimTerlambat.map(x=>`<div class="agenda-item ai-urgent"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Deadline: ${x.item.deadline} (${Math.abs(x.diff)}h lalu)</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
+  if(kirimHariIni.length)agendaSections.push({id:'ag-today',icon:'📦',label:'Kirim hari ini',count:kirimHariIni.length,urgent:false,items:kirimHariIni.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)}</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
   const invVJT=invV.filter(iv=>{if(iv.bayar_status==='lunas')return false;if(isPassthrough(iv.id))return false;if(!iv.jatuh)return false;return diffDays(iv.jatuh)<=0;});
-  if(invVJT.length)agendaSections.push({title:'💳 Invoice vendor jatuh tempo ('+invVJT.length+')',items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent">
-    <div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>
-    ${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}
-  </div>`})});
+  if(invVJT.length)agendaSections.push({id:'ag-invv',icon:'💳',label:'Invoice vendor jatuh tempo',count:invVJT.length,urgent:true,items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent"><div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}</div>`})});
   const blmVendorUrgent=[];pos.forEach(po=>{po.items.forEach((item,idx)=>{if(item.vendor&&item.harga_vendor)return;const diff=item.deadline?diffDays(item.deadline):null;if(diff!==null&&diff<=2)blmVendorUrgent.push({po,item,idx,diff});});});
-  if(blmVendorUrgent.length)agendaSections.push({title:'🔍 Harga vendor belum ada, deadline ≤2 hari ('+blmVendorUrgent.length+')',items:blmVendorUrgent.map(x=>`<div class="agenda-item ai-warn">
-    <div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--wt)">Deadline: ${x.item.deadline} ${x.diff===0?'(Hari ini)':x.diff<0?'('+Math.abs(x.diff)+'h lalu)':'('+x.diff+'h lagi)'}</span></div>
-    <button class="btn bxs bt" onclick="openNewInvVForVendor('${x.po.id}','${x.item.vendor||''}')">Buat invoice vendor</button>
-  </div>`)});
+  if(blmVendorUrgent.length)agendaSections.push({id:'ag-harga',icon:'🔍',label:'Harga vendor belum ada (≤2hr)',count:blmVendorUrgent.length,urgent:false,items:blmVendorUrgent.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--wt)">Deadline: ${x.item.deadline}</span></div><button class="btn bxs bt" onclick="openNewInvVForVendor('${x.po.id}','${x.item.vendor||''}')">Buat inv.</button></div>`)});
   const invDJT=invD.filter(id=>{if(id.terima_status==='lunas')return false;if(!id.jatuh)return false;return diffDays(id.jatuh)<=0;});
-  if(invDJT.length)agendaSections.push({title:'🏦 Invoice dapur jatuh tempo ('+invDJT.length+')',items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item">
-    <div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div>
-    <button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam terima</button>
-  </div>`})});
+  if(invDJT.length)agendaSections.push({id:'ag-invd',icon:'🏦',label:'Invoice dapur jatuh tempo',count:invDJT.length,urgent:false,items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item"><div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div><button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam</button></div>`})});
   const totalBlmV=pos.reduce((s,po)=>s+po.items.filter(i=>!i.vendor||!i.harga_vendor).length,0);
+  const totalUrgent=agendaSections.filter(s=>s.urgent).reduce((s,x)=>s+x.count,0);
+  const totalWarn=agendaSections.filter(s=>!s.urgent).reduce((s,x)=>s+x.count,0)+totalBlmV;
+  const poAktif=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !po.items.every(i=>i.status_kirim==='diterima')||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).length;
+
   const agendaBox=document.getElementById('agenda-box');
-  if(!agendaSections.length&&!totalBlmV){
-    agendaBox.innerHTML=`<div class="agenda-hdr"><span class="agenda-hdr-t">Agenda Hari Ini</span><span style="font-size:11px;opacity:.7">${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'})}</span></div><div style="padding:12px 13px;text-align:center;font-size:13px;color:var(--t3)">Tidak ada yang urgent hari ini ✓</div>`;
-  } else {
-    let html=`<div class="agenda-hdr"><span class="agenda-hdr-t">Agenda Hari Ini</span><span style="font-size:11px;opacity:.7">${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'})}</span></div>`;
-    agendaSections.forEach((sec,si)=>{
-      const secId='agenda-sec-'+si;
-      html+=`<div>
-        <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${secId}')">
-          <span>${sec.title}</span>
-          <span id="${secId}-arrow" style="font-size:10px;color:var(--t3)">▲</span>
+  let agHtml=`<div style="padding:10px 13px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+    <span style="font-size:12px;font-weight:600;color:var(--t2)">Ringkasan hari ini</span>
+    <span style="font-size:11px;color:var(--t3)">${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'})}</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:0 13px 10px">
+    <div style="background:var(--s2);border-radius:var(--r);padding:10px 12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:var(--tx)">${poAktif}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px">PO aktif</div>
+    </div>
+    ${totalUrgent>0?`<div style="background:#fff0f0;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #fdd">
+      <div style="font-size:22px;font-weight:700;color:var(--dn)">${totalUrgent}</div>
+      <div style="font-size:10px;color:var(--dn);margin-top:2px">Perlu segera</div>
+    </div>`:`<div style="background:#f0faf0;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #cec">
+      <div style="font-size:22px;font-weight:700;color:var(--ac)">✓</div>
+      <div style="font-size:10px;color:var(--ac);margin-top:2px">Tidak ada urgent</div>
+    </div>`}
+    ${totalWarn>0?`<div style="background:#fffbe6;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #ffe">
+      <div style="font-size:22px;font-weight:700;color:var(--wt)">${totalWarn}</div>
+      <div style="font-size:10px;color:var(--wt);margin-top:2px">Perlu perhatian</div>
+    </div>`:''}
+    ${totalBlmV>0?`<div style="background:var(--s2);border-radius:var(--r);padding:10px 12px;text-align:center">
+      <div style="font-size:22px;font-weight:700;color:var(--t2)">${totalBlmV}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px">Item blm ada vendor</div>
+    </div>`:''}
+  </div>`;
+
+  if(agendaSections.length||totalBlmV>0){
+    agHtml+=`<div style="border-top:1px solid var(--bd)">`;
+    agendaSections.forEach(sec=>{
+      agHtml+=`<div>
+        <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${sec.id}')" style="display:flex;justify-content:space-between;align-items:center">
+          <span>${sec.icon} ${sec.label} <span style="font-size:11px;font-weight:700;color:${sec.urgent?'var(--dn)':'var(--wt)'}">(${sec.count})</span></span>
+          <span id="${sec.id}-arrow" style="font-size:10px;color:var(--t3)">▼</span>
         </div>
-        <div class="agenda-sec-body" id="${secId}" style="max-height:${sec.items.length*80}px">
+        <div class="agenda-sec-body collapsed" id="${sec.id}" style="max-height:0">
           ${sec.items.join('')}
         </div>
       </div>`;
     });
     if(totalBlmV>0){
-      const secId='agenda-sec-blm';
-      html+=`<div>
-        <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${secId}')">
-          <span>📋 Item belum ada vendor / harga (${totalBlmV})</span>
-          <span id="${secId}-arrow" style="font-size:10px;color:var(--t3)">▲</span>
+      const sid='ag-blmv';
+      agHtml+=`<div>
+        <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${sid}')" style="display:flex;justify-content:space-between;align-items:center">
+          <span>📋 Item belum ada vendor / harga <span style="font-size:11px;font-weight:700;color:var(--t3)">(${totalBlmV})</span></span>
+          <span id="${sid}-arrow" style="font-size:10px;color:var(--t3)">▼</span>
         </div>
-        <div class="agenda-sec-body" id="${secId}" style="max-height:60px">
+        <div class="agenda-sec-body collapsed" id="${sid}" style="max-height:0">
           <div class="agenda-item"><span style="font-size:12px;color:var(--t2)">${totalBlmV} item di berbagai PO menunggu</span><button class="btn bsm" onclick="nav('daftar-po')">Lihat PO →</button></div>
         </div>
       </div>`;
     }
-    agendaBox.innerHTML=html;
+    agHtml+=`</div>`;
   }
+  agendaBox.innerHTML=agHtml;
 
   // Metrics
   let ttlM=0,blmBV=0,blmTD=0,blmVnd=0;
@@ -3863,8 +3876,16 @@ if(dzEl){dzEl.addEventListener('dragover',e=>{e.preventDefault();dzEl.classList.
 function toggleAgendaSec(id){
   const body=document.getElementById(id);const arrow=document.getElementById(id+'-arrow');
   if(!body)return;
-  const collapsed=body.classList.toggle('collapsed');
-  if(arrow)arrow.textContent=collapsed?'▼':'▲';
+  const isCollapsed=body.classList.contains('collapsed');
+  if(isCollapsed){
+    body.classList.remove('collapsed');
+    body.style.maxHeight=body.scrollHeight+40+'px';
+    if(arrow)arrow.textContent='▲';
+  } else {
+    body.style.maxHeight='0';
+    body.classList.add('collapsed');
+    if(arrow)arrow.textContent='▼';
+  }
 }
 function openKbb(id,event){
   event.stopPropagation();

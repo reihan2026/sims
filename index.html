@@ -2687,6 +2687,31 @@ function saveInvV(){
   }
 }
 
+function gantiFileInvV(invId){
+  if(!confirm('Ganti file lampiran? File lama akan ditimpa.'))return;
+  const input=document.createElement('input');
+  input.type='file';input.accept='image/*,.pdf';
+  input.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    showToast('Mengunggah file baru...');
+    const r=new FileReader();
+    r.onload=async ev=>{
+      try{
+        const nk='invv_'+invId;
+        await saveFile(nk,ev.target.result);
+        const invs=getInvV();const iv=invs.find(v=>v.id===invId);
+        if(iv){iv.file_key=nk;setInvV(invs);}
+        addLog('ganti_file','Ganti file invoice','invv',invId,'','');
+        showToast('File berhasil diganti!');
+        if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+      }catch(err){showToast('Gagal upload: '+err.message,true);}
+    };
+    r.onerror=()=>showToast('Gagal baca file',true);
+    r.readAsDataURL(file);
+  };
+  input.click();
+}
+
 // ===== REVISI INVOICE VENDOR =====
 function openEditInvV(invId){
   const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
@@ -3753,7 +3778,7 @@ function showInvVDetail(invId){
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openRetur('${inv.id}')">+ Retur</button>
       ${!n.ongkir?`<button class="btn bsm" onclick="closeModal('modal-det-invv');openOngkir('${inv.id}')">+ Ongkir</button>`:''}
-      ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota('${inv.file_key}','${inv.no}')">📎 Lihat file</button>`:`<button class="btn bsm" onclick="closeModal('modal-det-invv');uploadInvVFile('${inv.id}')">📎 Upload file</button>`}
+      ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota(\'${inv.file_key}\',\'${inv.no}\')">📎 Lihat file</button> <button class="btn bsm" onclick="gantiFileInvV(\'${inv.id}\')">🔄 Ganti file</button>`:`<button class="btn bsm" onclick="closeModal(\'modal-det-invv\');uploadInvVFile(\'${inv.id}\')">📎 Upload file</button>`}
       <button class="btn bsm" onclick="printInvV('${inv.id}')">🖨 Cetak</button>
       ${po?`<button class="btn bsm bi btn-full" onclick="closeModal('modal-det-invv');showDetail('${po.id}')">Lihat PO →</button>`:''}
     </div>`;

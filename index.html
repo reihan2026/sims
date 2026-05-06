@@ -963,7 +963,7 @@ function doLogin(){
     btn.textContent='Masuk';btn.disabled=false;
   });
 }
-function doLogout(){if(!confirm('Keluar dari SIMS?'))return;auth.signOut();}
+function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;
@@ -972,46 +972,94 @@ function showForgotPw(){
 
 // ===== DATA LAYER =====
 const _cache={po:[],invv:[],invd:[],rek:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0};
-async function loadAllData(){
-  try{
-    const snap=await db.collection('sims').doc('data').get();
-    if(snap.exists){
-      const d=snap.data();
-      // Load known keys
-      Object.keys(_cache).forEach(k=>{if(d[k]!==undefined)_cache[k]=d[k];});
-      // Load dynamic file_ keys
-      Object.keys(d).forEach(k=>{if(k.startsWith('file_'))_cache[k]=d[k];});
-    }
-    // Auto-fix counter from existing data
-    const fixCtr=(invArr,key,prefix)=>{
-      const maxN=invArr.reduce((mx,iv)=>{
-        const m=iv.no?.match(new RegExp(prefix+'(\\d+)'));
-        return m?Math.max(mx,parseInt(m[1])):mx;
-      },0);
-      if(maxN>(_cache[key]||0))_cache[key]=maxN;
-    };
-    fixCtr(_cache.invv,'ctr_invv','INV-V-');
-    fixCtr(_cache.invd,'ctr_invd','INV-D-');
-    // Auto-fix invoices stuck in 'belum' despite being fully paid
-    let statusFixed=0;
-    (_cache.invv||[]).forEach(iv=>{
-      if(iv.bayar_status!=='lunas'){
-        const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-        const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
-        const netTotal=Math.max(0,(iv.total||0)-retur);
-        if(paid>=netTotal&&netTotal>0){iv.bayar_status='lunas';statusFixed++;}
+function loadAllData(){
+  return new Promise((resolve)=>{
+    // Unsubscribe any existing listener first
+    if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}
+
+    let resolved=false;
+    _snapshotUnsub=db.collection('sims').doc('data').onSnapshot(
+      {includeMetadataChanges:false},
+      snap=>{
+        // Skip snapshots triggered by our own pending write to avoid render flicker
+        if(_ignoreNextSnapshot&&snap.metadata.hasPendingWrites){return;}
+        _ignoreNextSnapshot=false;
+
+        if(snap.exists){
+          const d=snap.data();
+          // Only update keys that aren't currently dirty (avoid overwriting unsaved local edits)
+          Object.keys(_cache).forEach(k=>{
+            if(!_dirty.has(k)&&d[k]!==undefined)_cache[k]=d[k];
+          });
+          Object.keys(d).forEach(k=>{if(k.startsWith('file_'))_cache[k]=d[k];});
+        }
+
+        // Auto-fix counter from existing data
+        const fixCtr=(invArr,key,prefix)=>{
+          const maxN=(invArr||[]).reduce((mx,iv)=>{
+            const m=iv.no?.match(new RegExp(prefix+'(\\d+)'));
+            return m?Math.max(mx,parseInt(m[1])):mx;
+          },0);
+          if(maxN>(_cache[key]||0))_cache[key]=maxN;
+        };
+        fixCtr(_cache.invv,'ctr_invv','INV-V-');
+        fixCtr(_cache.invd,'ctr_invd','INV-D-');
+
+        // Auto-fix invoices stuck in 'belum' despite being fully paid
+        let statusFixed=0;
+        (_cache.invv||[]).forEach(iv=>{
+          if(iv.bayar_status!=='lunas'){
+            const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+            const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
+            const netTotal=Math.max(0,(iv.total||0)-retur);
+            if(paid>=netTotal&&netTotal>0){iv.bayar_status='lunas';statusFixed++;}
+          }
+        });
+        (_cache.invd||[]).forEach(id=>{
+          if(id.terima_status!=='lunas'){
+            const recv=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+            if(recv>=(id.total||0)&&id.total>0){id.terima_status='lunas';statusFixed++;}
+          }
+        });
+        if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
+
+        _rc.invalidate();
+
+        if(!resolved){
+          // First snapshot — resolve the promise (used by initial login flow)
+          resolved=true;
+          resolve();
+        } else {
+          // Subsequent snapshots — re-render active page if not in middle of editing
+          _reRenderActivePage();
+        }
+      },
+      err=>{
+        console.error('[SIMS] onSnapshot error:',err);
+        if(!resolved){resolved=true;resolve();}
       }
-    });
-    (_cache.invd||[]).forEach(id=>{
-      if(id.terima_status!=='lunas'){
-        const recv=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-        if(recv>=(id.total||0)&&id.total>0){id.terima_status='lunas';statusFixed++;}
-      }
-    });
-    if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
-    _rc.invalidate();// rebuild cache with fresh data
-  }catch(e){console.error('Load error:',e);}
+    );
+  });
 }
+
+function _reRenderActivePage(){
+  // Don't interrupt if a modal is open
+  const anyModalOpen=document.querySelector('.modal-bg[style*="flex"]')||document.querySelector('.modal-bg.open');
+  if(anyModalOpen)return;
+  // Re-render current page silently
+  try{
+    if(_currentPage==='dash')renderDashboard();
+    else if(_currentPage==='daftar-po')renderDaftar();
+    else if(_currentPage==='inv-vendor')renderInvV();
+    else if(_currentPage==='inv-dapur')renderInvD();
+    else if(_currentPage==='cashflow')renderCashflow();
+    else if(_currentPage==='rekening')renderRekening();
+    // detail PO: re-render only if not in edit state
+    if(_currentPoId&&_currentPage==='daftar-po')showDetail(_currentPoId);
+  }catch(e){console.error('[SIMS] re-render error:',e);}
+}
+
+
 // Strip undefined values — Firebase rejects them
 function stripUndefined(obj){
   if(Array.isArray(obj))return obj.map(stripUndefined);
@@ -1025,6 +1073,9 @@ const _dirty=new Set();
 let _saveTimer=null;
 let _saving=false;
 let _pendingAfterSave=false;
+let _snapshotUnsub=null; // onSnapshot unsubscribe handle
+let _ignoreNextSnapshot=false; // skip snapshot triggered by our own save
+let _currentPage='dash'; // track active page for selective re-render
 
 function saveData(keys){
   if(!_currentUser)return;
@@ -1054,6 +1105,7 @@ async function _flushSave(){
   const payload={};
   keysToSave.forEach(k=>{if(_cache[k]!==undefined)payload[k]=stripUndefined(_cache[k]);});
   try{
+    _ignoreNextSnapshot=true; // our own write — skip the echo snapshot
     await db.collection('sims').doc('data').set(payload,{merge:true});
     _setSaveStatus('✓ Tersimpan','var(--ac)');
     setTimeout(()=>_setSaveStatus('✓ Tersimpan','var(--t3)'),2000);
@@ -1272,6 +1324,7 @@ function inlineAddRek(targetSelId){
 // ===== NAVIGATION =====
 const PAGES=['dash','po-baru','daftar-po','detail-po','inv-vendor','inv-dapur','cashflow','rekening','master'];
 function nav(name){
+  _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
   const MAP={dash:0,'po-baru':1,'daftar-po':2,'inv-vendor':3,'inv-dapur':4,cashflow:5,rekening:6,master:7};
@@ -2560,14 +2613,14 @@ function loadInvVItems(){
 
   const byHari={};available.forEach(i=>{const k=i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
   let html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-  html+='<thead><tr style="background:var(--s2)"><th style="padding:6px 8px;width:30px;border-bottom:1px solid var(--bd)"><input type="checkbox" id="invv-all" checked onchange="document.querySelectorAll(\'.invv-cb\').forEach(c=>c.checked=this.checked);calcInvVTotal()"></th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Nama item</th><th style="padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Qty (PO)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Harga vendor (Rp/sat)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Subtotal</th><th style="padding:6px 8px;width:28px;border-bottom:1px solid var(--bd)"></th></tr></thead><tbody>';
+  html+='<thead><tr style="background:var(--s2)"><th style="padding:6px 8px;width:30px;border-bottom:1px solid var(--bd)"><input type="checkbox" id="invv-all" onchange="document.querySelectorAll(\'.invv-cb\').forEach(c=>c.checked=this.checked);calcInvVTotal()"></th><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Nama item</th><th style="padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Qty (PO)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Harga vendor (Rp/sat)</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Subtotal</th><th style="padding:6px 8px;width:28px;border-bottom:1px solid var(--bd)"></th></tr></thead><tbody>';
 
   Object.entries(byHari).forEach(([hari,items])=>{
     if(Object.keys(byHari).length>1)html+=`<tr><td colspan="5" style="padding:3px 8px;background:var(--bg);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">${hari}</td></tr>`;
     items.forEach(item=>{
       const hv=item.harga_vendor||0;
       const defaultHarga=hv||item.harga_po||0;// default to harga_po if no harga_vendor yet
-      const shouldCheck=!vendor||!item.vendor||item.vendor===vendor;
+      const shouldCheck=false; // default unchecked — user harus pilih manual
       // Auto-suggest: get most recent harga_vendor from invoice history
       const _histH=getHistoriHargaVendor(item.nama,vendor);
       const suggestHarga=_histH&&!hv?_histH.harga:null;

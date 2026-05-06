@@ -2983,13 +2983,7 @@ function fixInvData(){
   renderInvV();
 }
 function renderInvV(){
-  const invs=getInvV();let bBayar=0,lunas=0,totalAll=0;
-  invs.forEach(iv=>{const n=invVNet(iv);totalAll+=n.netTotal;if(iv.bayar_status==='lunas')lunas+=n.netTotal;else if(!isPassthrough(iv.id))bBayar+=n.sisa;});
-  document.getElementById('invv-met').innerHTML=`
-    <div class="met"><div class="ml">Total tagihan vendor</div><div class="mv num">${fmt(totalAll)}</div></div>
-    <div class="met"><div class="ml">Belum dibayar</div><div class="mv num r">${fmt(bBayar)}</div></div>
-    <div class="met"><div class="ml">Sudah lunas</div><div class="mv num g">${fmt(lunas)}</div></div>
-    <div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${invs.length}</div></div>`;
+  const invs=getInvV();/* summary computed after filter */
   const srch=(document.getElementById('srch-invv')?.value||'').toLowerCase();
   const fS=document.getElementById('f-invv-stat')?.value||'';
   const fK=document.getElementById('f-invv-kirim')?.value||'';
@@ -3037,6 +3031,11 @@ function renderInvV(){
     if(fK){const ks=getKirimStatus(iv);if(ks!==fK)return false;}
     return true;
   }).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
+
+  // Hitung summary dari hasil filter
+  {let _bB=0,_ln=0,_tt=0;
+  filtered.forEach(iv=>{const n=invVNet(iv);_tt+=n.netTotal;if(iv.bayar_status==='lunas')_ln+=n.netTotal;else if(!isPassthrough(iv.id))_bB+=n.sisa;});
+  const _me=document.getElementById('invv-met');if(_me)_me.innerHTML=`<div class="met"><div class="ml">Total tagihan vendor</div><div class="mv num">${fmt(_tt)}</div></div><div class="met"><div class="ml">Belum dibayar</div><div class="mv num r">${fmt(_bB)}</div></div><div class="met"><div class="ml">Sudah lunas</div><div class="mv num g">${fmt(_ln)}</div></div><div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${filtered.length}</div></div>`;}
 
   const el=document.getElementById('invv-list');
   if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';return;}
@@ -3426,13 +3425,7 @@ function saveTerima(){
 
 // ===== RENDER INVOICE DAPUR =====
 function renderInvD(){
-  const invs=getInvD();let bTerima=0,lunas=0,total=0;
-  invs.forEach(iv=>{total+=iv.total;const r=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);if(iv.terima_status==='lunas')lunas+=iv.total;else bTerima+=iv.total-r;});
-  document.getElementById('invd-met').innerHTML=`
-    <div class="met"><div class="ml">Total invoice dapur</div><div class="mv num">${fmt(total)}</div></div>
-    <div class="met"><div class="ml">Belum diterima</div><div class="mv num a">${fmt(bTerima)}</div></div>
-    <div class="met"><div class="ml">Sudah diterima</div><div class="mv num g">${fmt(lunas)}</div></div>
-    <div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${invs.length}</div></div>`;
+  const invs=getInvD();/* summary computed after filter */
   const srch=(document.getElementById('srch-invd')?.value||'').toLowerCase();const fS=document.getElementById('f-invd-stat')?.value||'';const fB=document.getElementById('f-invd-bln')?.value||'';const fP=document.getElementById('f-invd-po')?.value||'';
   const pos=getPOs();
   const bSet=new Set(invs.filter(v=>v.tgl&&v.tgl.length>=7).map(v=>v.tgl.substring(0,7)));
@@ -3443,6 +3436,10 @@ function renderInvD(){
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
+  // Hitung summary dari hasil filter
+  {let _bT=0,_ln=0,_tt=0;
+  filtered.forEach(iv=>{_tt+=iv.total;const r=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);if(iv.terima_status==='lunas')_ln+=iv.total;else _bT+=iv.total-r;});
+  const _me=document.getElementById('invd-met');if(_me)_me.innerHTML=`<div class="met"><div class="ml">Total invoice dapur</div><div class="mv num">${fmt(_tt)}</div></div><div class="met"><div class="ml">Belum diterima</div><div class="mv num a">${fmt(_bT)}</div></div><div class="met"><div class="ml">Sudah diterima</div><div class="mv num g">${fmt(_ln)}</div></div><div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${filtered.length}</div></div>`;}
   const el=document.getElementById('invd-list');if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice ke dapur</div>';return;}
   el.innerHTML=filtered.map(iv=>{
     const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos.find(p=>p.id===iv.po_id);

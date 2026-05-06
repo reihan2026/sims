@@ -347,7 +347,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- DAFTAR PO -->
 <div id="page-daftar-po" class="page">
-  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bsm bw" onclick="fixHargaVendor(_currentPoId)" title="Re-sync harga vendor dari invoice terbaru">🔧 Perbaiki harga</button><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
+  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
   <div class="pc">
     <div class="fbar">
       <input type="text" placeholder="Cari PO / dapur..." id="srch" oninput="renderDaftar()">
@@ -504,6 +504,7 @@ input[type=checkbox],input[type=radio]{width:auto}
       <div class="fg"><label class="lbl">Qty</label><input type="number" id="ie-qty" min="0"></div>
       <div class="fg"><label class="lbl">Satuan</label><input type="text" id="ie-satuan"></div>
       <div class="fg"><label class="lbl">Harga PO (Rp)</label><input type="number" id="ie-harga-po" min="0"></div>
+      <div class="fg"><label class="lbl">Harga Vendor (Rp) <span style="font-weight:400;color:var(--t3)">— opsional</span></label><input type="number" id="ie-harga-vendor" min="0" placeholder="Kosongkan jika tidak diubah"></div>
     </div>
     <div class="r3">
       <div class="fg"><label class="lbl">Kategori</label>
@@ -2001,6 +2002,7 @@ function openItemEdit(poId,idx){
   document.getElementById('ie-kat').value=item.kat||'';
   document.getElementById('ie-tipe').value=item.tipe_kirim||'fresh';
   document.getElementById('ie-deadline').value=item.deadline||'';
+  document.getElementById('ie-harga-vendor').value=item.harga_vendor||'';
   document.getElementById('ie-alasan').value='';
   openModal('modal-item');
 }
@@ -2011,6 +2013,8 @@ function saveItemEdit(){
   item.qty=parseFloat(document.getElementById('ie-qty').value)||item.qty;
   item.satuan=document.getElementById('ie-satuan').value.trim()||item.satuan;
   item.harga_po=parseFloat(document.getElementById('ie-harga-po').value)||item.harga_po;
+  const newHV=parseFloat(document.getElementById('ie-harga-vendor').value);
+  if(newHV>0){item.harga_vendor=newHV;if(item.satuan_konv)delete item.satuan_konv;}
   item.kat=document.getElementById('ie-kat').value;
   item.tipe_kirim=document.getElementById('ie-tipe').value;
   item.deadline=document.getElementById('ie-deadline').value;

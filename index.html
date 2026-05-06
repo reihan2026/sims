@@ -347,7 +347,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- DAFTAR PO -->
 <div id="page-daftar-po" class="page">
-  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
+  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bsm bw" onclick="fixHargaVendor(_currentPoId)" title="Re-sync harga vendor dari invoice terbaru">🔧 Perbaiki harga</button><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
   <div class="pc">
     <div class="fbar">
       <input type="text" placeholder="Cari PO / dapur..." id="srch" oninput="renderDaftar()">
@@ -2437,6 +2437,11 @@ function toggleInvVEdit(idx, satPO){
   if(!panel)return;
   const isOpen=panel.classList.contains('open');
   panel.classList.toggle('open');
+  if(isOpen){
+    // Closing: if satuan unchanged, clear konv to avoid accidental conversion
+    const cb=document.querySelector('.invv-cb[data-idx="'+idx+'"]');
+    if(cb&&(cb.dataset.sat||'').toLowerCase()===(cb.dataset.satOrig||'').toLowerCase()){cb.dataset.konv='';}
+  }
   // If opening: refresh the satuan label in konv field
   if(!isOpen){
     const esLbl=document.getElementById('invv-es-lbl-'+idx);
@@ -2634,13 +2639,14 @@ function saveInvV(){
   const items=[];document.querySelectorAll('.invv-cb:checked').forEach(cb=>{
     const idx=parseInt(cb.dataset.idx);const hvEl=document.querySelector(`.invv-hv[data-idx="${idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;
     const qtyInv=parseFloat(cb.dataset.qty)||parseFloat(cb.dataset.qtyOrig)||0;
-    const satInv=cb.dataset.sat||cb.dataset.satOrig||cb.dataset.sat;
+    const satOrig=cb.dataset.satOrig||'';
+    const satInv=cb.dataset.sat||satOrig;
     const konv=parseFloat(cb.dataset.konv)||0;
-    const satOrig=cb.dataset.satOrig||cb.dataset.sat;
-    const satChanged=satInv&&satOrig&&satInv.toLowerCase()!==satOrig.toLowerCase();
-    // harga_vendor saved to PO: if konv given, convert to PO satuan basis; else use as-is
-    const hvForPO=konv>0&&satChanged?hv/konv:hv;
-    items.push({idx,nama:cb.dataset.nama,qty:qtyInv,satuan:satInv,satuan_po:satOrig,harga_vendor:hv,harga_vendor_po:hvForPO,konv:konv||null,sat_changed:satChanged||false});
+    // satChanged only if BOTH values known and truly different
+    const satChanged=satOrig&&satInv&&satOrig.toLowerCase()!==satInv.toLowerCase();
+    // harga_vendor saved to PO: only apply konv when satuan genuinely changed AND konv>0
+    const hvForPO=satChanged&&konv>0?hv/konv:hv;
+    items.push({idx,nama:cb.dataset.nama,qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
   // All valid — now disable button
@@ -2650,7 +2656,7 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
-  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=i.harga_vendor_po||i.harga_vendor;if(vendor)po.items[i.idx].vendor=vendor;if(i.konv)po.items[i.idx].satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}}}); }
+  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);if(vendor)po.items[i.idx].vendor=vendor;if(i.konv)po.items[i.idx].satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}}}); }
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);
@@ -2966,6 +2972,35 @@ function fixVendorData(){
   });
   if(fixed>0){setPOs(pos);showToast(`${fixed} vendor salah dibersihkan!`);renderDaftar();}
   else showToast('Tidak ada vendor yang perlu dibersihkan');
+}
+
+function fixHargaVendor(poId){
+  // Re-sync harga_vendor on PO items from latest invoice for that PO
+  const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
+  const invVList=getInvV().filter(iv=>iv.po_id===poId);
+  if(!invVList.length){showToast('Tidak ada invoice vendor untuk PO ini',true);return;}
+  let fixed=0;
+  po.items.forEach((item,idx)=>{
+    // Find the latest invoice that has this item
+    let bestHv=null,bestTgl='';
+    invVList.forEach(iv=>{
+      (iv.items||[]).forEach(it=>{
+        if(it.nama===item.nama&&(it.harga_vendor||0)>0&&(iv.tgl||'')>=bestTgl){
+          // Only use raw harga_vendor (no konv applied) if sat matches PO
+          const satMatch=!it.satuan||(it.satuan.toLowerCase()===(item.satuan||'').toLowerCase());
+          if(satMatch){bestHv=it.harga_vendor;bestTgl=iv.tgl||'';}
+        }
+      });
+    });
+    if(bestHv!==null&&bestHv!==item.harga_vendor){
+      po.items[idx].harga_vendor=bestHv;
+      // Clear any leftover satuan_konv if satuan matches
+      if(po.items[idx].satuan_konv){delete po.items[idx].satuan_konv;}
+      fixed++;
+    }
+  });
+  if(fixed>0){setPOs(pos);showToast(fixed+' harga vendor diperbaiki dari invoice!');if(_currentPoId===poId)showDetail(poId);}
+  else showToast('Tidak ada yang perlu diperbaiki',false);
 }
 
 function fixInvData(){

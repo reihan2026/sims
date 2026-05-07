@@ -4477,7 +4477,8 @@ function renderRekapVendorHTML(poId,vname){
           <tbody>${(iv.items||[]).map(i=>{
             const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
             const hpo=poItem?.harga_po||0;
-            const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):null;
+            const qtyPO=poItem?.qty||i.qty||0;
+            const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):null;
             return`<tr>
               <td style="font-weight:500">${i.nama}</td>
               <td class="num">${i.qty} ${i.satuan||''}</td>
@@ -4730,7 +4731,8 @@ function renderLaporanHTML(d){
             <tbody>${allInvItems.map(i=>{
               const poItem=d.po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
               const hpo=poItem?.harga_po||0;
-              const marginTotal=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):null;
+              const qtyPO=poItem?.qty||i.qty||0;
+              const marginTotal=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):null;
               return`<tr style="border-bottom:1px solid #f0f0f0">
                 <td style="padding:5px 14px;font-weight:500">${i.nama}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${i.qty} ${i.satuan||''}</td>
@@ -4886,7 +4888,7 @@ function downloadLaporanExcel(){
       const n=invVNet(iv);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
       (iv.items||[]).forEach((i,idx)=>{
         const poItem=d.po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
-        const hpo=poItem?.harga_po||0;const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):0;
+        const hpo=poItem?.harga_po||0;const qtyPO=poItem?.qty||i.qty||0;const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):0;
         rowsVDet.push([idx===0?nama:'',idx===0?iv.no:'',idx===0?(iv.bayar_status==='lunas'?'Lunas':'Belum'):'',
           idx===0?iv.total:0,idx===0?n.paid:0,idx===0?n.sisa:0,idx===0?(n.ongkir||0):0,idx===0?cbTotal:0,
           i.nama,i.qty,i.satuan||'',hpo,i.harga_vendor||0,mg]);

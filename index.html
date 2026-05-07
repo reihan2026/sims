@@ -2029,6 +2029,12 @@ function showDetail(id){
     </div>
   </div>${detItems(id,po,itemInvV,itemInvD,itemPassthrough)}</div>`;
 
+  // Preserve hari section collapse state before re-render
+  const _collapsedHari=new Set();
+  document.querySelectorAll('[id^="hari-sec-"]').forEach(el=>{
+    if(el.style.maxHeight==='0px')_collapsedHari.add(el.id);
+  });
+
   document.getElementById('det-body').innerHTML=
     detMetrics(po,t,invV)+
     detNextSteps(id,po,invV,invD)+
@@ -2037,6 +2043,16 @@ function showDetail(id){
     detInvV(id,invV)+
     detInvD(id,invD)+
     detRevisions(po);
+
+  // Restore collapsed state after render
+  if(_collapsedHari.size>0){
+    _collapsedHari.forEach(hariId=>{
+      const el=document.getElementById(hariId);
+      const arrow=document.getElementById(hariId+'-arrow');
+      if(el){el.style.maxHeight='0px';}
+      if(arrow)arrow.textContent='▼';
+    });
+  }
 
   nav('detail-po');
 }

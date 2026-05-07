@@ -4562,7 +4562,8 @@ function downloadRekapVendorExcel(){
     (iv.items||[]).forEach(i=>{
       const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
       const hpo=poItem?.harga_po||0;
-      const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(i.qty||0):0;
+      const qtyPO=poItem?.qty||i.qty||0;
+      const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):0;
       ivMargin+=mg;
       rows.push([i.nama,i.qty,i.satuan,hpo,i.harga_vendor||0,mg]);
     });
@@ -4676,7 +4677,7 @@ function renderLaporanHTML(d){
     ${totalOngkir?metRow('Total ongkos kirim','-'+fmtF(totalOngkir),'','#dc2626'):''}
     ${totalCashback?metRow('Total cashback diterima','+'+fmtF(totalCashback),'','#7c3aed'):''}
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 4px;border-top:2px solid #222;margin-top:4px">
-      <span style="font-weight:700">Estimasi margin bersih</span>
+      <span style="font-weight:700">Margin bersih</span>
       <span style="font-family:monospace;font-weight:700;font-size:16px;color:${marginBersih>=0?'#16a34a':'#dc2626'}">${fmtF(marginBersih)}${pct?` <span style="font-size:11px;font-weight:400;color:#888">(${pct}%)</span>`:''}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0">
@@ -4695,10 +4696,11 @@ function renderLaporanHTML(d){
     vendorEntries.forEach(([nama,v])=>{
       const allInvItems=v.invs.flatMap(iv=>(iv.items||[]).map(i=>({...i,iv})));
       // Compute total margin for this vendor
-      const vendorMargin=allInvItems.reduce((s,i)=>{
-        const poItem=d.po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
-        const hpo=poItem?.harga_po||0;
-        return hpo&&i.harga_vendor>0?s+(hpo-i.harga_vendor)*(i.qty||0):s;
+      // Hitung dari PO items yang vendor-nya sesuai — konsisten dengan poTotals
+      const vendorMargin=d.po.items.reduce((s,pi)=>{
+        if(!(pi.harga_vendor>0))return s;
+        if((pi.vendor||'').toLowerCase()!==(nama||'').toLowerCase())return s;
+        return s+(pi.harga_po-pi.harga_vendor)*(pi.qty||0);
       },0);
       const marginBersihVendor=vendorMargin-v.ongkir+v.cashback;
 
@@ -4817,12 +4819,8 @@ function renderLaporanHTML(d){
   vendorMarginHtml+='</tbody></table>';
   // Add total row
   const grandModal=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
-  const grandMargin=Object.entries(vendorMap).reduce((s,[,v])=>{
-    return s+v.invs.flatMap(iv=>(iv.items||[])).reduce((s2,i)=>{
-      const poItem=po.items.find((pi,pidx)=>typeof i.idx==='number'?pidx===i.idx:pi.nama===i.nama);
-      return poItem&&i.harga_vendor>0?s2+(poItem.harga_po-i.harga_vendor)*(i.qty||0):s2;
-    },0);
-  },0);
+  // Grand margin: pakai poTotals agar konsisten dengan angka di atas
+  const grandMargin=t.tpFilled-t.tv; // tp-tv tanpa ongkir (ongkir dihitung terpisah)
   const grandOngkir=Object.values(vendorMap).reduce((s,v)=>s+(v.ongkir||0),0);
   const grandCashback=Object.values(vendorMap).reduce((s,v)=>s+(v.cashback||0),0);
   const grandBersih=grandMargin-grandOngkir+grandCashback;
@@ -4914,9 +4912,11 @@ function downloadLaporanExcel(){
   const rowsMV=[['Vendor','Total modal','Total margin','Ongkir','Cashback','Margin bersih','%']];
   let gM=0,gMar=0,gO=0,gCB=0;
   Object.entries(vendorMap).forEach(([nama,v])=>{
-    const vMar=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
-      const pi=po.items.find((p,pidx)=>typeof i.idx==='number'?pidx===i.idx:p.nama===i.nama);
-      return pi&&i.harga_vendor>0?s+(pi.harga_po-i.harga_vendor)*(i.qty||0):s;
+    // Hitung dari PO items langsung — konsisten dengan poTotals
+    const vMar=po.items.reduce((s,pi)=>{
+      if(!(pi.harga_vendor>0))return s;
+      if((pi.vendor||'').toLowerCase()!==(nama||'').toLowerCase())return s;
+      return s+(pi.harga_po-pi.harga_vendor)*(pi.qty||0);
     },0);
     const vMB=vMar-(v.ongkir||0)+(v.cashback||0);
     rowsMV.push([nama,v.total,vMar,-(v.ongkir||0),v.cashback||0,vMB,v.total>0?parseFloat((vMB/v.total*100).toFixed(1)):0]);

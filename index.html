@@ -242,6 +242,8 @@ input[type=checkbox],input[type=radio]{width:auto}
     <div class="nsec">Keuangan</div>
     <button class="ni" onclick="nav('cashflow')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Cashflow</button>
     <button class="ni" onclick="nav('rekening')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Rekening &amp; Dana</button>
+    <div class="nsec">Analitik</div>
+    <button class="ni" onclick="nav('konsumsi')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 17V13M12 17V9M16 17V11"/></svg>Konsumsi Bahan Baku</button>
     <div class="nsec">Pengaturan</div>
     <button class="ni" onclick="nav('master')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07"/></svg>Master Data</button>
   </nav>
@@ -457,6 +459,46 @@ input[type=checkbox],input[type=radio]{width:auto}
         </div>
       </div>
       <div id="log-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="page-konsumsi" class="page">
+  <div class="ph"><div><div class="ph-t">Konsumsi Bahan Baku</div><div class="ph-s">Analisis qty bahan baku yang sudah diterima dapur</div></div></div>
+  <div class="pc">
+    <div class="fbar" style="margin-bottom:13px">
+      <select id="k-bulan" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua bulan</option></select>
+      <select id="k-dapur" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua dapur</option></select>
+      <select id="k-vendor" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua vendor</option></select>
+      <select id="k-kat" onchange="renderKonsumsi()" style="min-width:120px"><option value="">Semua kategori</option></select>
+      <button class="btn bsm" onclick="resetKonsumsiFilter()">Reset filter</button>
+    </div>
+    <div class="mg" id="k-met" style="margin-bottom:13px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px">
+      <div class="card" style="margin-bottom:0">
+        <div class="ct">Top bahan baku — qty diterima</div>
+        <div style="position:relative;height:260px"><canvas id="k-chart-bar"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="ct">Konsumsi per kategori</div>
+        <div style="position:relative;height:260px"><canvas id="k-chart-kat"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ct">Tren konsumsi bulanan</div>
+      <div style="position:relative;height:220px"><canvas id="k-chart-line"></canvas></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
+        <div class="ct" style="margin:0">Detail per bahan baku</div>
+        <span id="k-table-count" style="font-size:10px;color:var(--t3);font-family:var(--mn)"></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>Nama bahan baku</th><th>Kategori</th><th>Satuan</th><th style="text-align:right">Total qty diterima</th><th style="text-align:right">Jumlah PO</th><th>Vendor (terbanyak)</th></tr></thead>
+          <tbody id="k-table-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -927,6 +969,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // ===== FIREBASE INIT =====
 const firebaseConfig={apiKey:"AIzaSyDVno4yTcgOdCAf9X-VaNwulIUOYSry_24",authDomain:"sims-supply.firebaseapp.com",projectId:"sims-supply",storageBucket:"sims-supply.firebasestorage.app",messagingSenderId:"358117996377",appId:"1:358117996377:web:1d5fc8b448e7d0db5e7e48"};
@@ -1319,12 +1362,12 @@ function inlineAddRek(targetSelId){
 }
 
 // ===== NAVIGATION =====
-const PAGES=['dash','po-baru','daftar-po','detail-po','inv-vendor','inv-dapur','cashflow','rekening','master'];
+const PAGES=['dash','po-baru','daftar-po','detail-po','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','master'];
 function nav(name){
   _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  const MAP={dash:0,'po-baru':1,'daftar-po':2,'inv-vendor':3,'inv-dapur':4,cashflow:5,rekening:6,master:7};
+  const MAP={dash:0,'po-baru':1,'daftar-po':2,'inv-vendor':3,'inv-dapur':4,cashflow:5,rekening:6,konsumsi:7,master:8};
   const i=MAP[name];if(i!==undefined)document.querySelectorAll('.ni')[i]?.classList.add('active');
   closeSidebar();closeStatPopup();
   if(name==='dash')renderDashboard();
@@ -1333,6 +1376,7 @@ function nav(name){
   if(name==='inv-dapur')renderInvD();
   if(name==='cashflow')renderCashflow();
   if(name==='rekening')renderRekening();
+  if(name==='konsumsi')renderKonsumsi();
   if(name==='master'){renderMaster();initUserProfile();renderLog();}
   if(name==='po-baru')initPOForm();
 }
@@ -4875,6 +4919,147 @@ function downloadLaporanExcel(){
 
   XLSX.writeFile(wb,`Laporan-${po.no.replace(/[^a-z0-9]/gi,'_')}.xlsx`);
   showToast('File Excel berhasil didownload!');
+}
+
+// ===== KONSUMSI BAHAN BAKU =====
+let _kChartBar=null,_kChartKat=null,_kChartLine=null;
+
+function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat){
+  const rows=[];
+  getPOs().forEach(po=>{
+    if(fDapur&&po.dapur!==fDapur)return;
+    (po.items||[]).forEach(item=>{
+      if(item.status_kirim!=='diterima')return;
+      const tgl=item.tgl_diterima||po.date||'';
+      const bulan=tgl.substring(0,7);
+      if(fBulan&&bulan!==fBulan)return;
+      if(fVendor&&item.vendor!==fVendor)return;
+      if(fKat&&(item.kat||'')!==fKat)return;
+      const qty=Math.max(0,(item.qty||0)-(item.retur?.qty||0));
+      rows.push({nama:(item.nama||'').trim(),kat:item.kat||'Lainnya',qty,satuan:item.satuan||'pcs',vendor:item.vendor||'—',dapur:po.dapur,bulan,tgl});
+    });
+  });
+  return rows;
+}
+
+function _initKonsumsiFilters(rows){
+  const allRows=_getKonsumsiRows('','','','');
+  const bulanSet=new Set(),dapurSet=new Set(),vendorSet=new Set(),katSet=new Set();
+  allRows.forEach(r=>{if(r.bulan)bulanSet.add(r.bulan);dapurSet.add(r.dapur);if(r.vendor&&r.vendor!=='—')vendorSet.add(r.vendor);if(r.kat&&r.kat!=='Lainnya')katSet.add(r.kat);});
+  const curBulan=document.getElementById('k-bulan').value;
+  const curDapur=document.getElementById('k-dapur').value;
+  const curVendor=document.getElementById('k-vendor').value;
+  const curKat=document.getElementById('k-kat').value;
+  const sortedBulan=[...bulanSet].sort().reverse();
+  document.getElementById('k-bulan').innerHTML='<option value="">Semua bulan</option>'+sortedBulan.map(b=>`<option value="${b}" ${b===curBulan?'selected':''}>${_fmtBulan(b)}</option>`).join('');
+  document.getElementById('k-dapur').innerHTML='<option value="">Semua dapur</option>'+ [...dapurSet].sort().map(d=>`<option value="${d}" ${d===curDapur?'selected':''}>${d}</option>`).join('');
+  document.getElementById('k-vendor').innerHTML='<option value="">Semua vendor</option>'+ [...vendorSet].sort().map(v=>`<option value="${v}" ${v===curVendor?'selected':''}>${v}</option>`).join('');
+  document.getElementById('k-kat').innerHTML='<option value="">Semua kategori</option>'+ [...katSet].sort().map(k=>`<option value="${k}" ${k===curKat?'selected':''}>${k}</option>`).join('');
+}
+
+function _fmtBulan(ym){
+  if(!ym)return'';
+  const [y,m]=ym.split('-');
+  const bln=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Ags','Sep','Okt','Nov','Des'];
+  return(bln[parseInt(m)-1]||m)+' '+y;
+}
+
+const _KAT_COLORS=['#2D5A3D','#1A3D6B','#4A1E8A','#8B2020','#7A5B0A','#0A5C6B','#5C3D0A','#1A5C4A'];
+
+function renderKonsumsi(){
+  const fBulan=document.getElementById('k-bulan')?.value||'';
+  const fDapur=document.getElementById('k-dapur')?.value||'';
+  const fVendor=document.getElementById('k-vendor')?.value||'';
+  const fKat=document.getElementById('k-kat')?.value||'';
+  const rows=_getKonsumsiRows(fBulan,fDapur,fVendor,fKat);
+  _initKonsumsiFilters(rows);
+
+  // Metrics
+  const totalItem=rows.length;
+  const totalQty=rows.reduce((s,r)=>s+r.qty,0);
+  const uniqueNama=new Set(rows.map(r=>r.nama)).size;
+  const uniqueVendor=new Set(rows.filter(r=>r.vendor&&r.vendor!=='—').map(r=>r.vendor)).size;
+  document.getElementById('k-met').innerHTML=`
+    <div class="met"><div class="ml">Total item diterima</div><div class="mv num">${totalItem}</div><div class="ms">baris item</div></div>
+    <div class="met"><div class="ml">Total qty diterima</div><div class="mv num">${fmtF(totalQty)}</div><div class="ms">berbagai satuan</div></div>
+    <div class="met"><div class="ml">Jenis bahan baku</div><div class="mv num">${uniqueNama}</div><div class="ms">nama unik</div></div>
+    <div class="met"><div class="ml">Vendor terlibat</div><div class="mv num">${uniqueVendor}</div><div class="ms">vendor</div></div>`;
+
+  // Group by nama
+  const byNama=new Map();
+  rows.forEach(r=>{
+    const k=r.nama+'||'+r.satuan;
+    if(!byNama.has(k))byNama.set(k,{nama:r.nama,satuan:r.satuan,kat:r.kat,qty:0,po:0,vendors:new Map()});
+    const e=byNama.get(k);e.qty+=r.qty;e.po++;
+    if(r.vendor&&r.vendor!=='—')e.vendors.set(r.vendor,(e.vendors.get(r.vendor)||0)+1);
+  });
+  const byNamaArr=[...byNama.values()].sort((a,b)=>b.qty-a.qty);
+
+  // Group by kat
+  const byKat=new Map();
+  rows.forEach(r=>{const k=r.kat||'Lainnya';if(!byKat.has(k))byKat.set(k,0);byKat.set(k,byKat.get(k)+r.qty);});
+  const byKatArr=[...byKat.entries()].sort((a,b)=>b[1]-a[1]);
+
+  // Group by bulan (for trend line)
+  const allBulan=[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat).map(r=>r.bulan).filter(Boolean))].sort();
+  const last12=allBulan.slice(-12);
+  const kats=[...new Set(rows.map(r=>r.kat||'Lainnya'))];
+  const trendData=last12.map(b=>{
+    const bRows=_getKonsumsiRows(b,fDapur,fVendor,fKat);
+    const byK={};bRows.forEach(r=>{const k=r.kat||'Lainnya';byK[k]=(byK[k]||0)+r.qty;});
+    return{bulan:b,byK};
+  });
+
+  // Bar chart - top 15
+  const top15=byNamaArr.slice(0,15);
+  _kChartBar=_renderChart('k-chart-bar',_kChartBar,'bar',{
+    labels:top15.map(r=>r.nama.length>18?r.nama.substring(0,16)+'…':r.nama),
+    datasets:[{label:'Qty diterima',data:top15.map(r=>r.qty),backgroundColor:top15.map(r=>{const ci=kats.indexOf(r.kat);return_KAT_COLORS[ci>=0?ci%_KAT_COLORS.length:0]+'CC';}),borderRadius:3}]
+  },{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const r=top15[c.dataIndex];return`${fmtF(c.raw)} ${r.satuan}`;},title:c=>[top15[c[0].dataIndex].nama,top15[c[0].dataIndex].kat||'']}}},scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10},maxRotation:40}}}});
+
+  // Kat chart - horizontal bar
+  _kChartKat=_renderChart('k-chart-kat',_kChartKat,'bar',{
+    labels:byKatArr.map(e=>e[0]),
+    datasets:[{label:'Qty',data:byKatArr.map(e=>e[1]),backgroundColor:byKatArr.map((_,i)=>_KAT_COLORS[i%_KAT_COLORS.length]+'CC'),borderRadius:3}]
+  },{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtF(c.raw)} qty`}}},scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}});
+
+  // Line chart - trend
+  const lineDatasets=kats.map((k,i)=>({label:k,data:trendData.map(d=>d.byK[k]||0),borderColor:_KAT_COLORS[i%_KAT_COLORS.length],backgroundColor:_KAT_COLORS[i%_KAT_COLORS.length]+'22',tension:0.3,fill:false,pointRadius:3}));
+  _kChartLine=_renderChart('k-chart-line',_kChartLine,'line',{
+    labels:trendData.map(d=>_fmtBulan(d.bulan)),
+    datasets:lineDatasets
+  },{plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10}}},scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}});
+
+  // Table
+  const tbody=document.getElementById('k-table-body');
+  document.getElementById('k-table-count').textContent=byNamaArr.length+' jenis bahan baku';
+  if(!byNamaArr.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty">Belum ada data konsumsi</div></td></tr>';return;}
+  tbody.innerHTML=byNamaArr.map((r,i)=>{
+    const topVendor=r.vendors.size?[...r.vendors.entries()].sort((a,b)=>b[1]-a[1])[0][0]:'—';
+    return`<tr>
+      <td style="font-weight:500">${r.nama}</td>
+      <td>${r.kat?`<span class="tag tgr">${r.kat}</span>`:'—'}</td>
+      <td style="font-family:var(--mn);font-size:11px">${r.satuan}</td>
+      <td class="num-cell" style="font-weight:600">${fmtF(r.qty)}</td>
+      <td class="num-cell">${r.po}</td>
+      <td style="font-size:12px">${topVendor}</td>
+    </tr>`;
+  }).join('');
+}
+
+function _renderChart(canvasId,existing,type,data,options){
+  if(existing)existing.destroy();
+  const ctx=document.getElementById(canvasId);
+  if(!ctx)return null;
+  return new Chart(ctx,{type,data,options:{responsive:true,maintainAspectRatio:false,...options}});
+}
+
+function resetKonsumsiFilter(){
+  document.getElementById('k-bulan').value='';
+  document.getElementById('k-dapur').value='';
+  document.getElementById('k-vendor').value='';
+  document.getElementById('k-kat').value='';
+  renderKonsumsi();
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

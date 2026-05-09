@@ -493,9 +493,15 @@ input[type=checkbox],input[type=radio]{width:auto}
         <div style="position:relative;height:260px"><canvas id="k-chart-kat"></canvas></div>
       </div>
     </div>
-    <div class="card">
-      <div class="ct" id="k-title-line">Tren bulanan per kategori</div>
-      <div style="position:relative;height:220px"><canvas id="k-chart-line"></canvas></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px">
+      <div class="card" style="margin-bottom:0">
+        <div class="ct" id="k-title-line">Tren bulanan per kategori</div>
+        <div style="position:relative;height:220px"><canvas id="k-chart-line"></canvas></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="ct">Nilai per vendor (Rp)</div>
+        <div style="position:relative;height:220px"><canvas id="k-chart-vendor"></canvas></div>
+      </div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
@@ -4931,7 +4937,7 @@ function downloadLaporanExcel(){
 }
 
 // ===== KONSUMSI BAHAN BAKU =====
-let _kChartBar=null,_kChartKat=null,_kChartLine=null,_kMetrik='nilai';
+let _kChartBar=null,_kChartKat=null,_kChartLine=null,_kChartVendor=null,_kMetrik='nilai';
 
 function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat,fSatuan){
   const rows=[];
@@ -5144,6 +5150,34 @@ function renderKonsumsi(){
     scales:{
       y:{beginAtZero:true,ticks:{font:{size:10},callback:v=>m==='nilai'?'Rp '+Number(v/1000).toLocaleString('id-ID')+'rb':Number(v).toLocaleString('id-ID')}},
       x:{ticks:{font:{size:10}}}
+    }
+  });
+
+  // Vendor chart - selalu pakai nilai (Rp), tidak terpengaruh toggle metrik
+  const byVendor=new Map();
+  _getKonsumsiRows(fBulan,fDapur,'',fKat,fSatuan).forEach(r=>{
+    if(!r.vendor||r.vendor==='—')return;
+    if(!byVendor.has(r.vendor))byVendor.set(r.vendor,0);
+    byVendor.set(r.vendor,byVendor.get(r.vendor)+r.nilai);
+  });
+  const byVendorArr=[...byVendor.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
+  _kChartVendor=_renderChart('k-chart-vendor',_kChartVendor,'bar',{
+    labels:byVendorArr.map(e=>e[0].length>20?e[0].substring(0,18)+'…':e[0]),
+    datasets:[{
+      label:'Nilai (Rp)',
+      data:byVendorArr.map(e=>e[1]),
+      backgroundColor:byVendorArr.map((_,i)=>_KAT_COLORS[i%_KAT_COLORS.length]+'BB'),
+      borderRadius:3
+    }]
+  },{
+    indexAxis:'y',
+    plugins:{legend:{display:false},tooltip:{callbacks:{
+      label:c=>_fmtNilai(c.raw),
+      title:c=>[byVendorArr[c[0].dataIndex]?.[0]||'']
+    }}},
+    scales:{
+      x:{beginAtZero:true,ticks:{font:{size:10},callback:v=>'Rp '+Number(v/1000).toLocaleString('id-ID')+'rb'}},
+      y:{ticks:{font:{size:10}}}
     }
   });
 

@@ -4967,6 +4967,10 @@ function _fmtBulan(ym){
 const _KAT_COLORS=['#2D5A3D','#1A3D6B','#4A1E8A','#8B2020','#7A5B0A','#0A5C6B','#5C3D0A','#1A5C4A'];
 
 function renderKonsumsi(){
+  if(typeof Chart==='undefined'){
+    document.getElementById('k-met').innerHTML='<div style="color:var(--dn);font-size:12px;padding:8px">Chart.js belum dimuat. Coba refresh halaman.</div>';
+    return;
+  }
   const fBulan=document.getElementById('k-bulan')?.value||'';
   const fDapur=document.getElementById('k-dapur')?.value||'';
   const fVendor=document.getElementById('k-vendor')?.value||'';
@@ -4976,14 +4980,14 @@ function renderKonsumsi(){
 
   // Metrics
   const totalItem=rows.length;
-  const totalQty=rows.reduce((s,r)=>s+r.qty,0);
   const uniqueNama=new Set(rows.map(r=>r.nama)).size;
   const uniqueVendor=new Set(rows.filter(r=>r.vendor&&r.vendor!=='—').map(r=>r.vendor)).size;
+  const uniqueBulan=new Set(rows.map(r=>r.bulan).filter(Boolean)).size;
   document.getElementById('k-met').innerHTML=`
-    <div class="met"><div class="ml">Total item diterima</div><div class="mv num">${totalItem}</div><div class="ms">baris item</div></div>
-    <div class="met"><div class="ml">Total qty diterima</div><div class="mv num">${fmtF(totalQty)}</div><div class="ms">berbagai satuan</div></div>
-    <div class="met"><div class="ml">Jenis bahan baku</div><div class="mv num">${uniqueNama}</div><div class="ms">nama unik</div></div>
-    <div class="met"><div class="ml">Vendor terlibat</div><div class="mv num">${uniqueVendor}</div><div class="ms">vendor</div></div>`;
+    <div class="met"><div class="ml">Total item diterima</div><div class="mv num">${totalItem.toLocaleString('id-ID')}</div><div class="ms">baris item</div></div>
+    <div class="met"><div class="ml">Jenis bahan baku</div><div class="mv num">${uniqueNama.toLocaleString('id-ID')}</div><div class="ms">nama unik</div></div>
+    <div class="met"><div class="ml">Vendor terlibat</div><div class="mv num">${uniqueVendor.toLocaleString('id-ID')}</div><div class="ms">vendor</div></div>
+    <div class="met"><div class="ml">Rentang bulan</div><div class="mv num">${uniqueBulan.toLocaleString('id-ID')}</div><div class="ms">bulan</div></div>`;
 
   // Group by nama
   const byNama=new Map();
@@ -5000,10 +5004,13 @@ function renderKonsumsi(){
   rows.forEach(r=>{const k=r.kat||'Lainnya';if(!byKat.has(k))byKat.set(k,0);byKat.set(k,byKat.get(k)+r.qty);});
   const byKatArr=[...byKat.entries()].sort((a,b)=>b[1]-a[1]);
 
+  // All kats for color mapping
+  const kats=byKatArr.map(e=>e[0]);
+
   // Group by bulan (for trend line)
   const allBulan=[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat).map(r=>r.bulan).filter(Boolean))].sort();
   const last12=allBulan.slice(-12);
-  const kats=[...new Set(rows.map(r=>r.kat||'Lainnya'))];
+  const trendKats=kats.length?kats:[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat).map(r=>r.kat||'Lainnya'))];
   const trendData=last12.map(b=>{
     const bRows=_getKonsumsiRows(b,fDapur,fVendor,fKat);
     const byK={};bRows.forEach(r=>{const k=r.kat||'Lainnya';byK[k]=(byK[k]||0)+r.qty;});
@@ -5014,33 +5021,62 @@ function renderKonsumsi(){
   const top15=byNamaArr.slice(0,15);
   _kChartBar=_renderChart('k-chart-bar',_kChartBar,'bar',{
     labels:top15.map(r=>r.nama.length>18?r.nama.substring(0,16)+'…':r.nama),
-    datasets:[{label:'Qty diterima',data:top15.map(r=>r.qty),backgroundColor:top15.map(r=>{const ci=kats.indexOf(r.kat);return_KAT_COLORS[ci>=0?ci%_KAT_COLORS.length:0]+'CC';}),borderRadius:3}]
-  },{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const r=top15[c.dataIndex];return`${fmtF(c.raw)} ${r.satuan}`;},title:c=>[top15[c[0].dataIndex].nama,top15[c[0].dataIndex].kat||'']}}},scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10},maxRotation:40}}}});
+    datasets:[{
+      label:'Qty diterima',
+      data:top15.map(r=>r.qty),
+      backgroundColor:top15.map(r=>{const ci=kats.indexOf(r.kat);return _KAT_COLORS[ci>=0?ci%_KAT_COLORS.length:0]+'CC';}),
+      borderRadius:3
+    }]
+  },{
+    plugins:{legend:{display:false},tooltip:{callbacks:{
+      label:c=>{const r=top15[c.dataIndex];return`${Number(c.raw).toLocaleString('id-ID')} ${r.satuan}`;},
+      title:c=>[top15[c[0].dataIndex].nama,top15[c[0].dataIndex].kat||'']
+    }}},
+    scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10},maxRotation:40}}}
+  });
 
   // Kat chart - horizontal bar
   _kChartKat=_renderChart('k-chart-kat',_kChartKat,'bar',{
     labels:byKatArr.map(e=>e[0]),
-    datasets:[{label:'Qty',data:byKatArr.map(e=>e[1]),backgroundColor:byKatArr.map((_,i)=>_KAT_COLORS[i%_KAT_COLORS.length]+'CC'),borderRadius:3}]
-  },{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtF(c.raw)} qty`}}},scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}});
+    datasets:[{
+      label:'Qty',
+      data:byKatArr.map(e=>e[1]),
+      backgroundColor:byKatArr.map((_,i)=>_KAT_COLORS[i%_KAT_COLORS.length]+'CC'),
+      borderRadius:3
+    }]
+  },{
+    indexAxis:'y',
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${Number(c.raw).toLocaleString('id-ID')} qty`}}},
+    scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}
+  });
 
-  // Line chart - trend
-  const lineDatasets=kats.map((k,i)=>({label:k,data:trendData.map(d=>d.byK[k]||0),borderColor:_KAT_COLORS[i%_KAT_COLORS.length],backgroundColor:_KAT_COLORS[i%_KAT_COLORS.length]+'22',tension:0.3,fill:false,pointRadius:3}));
+  // Line chart - trend per kategori
+  const lineDatasets=trendKats.map((k,i)=>({
+    label:k,
+    data:trendData.map(d=>d.byK[k]||0),
+    borderColor:_KAT_COLORS[i%_KAT_COLORS.length],
+    backgroundColor:_KAT_COLORS[i%_KAT_COLORS.length]+'22',
+    tension:0.3,fill:false,pointRadius:3
+  }));
   _kChartLine=_renderChart('k-chart-line',_kChartLine,'line',{
     labels:trendData.map(d=>_fmtBulan(d.bulan)),
     datasets:lineDatasets
-  },{plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10}}},scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}});
+  },{
+    plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10}}},
+    scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}
+  });
 
   // Table
   const tbody=document.getElementById('k-table-body');
   document.getElementById('k-table-count').textContent=byNamaArr.length+' jenis bahan baku';
-  if(!byNamaArr.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty">Belum ada data konsumsi</div></td></tr>';return;}
-  tbody.innerHTML=byNamaArr.map((r,i)=>{
+  if(!byNamaArr.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty">Belum ada data — belum ada item dengan status "Diterima"</div></td></tr>';return;}
+  tbody.innerHTML=byNamaArr.map(r=>{
     const topVendor=r.vendors.size?[...r.vendors.entries()].sort((a,b)=>b[1]-a[1])[0][0]:'—';
     return`<tr>
       <td style="font-weight:500">${r.nama}</td>
       <td>${r.kat?`<span class="tag tgr">${r.kat}</span>`:'—'}</td>
       <td style="font-family:var(--mn);font-size:11px">${r.satuan}</td>
-      <td class="num-cell" style="font-weight:600">${fmtF(r.qty)}</td>
+      <td class="num-cell" style="font-weight:600">${Number(r.qty).toLocaleString('id-ID')}</td>
       <td class="num-cell">${r.po}</td>
       <td style="font-size:12px">${topVendor}</td>
     </tr>`;

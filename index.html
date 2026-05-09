@@ -464,28 +464,37 @@ input[type=checkbox],input[type=radio]{width:auto}
 </div>
 
 <div id="page-konsumsi" class="page">
-  <div class="ph"><div><div class="ph-t">Konsumsi Bahan Baku</div><div class="ph-s">Analisis qty bahan baku yang sudah diterima dapur</div></div></div>
+  <div class="ph">
+    <div><div class="ph-t">Konsumsi Bahan Baku</div><div class="ph-s">Analisis bahan baku yang sudah diterima dapur</div></div>
+    <div style="display:flex;border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;align-self:center">
+      <button id="k-tog-nilai" class="btn bsm bp" style="border:none;border-radius:0;border-right:1px solid var(--ab)" onclick="setKMetrik('nilai')">Nilai (Rp)</button>
+      <button id="k-tog-frek" class="btn bsm" style="border:none;border-radius:0;border-right:1px solid var(--bd)" onclick="setKMetrik('frek')">Frekuensi</button>
+      <button id="k-tog-qty" class="btn bsm" style="border:none;border-radius:0" onclick="setKMetrik('qty')">Qty / satuan</button>
+    </div>
+  </div>
   <div class="pc">
     <div class="fbar" style="margin-bottom:13px">
       <select id="k-bulan" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua bulan</option></select>
       <select id="k-dapur" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua dapur</option></select>
       <select id="k-vendor" onchange="renderKonsumsi()" style="min-width:130px"><option value="">Semua vendor</option></select>
       <select id="k-kat" onchange="renderKonsumsi()" style="min-width:120px"><option value="">Semua kategori</option></select>
-      <button class="btn bsm" onclick="resetKonsumsiFilter()">Reset filter</button>
+      <select id="k-satuan" onchange="renderKonsumsi()" style="min-width:120px;display:none"><option value="">Semua satuan</option></select>
+      <button class="btn bsm" onclick="resetKonsumsiFilter()">Reset</button>
     </div>
+    <div id="k-nilai-warn" style="display:none;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);padding:8px 12px;font-size:11px;color:var(--wt);margin-bottom:11px"></div>
     <div class="mg" id="k-met" style="margin-bottom:13px"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:11px">
       <div class="card" style="margin-bottom:0">
-        <div class="ct">Top bahan baku — qty diterima</div>
+        <div class="ct" id="k-title-bar">Top bahan baku</div>
         <div style="position:relative;height:260px"><canvas id="k-chart-bar"></canvas></div>
       </div>
       <div class="card" style="margin-bottom:0">
-        <div class="ct">Konsumsi per kategori</div>
+        <div class="ct" id="k-title-kat">Per kategori</div>
         <div style="position:relative;height:260px"><canvas id="k-chart-kat"></canvas></div>
       </div>
     </div>
     <div class="card">
-      <div class="ct">Tren konsumsi bulanan</div>
+      <div class="ct" id="k-title-line">Tren bulanan per kategori</div>
       <div style="position:relative;height:220px"><canvas id="k-chart-line"></canvas></div>
     </div>
     <div class="card">
@@ -495,7 +504,7 @@ input[type=checkbox],input[type=radio]{width:auto}
       </div>
       <div style="overflow-x:auto">
         <table class="tbl">
-          <thead><tr><th>Nama bahan baku</th><th>Kategori</th><th>Satuan</th><th style="text-align:right">Total qty diterima</th><th style="text-align:right">Jumlah PO</th><th>Vendor (terbanyak)</th></tr></thead>
+          <thead id="k-table-head"><tr><th>Nama bahan baku</th><th>Kategori</th><th>Satuan</th><th style="text-align:right">Nilai (Rp)</th><th style="text-align:right">Jumlah PO</th><th>Vendor (terbanyak)</th></tr></thead>
           <tbody id="k-table-body"></tbody>
         </table>
       </div>
@@ -4922,9 +4931,9 @@ function downloadLaporanExcel(){
 }
 
 // ===== KONSUMSI BAHAN BAKU =====
-let _kChartBar=null,_kChartKat=null,_kChartLine=null;
+let _kChartBar=null,_kChartKat=null,_kChartLine=null,_kMetrik='nilai';
 
-function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat){
+function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat,fSatuan){
   const rows=[];
   getPOs().forEach(po=>{
     if(fDapur&&po.dapur!==fDapur)return;
@@ -4935,26 +4944,34 @@ function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat){
       if(fBulan&&bulan!==fBulan)return;
       if(fVendor&&item.vendor!==fVendor)return;
       if(fKat&&(item.kat||'')!==fKat)return;
+      const satuan=item.satuan||'pcs';
+      if(fSatuan&&satuan!==fSatuan)return;
       const qty=Math.max(0,(item.qty||0)-(item.retur?.qty||0));
-      rows.push({nama:(item.nama||'').trim(),kat:item.kat||'Lainnya',qty,satuan:item.satuan||'pcs',vendor:item.vendor||'—',dapur:po.dapur,bulan,tgl});
+      const harga=(item.harga_vendor>0?item.harga_vendor:(item.harga_po||0));
+      const nilai=harga*qty;
+      rows.push({nama:(item.nama||'').trim(),kat:item.kat||'Lainnya',qty,satuan,nilai,vendor:item.vendor||'—',dapur:po.dapur,bulan,tgl});
     });
   });
   return rows;
 }
 
-function _initKonsumsiFilters(rows){
-  const allRows=_getKonsumsiRows('','','','');
-  const bulanSet=new Set(),dapurSet=new Set(),vendorSet=new Set(),katSet=new Set();
-  allRows.forEach(r=>{if(r.bulan)bulanSet.add(r.bulan);dapurSet.add(r.dapur);if(r.vendor&&r.vendor!=='—')vendorSet.add(r.vendor);if(r.kat&&r.kat!=='Lainnya')katSet.add(r.kat);});
-  const curBulan=document.getElementById('k-bulan').value;
-  const curDapur=document.getElementById('k-dapur').value;
-  const curVendor=document.getElementById('k-vendor').value;
-  const curKat=document.getElementById('k-kat').value;
-  const sortedBulan=[...bulanSet].sort().reverse();
-  document.getElementById('k-bulan').innerHTML='<option value="">Semua bulan</option>'+sortedBulan.map(b=>`<option value="${b}" ${b===curBulan?'selected':''}>${_fmtBulan(b)}</option>`).join('');
-  document.getElementById('k-dapur').innerHTML='<option value="">Semua dapur</option>'+ [...dapurSet].sort().map(d=>`<option value="${d}" ${d===curDapur?'selected':''}>${d}</option>`).join('');
-  document.getElementById('k-vendor').innerHTML='<option value="">Semua vendor</option>'+ [...vendorSet].sort().map(v=>`<option value="${v}" ${v===curVendor?'selected':''}>${v}</option>`).join('');
-  document.getElementById('k-kat').innerHTML='<option value="">Semua kategori</option>'+ [...katSet].sort().map(k=>`<option value="${k}" ${k===curKat?'selected':''}>${k}</option>`).join('');
+function _initKonsumsiFilters(){
+  const allRows=_getKonsumsiRows('','','','','');
+  const bulanSet=new Set(),dapurSet=new Set(),vendorSet=new Set(),katSet=new Set(),satuanSet=new Set();
+  allRows.forEach(r=>{
+    if(r.bulan)bulanSet.add(r.bulan);
+    dapurSet.add(r.dapur);
+    if(r.vendor&&r.vendor!=='—')vendorSet.add(r.vendor);
+    if(r.kat&&r.kat!=='Lainnya')katSet.add(r.kat);
+    satuanSet.add(r.satuan);
+  });
+  const save=id=>document.getElementById(id)?.value||'';
+  const curB=save('k-bulan'),curD=save('k-dapur'),curV=save('k-vendor'),curK=save('k-kat'),curS=save('k-satuan');
+  document.getElementById('k-bulan').innerHTML='<option value="">Semua bulan</option>'+[...bulanSet].sort().reverse().map(b=>`<option value="${b}" ${b===curB?'selected':''}>${_fmtBulan(b)}</option>`).join('');
+  document.getElementById('k-dapur').innerHTML='<option value="">Semua dapur</option>'+ [...dapurSet].sort().map(d=>`<option value="${d}" ${d===curD?'selected':''}>${d}</option>`).join('');
+  document.getElementById('k-vendor').innerHTML='<option value="">Semua vendor</option>'+ [...vendorSet].sort().map(v=>`<option value="${v}" ${v===curV?'selected':''}>${v}</option>`).join('');
+  document.getElementById('k-kat').innerHTML='<option value="">Semua kategori</option>'+ [...katSet].sort().map(k=>`<option value="${k}" ${k===curK?'selected':''}>${k}</option>`).join('');
+  document.getElementById('k-satuan').innerHTML='<option value="">Semua satuan</option>'+ [...satuanSet].sort().map(s=>`<option value="${s}" ${s===curS?'selected':''}>${s}</option>`).join('');
 }
 
 function _fmtBulan(ym){
@@ -4964,27 +4981,83 @@ function _fmtBulan(ym){
   return(bln[parseInt(m)-1]||m)+' '+y;
 }
 
+function _fmtNilai(v){return'Rp '+Math.round(v).toLocaleString('id-ID');}
+
 const _KAT_COLORS=['#2D5A3D','#1A3D6B','#4A1E8A','#8B2020','#7A5B0A','#0A5C6B','#5C3D0A','#1A5C4A'];
+
+function setKMetrik(m){
+  _kMetrik=m;
+  renderKonsumsi();
+}
 
 function renderKonsumsi(){
   if(typeof Chart==='undefined'){
     document.getElementById('k-met').innerHTML='<div style="color:var(--dn);font-size:12px;padding:8px">Chart.js belum dimuat. Coba refresh halaman.</div>';
     return;
   }
+  const m=_kMetrik;
+
+  // Toggle button states
+  ['nilai','frek','qty'].forEach(x=>{
+    const btn=document.getElementById('k-tog-'+x);
+    if(!btn)return;
+    btn.classList.toggle('bp',x===m);
+    btn.style.borderRightColor=x===m?'var(--ab)':x==='frek'&&m==='qty'?'var(--bd)':'var(--bd)';
+  });
+
+  // Show/hide satuan filter
+  const satuanEl=document.getElementById('k-satuan');
+  satuanEl.style.display=m==='qty'?'':'none';
+
   const fBulan=document.getElementById('k-bulan')?.value||'';
   const fDapur=document.getElementById('k-dapur')?.value||'';
   const fVendor=document.getElementById('k-vendor')?.value||'';
   const fKat=document.getElementById('k-kat')?.value||'';
-  const rows=_getKonsumsiRows(fBulan,fDapur,fVendor,fKat);
-  _initKonsumsiFilters(rows);
+  const fSatuan=m==='qty'?(satuanEl?.value||''):'';
+
+  _initKonsumsiFilters();
+  const rows=_getKonsumsiRows(fBulan,fDapur,fVendor,fKat,fSatuan);
+
+  // Nilai warning: items tanpa harga vendor
+  const warnEl=document.getElementById('k-nilai-warn');
+  if(m==='nilai'){
+    const noHarga=rows.filter(r=>r.nilai===0).length;
+    if(noHarga>0){
+      warnEl.style.display='';
+      warnEl.textContent=`${noHarga} item tidak memiliki harga vendor maupun harga PO — nilai Rp 0 dan tidak terhitung dalam total.`;
+    } else warnEl.style.display='none';
+  } else warnEl.style.display='none';
+
+  // Helpers
+  const getVal=r=>m==='nilai'?r.nilai:m==='frek'?1:r.qty;
+  const fmtVal=v=>m==='nilai'?_fmtNilai(v):Number(v).toLocaleString('id-ID');
+  const valLabel=m==='nilai'?'Nilai (Rp)':m==='frek'?'Frekuensi':'Qty';
+  const tooltipVal=(v,satuan)=>m==='nilai'?_fmtNilai(v):m==='frek'?v+' kali':Number(v).toLocaleString('id-ID')+' '+satuan;
+
+  // Chart & table titles
+  const titles={
+    nilai:{bar:'Top bahan baku — nilai (Rp)',kat:'Nilai per kategori (Rp)',line:'Tren nilai bulanan per kategori'},
+    frek:{bar:'Top bahan baku — frekuensi order',kat:'Frekuensi per kategori',line:'Tren frekuensi bulanan per kategori'},
+    qty:{bar:'Top bahan baku — qty diterima'+(fSatuan?' ('+fSatuan+')':''),kat:'Qty per kategori'+(fSatuan?' ('+fSatuan+')':''),line:'Tren qty bulanan per kategori'},
+  };
+  document.getElementById('k-title-bar').textContent=titles[m].bar;
+  document.getElementById('k-title-kat').textContent=titles[m].kat;
+  document.getElementById('k-title-line').textContent=titles[m].line;
+
+  // Table header
+  const thVal=m==='nilai'?'Nilai (Rp)':m==='frek'?'Frekuensi':'Qty';
+  const thSatuan=m==='qty'?'<th>Satuan</th>':'<th>Satuan</th>';
+  document.getElementById('k-table-head').innerHTML=`<tr><th>Nama bahan baku</th><th>Kategori</th>${thSatuan}<th style="text-align:right">${thVal}</th><th style="text-align:right">Jumlah PO</th><th>Vendor (terbanyak)</th></tr>`;
 
   // Metrics
-  const totalItem=rows.length;
+  const totalVal=rows.reduce((s,r)=>s+getVal(r),0);
   const uniqueNama=new Set(rows.map(r=>r.nama)).size;
   const uniqueVendor=new Set(rows.filter(r=>r.vendor&&r.vendor!=='—').map(r=>r.vendor)).size;
   const uniqueBulan=new Set(rows.map(r=>r.bulan).filter(Boolean)).size;
+  const metLabel1=m==='nilai'?'Total nilai konsumsi':m==='frek'?'Total frekuensi':'Total qty diterima';
+  const metSub1=m==='nilai'?'estimasi (harga vendor/PO)':m==='frek'?'kali diterima':fSatuan||'berbagai satuan';
   document.getElementById('k-met').innerHTML=`
-    <div class="met"><div class="ml">Total item diterima</div><div class="mv num">${totalItem.toLocaleString('id-ID')}</div><div class="ms">baris item</div></div>
+    <div class="met"><div class="ml">${metLabel1}</div><div class="mv num">${fmtVal(totalVal)}</div><div class="ms">${metSub1}</div></div>
     <div class="met"><div class="ml">Jenis bahan baku</div><div class="mv num">${uniqueNama.toLocaleString('id-ID')}</div><div class="ms">nama unik</div></div>
     <div class="met"><div class="ml">Vendor terlibat</div><div class="mv num">${uniqueVendor.toLocaleString('id-ID')}</div><div class="ms">vendor</div></div>
     <div class="met"><div class="ml">Rentang bulan</div><div class="mv num">${uniqueBulan.toLocaleString('id-ID')}</div><div class="ms">bulan</div></div>`;
@@ -4993,27 +5066,26 @@ function renderKonsumsi(){
   const byNama=new Map();
   rows.forEach(r=>{
     const k=r.nama+'||'+r.satuan;
-    if(!byNama.has(k))byNama.set(k,{nama:r.nama,satuan:r.satuan,kat:r.kat,qty:0,po:0,vendors:new Map()});
-    const e=byNama.get(k);e.qty+=r.qty;e.po++;
+    if(!byNama.has(k))byNama.set(k,{nama:r.nama,satuan:r.satuan,kat:r.kat,nilai:0,qty:0,frek:0,po:0,vendors:new Map()});
+    const e=byNama.get(k);e.nilai+=r.nilai;e.qty+=r.qty;e.frek++;e.po++;
     if(r.vendor&&r.vendor!=='—')e.vendors.set(r.vendor,(e.vendors.get(r.vendor)||0)+1);
   });
-  const byNamaArr=[...byNama.values()].sort((a,b)=>b.qty-a.qty);
+  const sortKey=m==='nilai'?'nilai':m==='frek'?'frek':'qty';
+  const byNamaArr=[...byNama.values()].sort((a,b)=>b[sortKey]-a[sortKey]);
 
   // Group by kat
   const byKat=new Map();
-  rows.forEach(r=>{const k=r.kat||'Lainnya';if(!byKat.has(k))byKat.set(k,0);byKat.set(k,byKat.get(k)+r.qty);});
+  rows.forEach(r=>{const k=r.kat||'Lainnya';if(!byKat.has(k))byKat.set(k,0);byKat.set(k,byKat.get(k)+getVal(r));});
   const byKatArr=[...byKat.entries()].sort((a,b)=>b[1]-a[1]);
-
-  // All kats for color mapping
   const kats=byKatArr.map(e=>e[0]);
 
-  // Group by bulan (for trend line)
-  const allBulan=[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat).map(r=>r.bulan).filter(Boolean))].sort();
+  // Trend data (last 12 bulan with data)
+  const allBulan=[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat,fSatuan).map(r=>r.bulan).filter(Boolean))].sort();
   const last12=allBulan.slice(-12);
-  const trendKats=kats.length?kats:[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat).map(r=>r.kat||'Lainnya'))];
+  const trendKats=kats.length?kats:[...new Set(_getKonsumsiRows('',fDapur,fVendor,fKat,fSatuan).map(r=>r.kat||'Lainnya'))];
   const trendData=last12.map(b=>{
-    const bRows=_getKonsumsiRows(b,fDapur,fVendor,fKat);
-    const byK={};bRows.forEach(r=>{const k=r.kat||'Lainnya';byK[k]=(byK[k]||0)+r.qty;});
+    const bRows=_getKonsumsiRows(b,fDapur,fVendor,fKat,fSatuan);
+    const byK={};bRows.forEach(r=>{const k=r.kat||'Lainnya';byK[k]=(byK[k]||0)+getVal(r);});
     return{bulan:b,byK};
   });
 
@@ -5022,32 +5094,38 @@ function renderKonsumsi(){
   _kChartBar=_renderChart('k-chart-bar',_kChartBar,'bar',{
     labels:top15.map(r=>r.nama.length>18?r.nama.substring(0,16)+'…':r.nama),
     datasets:[{
-      label:'Qty diterima',
-      data:top15.map(r=>r.qty),
+      label:valLabel,
+      data:top15.map(r=>r[sortKey]),
       backgroundColor:top15.map(r=>{const ci=kats.indexOf(r.kat);return _KAT_COLORS[ci>=0?ci%_KAT_COLORS.length:0]+'CC';}),
       borderRadius:3
     }]
   },{
     plugins:{legend:{display:false},tooltip:{callbacks:{
-      label:c=>{const r=top15[c.dataIndex];return`${Number(c.raw).toLocaleString('id-ID')} ${r.satuan}`;},
-      title:c=>[top15[c[0].dataIndex].nama,top15[c[0].dataIndex].kat||'']
+      label:c=>tooltipVal(c.raw,top15[c.dataIndex]?.satuan||''),
+      title:c=>[top15[c[0].dataIndex]?.nama||'',top15[c[0].dataIndex]?.kat||'']
     }}},
-    scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10},maxRotation:40}}}
+    scales:{
+      y:{beginAtZero:true,ticks:{font:{size:10},callback:v=>m==='nilai'?'Rp '+Number(v/1000).toLocaleString('id-ID')+'rb':Number(v).toLocaleString('id-ID')}},
+      x:{ticks:{font:{size:10},maxRotation:40}}
+    }
   });
 
   // Kat chart - horizontal bar
   _kChartKat=_renderChart('k-chart-kat',_kChartKat,'bar',{
     labels:byKatArr.map(e=>e[0]),
     datasets:[{
-      label:'Qty',
+      label:valLabel,
       data:byKatArr.map(e=>e[1]),
       backgroundColor:byKatArr.map((_,i)=>_KAT_COLORS[i%_KAT_COLORS.length]+'CC'),
       borderRadius:3
     }]
   },{
     indexAxis:'y',
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${Number(c.raw).toLocaleString('id-ID')} qty`}}},
-    scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>tooltipVal(c.raw,'')}}},
+    scales:{
+      x:{beginAtZero:true,ticks:{font:{size:10},callback:v=>m==='nilai'?'Rp '+Number(v/1000).toLocaleString('id-ID')+'rb':Number(v).toLocaleString('id-ID')}},
+      y:{ticks:{font:{size:10}}}
+    }
   });
 
   // Line chart - trend per kategori
@@ -5062,21 +5140,28 @@ function renderKonsumsi(){
     labels:trendData.map(d=>_fmtBulan(d.bulan)),
     datasets:lineDatasets
   },{
-    plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10}}},
-    scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}
+    plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:10,padding:10}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+tooltipVal(c.raw,'')}}},
+    scales:{
+      y:{beginAtZero:true,ticks:{font:{size:10},callback:v=>m==='nilai'?'Rp '+Number(v/1000).toLocaleString('id-ID')+'rb':Number(v).toLocaleString('id-ID')}},
+      x:{ticks:{font:{size:10}}}
+    }
   });
 
   // Table
   const tbody=document.getElementById('k-table-body');
   document.getElementById('k-table-count').textContent=byNamaArr.length+' jenis bahan baku';
-  if(!byNamaArr.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty">Belum ada data — belum ada item dengan status "Diterima"</div></td></tr>';return;}
+  if(!byNamaArr.length){
+    tbody.innerHTML=`<tr><td colspan="6"><div class="empty">Belum ada data — belum ada item dengan status "Diterima"${m==='qty'&&!fSatuan?' (pilih satuan untuk filter lebih spesifik)':''}</div></td></tr>`;
+    return;
+  }
   tbody.innerHTML=byNamaArr.map(r=>{
     const topVendor=r.vendors.size?[...r.vendors.entries()].sort((a,b)=>b[1]-a[1])[0][0]:'—';
+    const valCell=m==='nilai'?_fmtNilai(r.nilai):m==='frek'?r.frek.toLocaleString('id-ID'):Number(r.qty).toLocaleString('id-ID');
     return`<tr>
       <td style="font-weight:500">${r.nama}</td>
       <td>${r.kat?`<span class="tag tgr">${r.kat}</span>`:'—'}</td>
       <td style="font-family:var(--mn);font-size:11px">${r.satuan}</td>
-      <td class="num-cell" style="font-weight:600">${Number(r.qty).toLocaleString('id-ID')}</td>
+      <td class="num-cell" style="font-weight:600">${valCell}</td>
       <td class="num-cell">${r.po}</td>
       <td style="font-size:12px">${topVendor}</td>
     </tr>`;
@@ -5095,6 +5180,7 @@ function resetKonsumsiFilter(){
   document.getElementById('k-dapur').value='';
   document.getElementById('k-vendor').value='';
   document.getElementById('k-kat').value='';
+  document.getElementById('k-satuan').value='';
   renderKonsumsi();
 }
 

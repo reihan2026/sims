@@ -1497,7 +1497,7 @@ function getManualItems(){return readItemRows('manual-tbody');}
 function parseItemCols(cols,hari){
   const base={tipe_kirim:'fresh',harga_vendor:0,vendor:'',nota_key:null,status_kirim:'belum',tgl_kirim:'',tgl_diterima:'',retur:null};
   // Format baru (>=8 col): Hari|Nama|Kat|Qty|Sat|Harga/kg|Total|Keterangan|Deadline
-  if(cols.length>=8){const nama=cols[1].trim();if(!nama||nama.length<2)return null;return{...base,hari,nama,kat:cols[2]||'',qty:parseFloat((cols[3]||'0').replace(/[^0-9.]/g,''))||0,satuan:cols[4]||'pcs',harga_po:parseFloat((cols[5]||'0').replace(/[^0-9]/g,''))||0,spek:cols[7]||'',deadline:cols[8]||''};}
+  if(cols.length>=8){const nama=cols[1].trim();if(!nama||nama.length<2)return null;const _kat2=cols[2]||'';const _katMatch2=getCats().find(c=>c.toLowerCase()===_kat2.toLowerCase());return{...base,hari,nama,kat:_katMatch2||_kat2,qty:parseFloat((cols[3]||'0').replace(/[^0-9.]/g,''))||0,satuan:cols[4]||'pcs',harga_po:parseFloat((cols[5]||'0').replace(/[^0-9]/g,''))||0,spek:cols[7]||'',deadline:cols[8]||''};}
   // Format lama (>=7 col): Hari|Nama|Qty|Sat|Harga/kg|Total|Keterangan|Deadline
   if(cols.length>=7){const nama=cols[1].trim();if(!nama||nama.length<2)return null;return{...base,hari,nama,kat:'',qty:parseFloat((cols[2]||'0').replace(/[^0-9.]/g,''))||0,satuan:cols[3]||'pcs',harga_po:parseFloat((cols[4]||'0').replace(/[^0-9]/g,''))||0,spek:cols[6]||'',deadline:cols[7]||''};}
   const nama=cols[0].trim();if(!nama||nama.length<2)return null;
@@ -1552,7 +1552,7 @@ function renderMerged(items){
       <td style="font-size:11px;color:var(--t3)">${i.hari||''}</td>
       <td style="font-weight:500">${i.nama}</td>
       <td><select onchange="importedItems[${idx}].kat=this.value" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)">
-        <option value="">—</option>${getCats().map(c=>`<option value="${c}" ${i.kat===c?'selected':''}>${c}</option>`).join('')}
+        <option value="">—</option>${getCats().map(c=>`<option value="${c}" ${(i.kat||'').toLowerCase()===(c||'').toLowerCase()?'selected':''}>${c}</option>`).join('')}
       </select></td>
       <td>${i.satuan}</td><td class="num">${i.qty}</td><td class="num">${fmtF(i.harga_po)}</td>
       <td style="font-size:11px;color:var(--t2);max-width:160px">${i.spek||'—'}</td>

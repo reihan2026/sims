@@ -442,7 +442,16 @@ input[type=checkbox],input[type=radio]{width:auto}
       <div style="font-size:11px;color:var(--in);margin-top:4px" id="user-status"></div>
     </div>
     <div class="r2">
-      <div class="card"><div class="ct">Dapur</div><div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-dapur" placeholder="Nama dapur..."><button class="btn bp bsm" onclick="addDapur()">Tambah</button></div><div id="dapur-list"></div></div>
+      <div class="card"><div class="ct">Dapur</div>
+        <div class="r2" style="margin-bottom:6px">
+          <input type="text" id="new-dapur-kode" placeholder="Kode (KLU003)">
+          <input type="text" id="new-dapur-nama" placeholder="Nama dapur (SPPG Kebayoran Lama)">
+        </div>
+        <div style="display:flex;gap:7px;margin-bottom:9px">
+          <input type="text" id="new-dapur-tlp" placeholder="No. telepon (opsional)" style="flex:1">
+          <button class="btn bp bsm" onclick="addDapur()">Tambah</button>
+        </div>
+        <div id="dapur-list"></div></div>
       <div class="card">
         <div class="ct">Kategori item</div>
         <div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-kat" placeholder="Nama kategori baru..."><button class="btn bp bsm" onclick="addKat()">Tambah</button></div>
@@ -1507,7 +1516,7 @@ function nav(name){
 function renderMaster(){
   renderKats();renderVendorSaya();
   const m=getMaster();const reks=getReks();
-  document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><span style="font-size:13px">${d}</span><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
+  document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${o.kode?`<span style="font-family:var(--mn);color:var(--ac);margin-right:6px">${o.kode}</span>`:''}${o.nama}</div>${o.tlp?`<div style="font-size:11px;color:var(--t3)">${o.tlp}</div>`:''}</div><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`;}).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';
   const vtbl=document.getElementById('vendor-tbl');
   vtbl.innerHTML=m.vendor.length?m.vendor.map((v,i)=>`<tr><td style="font-weight:500">${v.nama}</td><td>${catBadge(v.kat)}</td><td style="font-family:var(--mn);font-size:11px">${v.hp||'—'}</td><td>${v.cashback?`<span class="tag tpu">CB ~${v.cashback_pct||'?'}%</span>`:'—'}</td><td><div class="bg"><button class="btn bxs bi" onclick="editVendor(${i})">Edit</button><button class="btn bxs bd-" onclick="rmVendor(${i})">Hapus</button></div></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty">Belum ada vendor</div></td></tr>`;
@@ -1537,20 +1546,42 @@ function renderKats(){
     <button class="btn bxs bd-" onclick="delKat('${k}')">✕</button>
   </div>`).join('');
 }
-function addDapur(){const v=document.getElementById('new-dapur').value.trim();if(!v)return;const m=getMaster();if(!m.dapur.includes(v)){m.dapur.push(v);setMaster(m);}document.getElementById('new-dapur').value='';renderMaster();showToast('Dapur ditambahkan');}
+function addDapur(){
+  const kode=document.getElementById('new-dapur-kode').value.trim();
+  const nama=document.getElementById('new-dapur-nama').value.trim();
+  const tlp=document.getElementById('new-dapur-tlp').value.trim();
+  if(!nama){showToast('Isi nama dapur!',true);return;}
+  const m=getMaster();
+  const exists=m.dapur.some(d=>(typeof d==='string'?d:d.nama)===nama);
+  if(!exists)m.dapur.push({kode,nama,tlp});
+  setMaster(m);
+  ['new-dapur-kode','new-dapur-nama','new-dapur-tlp'].forEach(id=>document.getElementById(id).value='');
+  renderMaster();showToast('Dapur ditambahkan');
+}
 function rmDapur(i){const m=getMaster();m.dapur.splice(i,1);setMaster(m);renderMaster();}
 function openModalVendor(){document.getElementById('vmodal-title').textContent='Tambah Vendor';['v-nama','v-hp','v-cat'].forEach(id=>document.getElementById(id).value='');document.getElementById('v-kat').value='';document.getElementById('v-cashback').checked=false;document.getElementById('v-cb-pct').value='';document.getElementById('v-cb-wrap').style.display='none';document.getElementById('v-edit-idx').value='';openModal('modal-vendor');}
 function editVendor(i){const m=getMaster();const v=m.vendor[i];if(!v)return;document.getElementById('vmodal-title').textContent='Edit Vendor';document.getElementById('v-nama').value=v.nama||'';document.getElementById('v-kat').value=v.kat||'';document.getElementById('v-hp').value=v.hp||'';document.getElementById('v-cashback').checked=!!v.cashback;document.getElementById('v-cb-pct').value=v.cashback_pct||'';document.getElementById('v-cb-wrap').style.display=v.cashback?'block':'none';document.getElementById('v-cat').value=v.catatan||'';document.getElementById('v-edit-idx').value=i;openModal('modal-vendor');}
 document.getElementById('v-cashback').onchange=function(){document.getElementById('v-cb-wrap').style.display=this.checked?'block':'none';};
 function saveVendor(){const nama=document.getElementById('v-nama').value.trim();if(!nama){showToast('Isi nama vendor!',true);return;}const v={nama,kat:document.getElementById('v-kat').value,hp:document.getElementById('v-hp').value.trim(),cashback:document.getElementById('v-cashback').checked,cashback_pct:parseFloat(document.getElementById('v-cb-pct').value)||0,catatan:document.getElementById('v-cat').value.trim()};const m=getMaster();const idx=document.getElementById('v-edit-idx').value;if(idx!=='')m.vendor[parseInt(idx)]=v;else m.vendor.push(v);setMaster(m);closeModal('modal-vendor');renderMaster();showToast('Vendor disimpan');}
 function rmVendor(i){if(!confirm('Hapus vendor ini?'))return;const m=getMaster();m.vendor.splice(i,1);setMaster(m);renderMaster();}
+function getDapurInfo(nama){
+  const m=getMaster();
+  const found=m.dapur.find(d=>(typeof d==='string'?d:d.nama)===nama);
+  if(!found)return{kode:'',nama:nama||'',tlp:''};
+  return typeof found==='string'?{kode:'',nama:found,tlp:''}:found;
+}
 function updateDL(){
   const m=getMaster();
-  ['dl-dapur','dl-dapur-invd'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=m.dapur.map(d=>`<option value="${d}">`).join('');});
+  ['dl-dapur','dl-dapur-invd'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=m.dapur.map(d=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<option value="${o.nama}">${o.kode?o.kode+' — '+o.nama:o.nama}</option>`;}).join('');});
   const vnames=m.vendor.map(v=>v.nama);
   ['dl-vendor-invv'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=vnames.map(v=>`<option value="${v}">`).join('');});
 }
-function autoMaster(dapur,vendors){const m=getMaster();if(dapur&&!m.dapur.includes(dapur))m.dapur.push(dapur);vendors.forEach(vn=>{if(vn&&!m.vendor.find(v=>v.nama===vn))m.vendor.push({nama:vn,kat:'',hp:'',cashback:false,cashback_pct:0});});setMaster(m);updateDL();}
+function autoMaster(dapur,vendors){
+  const m=getMaster();
+  if(dapur&&!m.dapur.some(d=>(typeof d==='string'?d:d.nama)===dapur))m.dapur.push({kode:'',nama:dapur,tlp:''});
+  vendors.forEach(vn=>{if(vn&&!m.vendor.find(v=>v.nama===vn))m.vendor.push({nama:vn,kat:'',hp:'',cashback:false,cashback_pct:0});});
+  setMaster(m);updateDL();
+}
 
 // ===== REKENING =====
 function openModalRek(){['rek-nama','rek-pj','rek-no'].forEach(id=>document.getElementById(id).value='');openModal('modal-rek');}
@@ -5647,12 +5678,15 @@ async function printInvDFormal(invId){
     .rek-bank{font-weight:600;min-width:80px}
   `;
   // Header block
+  const vsSubLines=[vs.alamat?vs.alamat.replace(/\n/g,', '):'',vs.telp||''].filter(Boolean);
   const hdrHtml=kopSrc
-    ?`<img src="${kopSrc}" class="kop-img">`
-    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div><div class="vs-hdr-sub">${vs.alamat?vs.alamat.replace(/\n/g,', '):''}</div><div class="vs-hdr-sub">${vs.telp||''}</div></div>`;
+    ?`<img src="${kopSrc}" class="kop-img"><div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #D8D3C8;font-size:12px;color:#6B6560">${vsSubLines.join(' &nbsp;·&nbsp; ')}</div>`
+    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div>${vsSubLines.map(l=>`<div class="vs-hdr-sub">${l}</div>`).join('')}</div>`;
+  // Lookup dapur phone
+  const dapurInfo=getDapurInfo(inv.dapur);
   // Invoice info
   const infoHtml=`<div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
-    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${inv.dapur}</div></div>
+    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${inv.dapur}</div>${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${dapurInfo.tlp}</div>`:''}</div>
     <div style="text-align:right">
       <div style="font-size:20px;font-weight:700">INVOICE</div>
       <div style="font-size:11px;color:#6B6560;font-family:'IBM Plex Mono',monospace">${inv.no} · ${inv.tgl}</div>

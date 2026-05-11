@@ -236,6 +236,7 @@ input[type=checkbox],input[type=radio]{width:auto}
     <button class="ni active" onclick="nav('dash')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</button>
     <button class="ni" onclick="nav('po-baru')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Input PO Baru</button>
     <button class="ni" onclick="nav('daftar-po')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>Daftar PO</button>
+    <button class="ni" onclick="nav('pov')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>PO ke Vendor</button>
     <div class="nsec">Invoice</div>
     <button class="ni" onclick="nav('inv-vendor')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Invoice Vendor</button>
     <button class="ni" onclick="nav('inv-dapur')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="8" y1="9" x2="10" y2="9"/></svg>Invoice ke Dapur</button>
@@ -368,6 +369,18 @@ input[type=checkbox],input[type=radio]{width:auto}
     <div class="bg" id="det-act"></div>
   </div>
   <div class="pc" id="det-body"></div>
+</div>
+
+<!-- PO KE VENDOR -->
+<div id="page-pov" class="page">
+  <div class="ph"><div><div class="ph-t">PO ke Vendor</div><div class="ph-s">Riwayat purchase order yang dikirim ke vendor</div></div></div>
+  <div class="pc">
+    <div class="fbar">
+      <select id="pov-f-vendor" onchange="renderPOV()" style="min-width:140px"><option value="">Semua vendor</option></select>
+      <select id="pov-f-bulan" onchange="renderPOV()" style="min-width:130px"><option value="">Semua bulan</option></select>
+    </div>
+    <div id="pov-list"></div>
+  </div>
 </div>
 
 <!-- INVOICE VENDOR -->
@@ -550,6 +563,45 @@ input[type=checkbox],input[type=radio]{width:auto}
     <input type="hidden" id="v-edit-idx">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-vendor')">Batal</button><button class="btn bp" onclick="saveVendor()">Simpan</button></div>
+</div></div>
+
+<!-- Buat PO ke Vendor -->
+<div class="modal-bg" id="modal-buat-pov"><div class="modal mw">
+  <div class="mh"><span class="mht">Buat PO ke Vendor</span><button class="btn bgh bsm" onclick="closeModal('modal-buat-pov')">✕</button></div>
+  <div class="mb">
+    <div id="bpov-po-info" style="background:var(--ibg);border:1px solid var(--ib);border-radius:var(--r);padding:9px 12px;font-size:12px;margin-bottom:13px;color:var(--it)"></div>
+    <div class="r2" style="margin-bottom:10px">
+      <div class="fg"><label class="lbl">Vendor tujuan</label>
+        <select id="bpov-vendor" onchange="bpovVendorChange()"><option value="">— Pilih vendor —</option></select>
+        <div id="bpov-vendor-hp" style="font-size:11px;color:var(--t3);margin-top:3px;font-family:var(--mn)"></div>
+      </div>
+      <div class="fg"><label class="lbl">Tanggal PO</label><input type="date" id="bpov-tgl"></div>
+    </div>
+    <div class="fg" style="margin-bottom:12px"><label class="lbl">Catatan untuk vendor (opsional)</label><input type="text" id="bpov-cat" placeholder="mis. minta konfirmasi harga sebelum kirim"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div class="ct" style="margin:0">Pilih item</div>
+      <div class="bg"><button class="btn bxs" onclick="bpovCheckAll(true)">Pilih semua</button><button class="btn bxs" onclick="bpovCheckAll(false)">Kosongkan</button></div>
+    </div>
+    <div id="bpov-items"></div>
+  </div>
+  <div class="mf" style="flex-wrap:wrap;gap:7px">
+    <button class="btn" onclick="closeModal('modal-buat-pov')">Batal</button>
+    <button class="btn" onclick="savePOV('only')">Simpan saja</button>
+    <button class="btn bi" onclick="savePOV('pdf')">Simpan + Cetak PDF</button>
+    <button class="btn" style="background:#25D366;color:#fff;border-color:#25D366" onclick="savePOV('wa')">Simpan + Buka WA</button>
+  </div>
+</div></div>
+
+<!-- View PO ke Vendor -->
+<div class="modal-bg" id="modal-view-pov"><div class="modal mw">
+  <div class="mh"><span class="mht" id="vpov-title">Detail PO Vendor</span><button class="btn bgh bsm" onclick="closeModal('modal-view-pov')">✕</button></div>
+  <div class="mb" id="vpov-body"></div>
+  <div class="mf">
+    <button class="btn" onclick="closeModal('modal-view-pov')">Tutup</button>
+    <button class="btn bi" id="vpov-pdf-btn">Cetak PDF</button>
+    <button class="btn" id="vpov-wa-btn" style="background:#25D366;color:#fff;border-color:#25D366">Buka WA</button>
+    <button class="btn bd-" id="vpov-del-btn">Hapus</button>
+  </div>
 </div></div>
 
 <!-- Edit Item PO -->
@@ -1029,7 +1081,7 @@ function showForgotPw(){
 }
 
 // ===== DATA LAYER =====
-const _cache={po:[],invv:[],invd:[],rek:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0};
+const _cache={po:[],invv:[],invd:[],pov:[],rek:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0,ctr_pov:0};
 function loadAllData(){
   return new Promise((resolve)=>{
     // Unsubscribe any existing listener first
@@ -1195,6 +1247,9 @@ const getInvV=()=>_cache.invv;
 const setInvV=d=>{_cache.invv=d;_rc.invalidate();saveData(['invv']);};
 const getInvD=()=>_cache.invd;
 const setInvD=d=>{_cache.invd=d;_rc.invalidate();saveData(['invd']);};
+const getPOVs=()=>_cache.pov||[];
+const setPOVs=d=>{_cache.pov=d;saveData(['pov']);};
+function nextCtrPOV(){_cache.ctr_pov=(_cache.ctr_pov||0)+1;saveData(['ctr_pov']);return String(_cache.ctr_pov).padStart(3,'0');};
 
 // Batch setter — update multiple keys at once, single Firebase write
 function setBatch(updates){
@@ -1226,7 +1281,7 @@ const loadFile=async(key)=>{
   return null;
 };
 function backupData(){
-  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),rek:getReks(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,exported:new Date().toISOString(),ver:'5'};
+  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'5'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();showToast('Backup berhasil didownload!');
 }
@@ -1235,7 +1290,7 @@ function restoreData(){
   input.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{
     try{const data=JSON.parse(ev.target.result);if(!data.po||!data.invv)throw new Error('Format tidak valid');
       if(!confirm(`Restore dari backup ${data.exported?.split('T')[0]||'?'}?\n\nSEMUA DATA SAAT INI AKAN DIGANTIKAN.`))return;
-      ['po','invv','invd','rek','master','ctr_invv','ctr_invd'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
+      ['po','invv','invd','pov','rek','master','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
       saveData();showToast('Restore berhasil! Memuat ulang...');setTimeout(()=>location.reload(),1200);
     }catch(err){showToast('Gagal restore: '+err.message,true);}
   };r.readAsText(file);};input.click();
@@ -1377,12 +1432,12 @@ function inlineAddRek(targetSelId){
 }
 
 // ===== NAVIGATION =====
-const PAGES=['dash','po-baru','daftar-po','detail-po','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','master'];
+const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','master'];
 function nav(name){
   _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  const MAP={dash:0,'po-baru':1,'daftar-po':2,'inv-vendor':3,'inv-dapur':4,cashflow:5,rekening:6,konsumsi:7,master:8};
+  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,cashflow:6,rekening:7,konsumsi:8,master:9};
   const i=MAP[name];if(i!==undefined)document.querySelectorAll('.ni')[i]?.classList.add('active');
   closeSidebar();closeStatPopup();
   if(name==='dash')renderDashboard();
@@ -1391,6 +1446,7 @@ function nav(name){
   if(name==='inv-dapur')renderInvD();
   if(name==='cashflow')renderCashflow();
   if(name==='rekening')renderRekening();
+  if(name==='pov')renderPOV();
   if(name==='konsumsi')renderKonsumsi();
   if(name==='master'){renderMaster();initUserProfile();renderLog();}
   if(name==='po-baru')initPOForm();
@@ -2059,6 +2115,7 @@ function showDetail(id){
   document.getElementById('det-t').textContent=po.no+' — '+po.dapur;
   document.getElementById('det-s').innerHTML=po.date+' · '+t.total+' item'+(po.catatan?' · '+po.catatan:'')+' '+jenisBadge(po.jenis);
   document.getElementById('det-act').innerHTML=`
+    <button class="btn bsm bp" onclick="openBuatPOV('${id}')">📤 PO ke Vendor</button>
     <button class="btn bsm bt" onclick="openNewInvV('${id}')">+ Invoice Vendor</button>
     <button class="btn bsm bpu" onclick="openNewInvD('${id}')">+ Invoice Dapur</button>
     <button class="btn bsm bi" onclick="openTambahItem('${id}')">+ Tambah Item</button>
@@ -3654,7 +3711,7 @@ function renderRekening(){
   </div>`).join(''):'<div class="empty">Belum ada riwayat pembayaran</div>';
 }
 
-const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)'};
+const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',buat_pov:'var(--ac)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)'};
 // ===== DASHBOARD =====
 function renderDashboard(){
   const el=document.getElementById('hdr-date');if(el)el.textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -5216,6 +5273,184 @@ function resetKonsumsiFilter(){
   document.getElementById('k-kat').value='';
   document.getElementById('k-satuan').value='';
   renderKonsumsi();
+}
+
+// ===== PO KE VENDOR =====
+let _buatPOVSourceId=null;
+
+function openBuatPOV(poId){
+  const po=getPOs().find(p=>p.id===poId);if(!po)return;
+  _buatPOVSourceId=poId;
+  document.getElementById('bpov-po-info').innerHTML=`<strong>${po.no}</strong> — ${po.dapur} &nbsp;·&nbsp; ${po.date} &nbsp;·&nbsp; ${po.items.length} item`;
+  document.getElementById('bpov-tgl').value=today();
+  document.getElementById('bpov-cat').value='';
+  // Populate vendor dropdown
+  const vendors=getMaster().vendor||[];
+  document.getElementById('bpov-vendor').innerHTML='<option value="">— Pilih vendor —</option>'+vendors.map(v=>`<option value="${v.nama}">${v.nama}${v.hp?' ('+v.hp+')':''}</option>`).join('');
+  document.getElementById('bpov-vendor-hp').textContent='';
+  bpovRenderItems(po,'');
+  openModal('modal-buat-pov');
+}
+
+function bpovVendorChange(){
+  const vendorNama=document.getElementById('bpov-vendor').value;
+  const v=getMaster().vendor.find(x=>x.nama===vendorNama);
+  document.getElementById('bpov-vendor-hp').textContent=v?.hp?'HP: '+v.hp:'';
+  const po=getPOs().find(p=>p.id===_buatPOVSourceId);if(!po)return;
+  bpovRenderItems(po,vendorNama);
+}
+
+function bpovRenderItems(po,vendorNama){
+  const el=document.getElementById('bpov-items');
+  if(!po.items.length){el.innerHTML='<div class="empty">PO ini tidak punya item</div>';return;}
+  el.innerHTML=po.items.map((item,idx)=>{
+    const precheck=vendorNama&&item.vendor===vendorNama;
+    const deadline=item.deadline?` · deadline ${item.deadline}`:'';
+    const spek=item.spek?`<span style="color:var(--t3);font-size:10px"> — ${item.spek}</span>`:'';
+    const kat=item.kat?`<span class="tag tgr" style="font-size:9px">${item.kat}</span> `:'';
+    return`<label style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--bd);cursor:pointer">
+      <input type="checkbox" id="bpov-item-${idx}" ${precheck?'checked':''} style="margin-top:2px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500">${kat}${item.nama}</div>
+        <div style="font-size:11px;color:var(--t2);font-family:var(--mn)">${item.qty} ${item.satuan}${deadline}</div>
+        ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
+      </div>
+    </label>`;
+  }).join('');
+}
+
+function bpovCheckAll(checked){
+  const po=getPOs().find(p=>p.id===_buatPOVSourceId);if(!po)return;
+  po.items.forEach((_,idx)=>{const cb=document.getElementById('bpov-item-'+idx);if(cb)cb.checked=checked;});
+}
+
+function savePOV(mode){
+  const vendorNama=document.getElementById('bpov-vendor').value;
+  if(!vendorNama){showToast('Pilih vendor dulu!',true);return;}
+  const po=getPOs().find(p=>p.id===_buatPOVSourceId);if(!po)return;
+  const selectedItems=po.items.map((item,idx)=>({item,idx,checked:document.getElementById('bpov-item-'+idx)?.checked})).filter(x=>x.checked).map(x=>({nama:x.item.nama,qty:x.item.qty,satuan:x.item.satuan,spek:x.item.spek||'',deadline:x.item.deadline||'',kat:x.item.kat||'',hari:x.item.hari||''}));
+  if(!selectedItems.length){showToast('Pilih minimal 1 item!',true);return;}
+  const v=getMaster().vendor.find(x=>x.nama===vendorNama);
+  const no='POV-'+today().substring(0,4)+'-'+nextCtrPOV();
+  const pov={id:uid(),no,tgl:document.getElementById('bpov-tgl').value||today(),po_id:po.id,po_no:po.no,dapur:po.dapur,vendor:vendorNama,vendor_hp:v?.hp||'',catatan:document.getElementById('bpov-cat').value.trim(),items:selectedItems,created:new Date().toISOString()};
+  const povs=getPOVs();povs.push(pov);setPOVs(povs);
+  addLog('buat_pov','Buat PO ke Vendor','pov',pov.id,pov.no,vendorNama+' · '+selectedItems.length+' item');
+  closeModal('modal-buat-pov');
+  showToast('PO ke vendor disimpan: '+no);
+  if(mode==='pdf')printPOV(pov);
+  if(mode==='wa')openWAPOV(pov);
+}
+
+function renderPOV(){
+  const fVendor=document.getElementById('pov-f-vendor')?.value||'';
+  const fBulan=document.getElementById('pov-f-bulan')?.value||'';
+  const all=getPOVs();
+  // Populate filters
+  const vendors=[...new Set(all.map(p=>p.vendor).filter(Boolean))].sort();
+  const bulans=[...new Set(all.map(p=>(p.tgl||'').substring(0,7)).filter(Boolean))].sort().reverse();
+  const curV=document.getElementById('pov-f-vendor')?.value||'';
+  const curB=document.getElementById('pov-f-bulan')?.value||'';
+  document.getElementById('pov-f-vendor').innerHTML='<option value="">Semua vendor</option>'+vendors.map(v=>`<option value="${v}" ${v===curV?'selected':''}>${v}</option>`).join('');
+  document.getElementById('pov-f-bulan').innerHTML='<option value="">Semua bulan</option>'+bulans.map(b=>`<option value="${b}" ${b===curB?'selected':''}>${_fmtBulan(b)}</option>`).join('');
+  const list=all.filter(p=>{
+    if(fVendor&&p.vendor!==fVendor)return false;
+    if(fBulan&&!(p.tgl||'').startsWith(fBulan))return false;
+    return true;
+  }).sort((a,b)=>b.created>a.created?1:-1);
+  const el=document.getElementById('pov-list');
+  if(!list.length){el.innerHTML='<div class="empty" style="padding:30px">Belum ada PO ke vendor</div>';return;}
+  el.innerHTML=list.map(p=>`
+    <div class="card" style="margin-bottom:9px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:600;font-size:13px;font-family:var(--mn)">${p.no}</div>
+          <div style="font-size:12px;color:var(--t2);margin-top:2px">${p.vendor}${p.vendor_hp?' · <span style="font-family:var(--mn)">' +p.vendor_hp+'</span>':''}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">${p.tgl} · dari PO ${p.po_no} (${p.dapur}) · ${p.items.length} item</div>
+          ${p.catatan?`<div style="font-size:11px;color:var(--wt);margin-top:3px">📝 ${p.catatan}</div>`:''}
+        </div>
+        <div class="bg">
+          <button class="btn bsm bi" onclick="viewPOV('${p.id}')">Lihat</button>
+          <button class="btn bsm bi" onclick="printPOV(getPOVs().find(x=>x.id==='${p.id}'))">PDF</button>
+          ${p.vendor_hp?`<button class="btn bsm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="openWAPOV(getPOVs().find(x=>x.id==='${p.id}'))">WA</button>`:''}
+        </div>
+      </div>
+      <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:5px">
+        ${p.items.map(i=>`<span class="tag tgr">${i.nama} <span style="font-family:var(--mn);font-weight:400">${i.qty} ${i.satuan}</span></span>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function viewPOV(id){
+  const pov=getPOVs().find(p=>p.id===id);if(!pov)return;
+  document.getElementById('vpov-title').textContent=pov.no+' — '+pov.vendor;
+  document.getElementById('vpov-body').innerHTML=`
+    <div class="mg" style="margin-bottom:12px">
+      <div class="met"><div class="ml">No. PO</div><div class="mv num" style="font-size:14px">${pov.no}</div></div>
+      <div class="met"><div class="ml">Vendor</div><div class="mv" style="font-size:13px">${pov.vendor}</div>${pov.vendor_hp?`<div class="ms">${pov.vendor_hp}</div>`:''}</div>
+      <div class="met"><div class="ml">Tanggal</div><div class="mv" style="font-size:13px">${pov.tgl}</div></div>
+      <div class="met"><div class="ml">Dari PO</div><div class="mv" style="font-size:13px">${pov.po_no}</div><div class="ms">${pov.dapur}</div></div>
+    </div>
+    ${pov.catatan?`<div style="background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:12px">📝 ${pov.catatan}</div>`:''}
+    <table class="tbl">
+      <thead><tr><th>#</th><th>Nama item</th><th>Kategori</th><th>Spesifikasi</th><th>Qty</th><th>Satuan</th><th>Deadline</th></tr></thead>
+      <tbody>${pov.items.map((it,i)=>`<tr><td style="color:var(--t3)">${i+1}</td><td style="font-weight:500">${it.nama}</td><td>${it.kat?`<span class="tag tgr">${it.kat}</span>`:'—'}</td><td style="font-size:11px;color:var(--t2)">${it.spek||'—'}</td><td class="num-cell">${it.qty}</td><td style="font-family:var(--mn);font-size:11px">${it.satuan}</td><td style="font-family:var(--mn);font-size:11px">${it.deadline||'—'}</td></tr>`).join('')}</tbody>
+    </table>`;
+  document.getElementById('vpov-pdf-btn').onclick=()=>printPOV(pov);
+  document.getElementById('vpov-wa-btn').style.display=pov.vendor_hp?'':'none';
+  document.getElementById('vpov-wa-btn').onclick=()=>openWAPOV(pov);
+  document.getElementById('vpov-del-btn').onclick=()=>deletePOV(id);
+  openModal('modal-view-pov');
+}
+
+function deletePOV(id){
+  if(!confirm('Hapus PO ke vendor ini?'))return;
+  setPOVs(getPOVs().filter(p=>p.id!==id));
+  closeModal('modal-view-pov');
+  renderPOV();
+  showToast('PO ke vendor dihapus');
+}
+
+function _povItemRows(items){
+  return items.map((it,i)=>`<tr><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;color:#888;font-size:11px">${i+1}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;font-weight:600">${it.nama}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;font-size:11px;color:#666">${it.kat||'—'}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;font-size:11px;color:#666;max-width:160px">${it.spek||'—'}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;text-align:right;font-family:monospace;font-weight:600">${it.qty}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;font-size:11px">${it.satuan}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;font-size:11px;font-family:monospace">${it.deadline||'—'}</td><td style="padding:6px 8px;border-bottom:1px solid #e0ddd6;text-align:center;color:#aaa;font-size:11px">__________</td></tr>`).join('');
+}
+
+function printPOV(pov){
+  if(!pov)return;
+  const body=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div><div style="font-size:22px;font-weight:700;color:#1E4029">PURCHASE ORDER</div><div style="font-size:12px;color:#666;margin-top:2px">SIMS — Sistem Internal Manajemen Suplai</div></div>
+      <div style="text-align:right;font-size:12px"><div style="font-size:16px;font-weight:700;font-family:monospace">${pov.no}</div><div style="color:#666">Tanggal: ${pov.tgl}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;padding:14px;background:#f8f7f4;border-radius:6px;border:1px solid #e0ddd6">
+      <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Kepada (Vendor)</div><div style="font-weight:700;font-size:14px">${pov.vendor}</div>${pov.vendor_hp?`<div style="font-size:12px;color:#666;font-family:monospace">${pov.vendor_hp}</div>`:''}</div>
+      <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Untuk Dapur</div><div style="font-weight:600;font-size:13px">${pov.dapur}</div><div style="font-size:11px;color:#666">Dari PO: ${pov.po_no}</div></div>
+    </div>
+    ${pov.catatan?`<div style="background:#FFF8E7;border:1px solid #D4B870;border-radius:4px;padding:9px 12px;font-size:12px;margin-bottom:16px;color:#5C4508"><strong>Catatan:</strong> ${pov.catatan}</div>`:''}
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px">
+      <thead><tr style="background:#2D5A3D;color:#fff"><th style="padding:8px;text-align:left">No</th><th style="padding:8px;text-align:left">Nama Item</th><th style="padding:8px;text-align:left">Kategori</th><th style="padding:8px;text-align:left">Spesifikasi</th><th style="padding:8px;text-align:right">Qty</th><th style="padding:8px;text-align:left">Satuan</th><th style="padding:8px;text-align:left">Deadline</th><th style="padding:8px;text-align:center">Harga/unit</th></tr></thead>
+      <tbody>${_povItemRows(pov.items)}</tbody>
+    </table>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:30px">
+      <div style="text-align:center"><div style="font-size:11px;color:#888;margin-bottom:40px">Dibuat oleh</div><div style="border-top:1px solid #333;padding-top:6px;font-size:11px">Tanggal: ___________</div></div>
+      <div style="text-align:center"><div style="font-size:11px;color:#888;margin-bottom:40px">Disetujui vendor</div><div style="border-top:1px solid #333;padding-top:6px;font-size:11px">Tanggal: ___________</div></div>
+    </div>`;
+  const css=`body{font-family:'Helvetica Neue',Arial,sans-serif;margin:30px;color:#1a1814}@media print{@page{margin:20mm}}`;
+  const w=window.open('','_blank','width=820,height=720');
+  w.document.write(`<!DOCTYPE html><html><head><title>${pov.no}</title><style>${css}</style></head><body>${body}<script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+}
+
+function waTextPOV(pov){
+  const lines=pov.items.map((it,i)=>`${i+1}. ${it.nama} — ${it.qty} ${it.satuan}${it.deadline?' (deadline '+it.deadline+')':''}${it.spek?' | Spek: '+it.spek:''}`).join('\n');
+  const catatan=pov.catatan?'\n\n📝 '+pov.catatan:'';
+  return`Halo ${pov.vendor},\n\nBerikut Purchase Order dari dapur *${pov.dapur}*:\n\n${lines}${catatan}\n\nNo. PO: *${pov.no}*\nTanggal: ${pov.tgl}\n\nMohon konfirmasi ketersediaan dan harga.\nTerima kasih 🙏`;
+}
+
+function openWAPOV(pov){
+  if(!pov)return;
+  const hp=(pov.vendor_hp||'').replace(/[^0-9]/g,'').replace(/^0/,'62');
+  const text=encodeURIComponent(waTextPOV(pov));
+  window.open(`https://wa.me/${hp}?text=${text}`,'_blank');
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

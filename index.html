@@ -2286,7 +2286,7 @@ function hapusItem(poId,idx){
   // Record in revisions
   if(!po.revisions)po.revisions=[];
   po.revisions.push({tgl:today(),changes:[{nama:item.nama,qty_lama:item.qty,qty_baru:0,harga_lama:item.harga_po,harga_baru:0,alasan:'Item dihapus'}]});
-  addLog('hapus_item','Hapus item','item',poId,po?.no,itemLama.nama+' '+itemLama.qty+' '+itemLama.satuan);
+  addLog('hapus_item','Hapus item','item',poId,po?.no,item.nama+' '+item.qty+' '+item.satuan);
   po.items.splice(idx,1);
   setPOs(pos);
   showToast(`Item "${item.nama}" dihapus`);

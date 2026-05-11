@@ -5573,46 +5573,41 @@ function delVsKop(){
   document.getElementById('vs-kop-del').style.display='none';
   document.getElementById('vs-kop-file').value='';
 }
-async function saveVendorSaya(){
-  const nama=document.getElementById('vs-nama').value.trim();
-  if(!nama){showToast('Isi nama perusahaan!',true);return;}
-  const reks=[...document.getElementById('vs-rekening-wrap').querySelectorAll('.r2')].map(row=>({
-    bank:row.querySelector('[data-vs="bank"]').value.trim(),
-    no:row.querySelector('[data-vs="no"]').value.trim(),
-    atas:row.querySelector('[data-vs="atas"]').value.trim()
-  })).filter(r=>r.bank||r.no);
-  const editId=document.getElementById('vs-edit-id').value;
-  const vsId=editId||uid();
-  // Handle kop image
-  const img=document.getElementById('vs-kop-img');
-  const fileInput=document.getElementById('vs-kop-file');
-  if(fileInput.files[0]){
-    const reader=new FileReader();
-    reader.onload=async e=>{
-      await saveFile('kop_'+vsId,e.target.result);
-      _finishSaveVS(vsId,nama,reks);
+function saveVendorSaya(){
+  try{
+    const nama=document.getElementById('vs-nama').value.trim();
+    if(!nama){showToast('Isi nama perusahaan!',true);return;}
+    const telp=document.getElementById('vs-telp').value.trim();
+    const alamat=document.getElementById('vs-alamat').value.trim();
+    const reks=[...document.getElementById('vs-rekening-wrap').querySelectorAll('.r2')].map(row=>({
+      bank:(row.querySelector('input[data-vs="bank"]')||{}).value||'',
+      no:(row.querySelector('input[data-vs="no"]')||{}).value||'',
+      atas:(row.querySelector('input[data-vs="atas"]')||{}).value||''
+    })).filter(r=>r.bank.trim()||r.no.trim());
+    const editId=document.getElementById('vs-edit-id').value||'';
+    const vsId=editId||uid();
+    const obj={id:vsId,nama,telp,alamat,rekening:reks};
+    const doSave=()=>{
+      const list=getVendorSaya();
+      const idx=list.findIndex(v=>v.id===vsId);
+      if(idx>=0)list[idx]=obj;else list.push(obj);
+      setVendorSaya(list);
+      closeModal('modal-vendor-saya');
+      renderVendorSaya();
+      showToast('Vendor disimpan');
     };
-    reader.readAsDataURL(fileInput.files[0]);
-  } else {
-    // If preview is hidden and there was an existing kop, it means user deleted it
-    if(document.getElementById('vs-kop-preview').style.display==='none'&&editId){
-      // Delete from cache (mark as null)
-      _cache['file_kop_'+vsId]=null;
+    const fileInput=document.getElementById('vs-kop-file');
+    if(fileInput&&fileInput.files[0]){
+      const reader=new FileReader();
+      reader.onload=function(e){
+        saveFile('kop_'+vsId,e.target.result).then(doSave).catch(err=>{console.error(err);doSave();});
+      };
+      reader.onerror=function(){doSave();};
+      reader.readAsDataURL(fileInput.files[0]);
+    } else {
+      doSave();
     }
-    _finishSaveVS(vsId,nama,reks);
-  }
-}
-function _finishSaveVS(vsId,nama,reks){
-  const telp=document.getElementById('vs-telp').value.trim();
-  const alamat=document.getElementById('vs-alamat').value.trim();
-  const list=getVendorSaya();
-  const idx=list.findIndex(v=>v.id===vsId);
-  const obj={id:vsId,nama,telp,alamat,rekening:reks};
-  if(idx>=0)list[idx]=obj;else list.push(obj);
-  setVendorSaya(list);
-  closeModal('modal-vendor-saya');
-  renderVendorSaya();
-  showToast('Vendor disimpan');
+  }catch(e){console.error('saveVendorSaya error:',e);showToast('Error: '+e.message,true);}
 }
 function delVendorSaya(id){
   if(!confirm('Hapus vendor ini?'))return;

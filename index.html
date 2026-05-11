@@ -447,6 +447,7 @@ input[type=checkbox],input[type=radio]{width:auto}
           <input type="text" id="new-dapur-kode" placeholder="Kode (KLU003)">
           <input type="text" id="new-dapur-nama" placeholder="Nama dapur (SPPG Kebayoran Lama)">
         </div>
+        <div style="margin-bottom:6px"><input type="text" id="new-dapur-alamat" placeholder="Alamat (opsional)" style="width:100%;box-sizing:border-box"></div>
         <div style="display:flex;gap:7px;margin-bottom:9px">
           <input type="text" id="new-dapur-tlp" placeholder="No. telepon (opsional)" style="flex:1">
           <button class="btn bp bsm" onclick="addDapur()">Tambah</button>
@@ -1513,7 +1514,7 @@ function nav(name){
 function renderMaster(){
   renderKats();
   const m=getMaster();const reks=getReks();
-  document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${o.kode?`<span style="font-family:var(--mn);color:var(--ac);margin-right:6px">${o.kode}</span>`:''}${o.nama}</div>${o.tlp?`<div style="font-size:11px;color:var(--t3)">${o.tlp}</div>`:''}</div><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`;}).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
+  document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>{const o=typeof d==='string'?{kode:'',nama:d,alamat:'',tlp:''}:d;return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${o.kode?`<span style="font-family:var(--mn);color:var(--ac);margin-right:6px">${o.kode}</span>`:''}${o.nama}</div>${o.alamat?`<div style="font-size:11px;color:var(--t3)">${o.alamat}</div>`:''}${o.tlp?`<div style="font-size:11px;color:var(--t3)">${o.tlp}</div>`:''}</div><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`;}).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';
   const vtbl=document.getElementById('vendor-tbl');
   const mitraRows=getVendorSaya().map(vs=>`<tr style="background:color-mix(in srgb,var(--ac) 4%,transparent)"><td style="font-weight:500">${vs.nama}<span class="tag" style="margin-left:6px;background:var(--ac);color:#fff;font-size:9px">MITRA</span></td><td style="font-size:11px;color:var(--t2)">${(vs.rekening||[]).map(r=>r.bank+' '+r.no).join('<br>')||'—'}</td><td style="font-family:var(--mn);font-size:11px">${vs.telp||'—'}</td><td>—</td><td><div class="bg"><button class="btn bxs bi" onclick="openModalVendorSaya('${vs.id}')">Edit</button><button class="btn bxs bd-" onclick="delVendorSaya('${vs.id}')">Hapus</button></div></td></tr>`).join('');
@@ -1548,13 +1549,14 @@ function renderKats(){
 function addDapur(){
   const kode=document.getElementById('new-dapur-kode').value.trim();
   const nama=document.getElementById('new-dapur-nama').value.trim();
+  const alamat=document.getElementById('new-dapur-alamat').value.trim();
   const tlp=document.getElementById('new-dapur-tlp').value.trim();
   if(!nama){showToast('Isi nama dapur!',true);return;}
   const m=getMaster();
   const exists=m.dapur.some(d=>(typeof d==='string'?d:d.nama)===nama);
-  if(!exists)m.dapur.push({kode,nama,tlp});
+  if(!exists)m.dapur.push({kode,nama,alamat,tlp});
   setMaster(m);
-  ['new-dapur-kode','new-dapur-nama','new-dapur-tlp'].forEach(id=>document.getElementById(id).value='');
+  ['new-dapur-kode','new-dapur-nama','new-dapur-alamat','new-dapur-tlp'].forEach(id=>document.getElementById(id).value='');
   renderMaster();showToast('Dapur ditambahkan');
 }
 function rmDapur(i){const m=getMaster();m.dapur.splice(i,1);setMaster(m);renderMaster();}
@@ -5652,25 +5654,25 @@ async function printInvDFormal(invId){
   if(po){(po.items||[]).forEach(pi=>{if(pi.nama&&pi.hari)hariMap[pi.nama.toLowerCase()]=pi.hari;});}
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total,hari:''}]:inv.items;
   const css=PRINT_CSS+`
-    .kop-img{width:100%;max-height:150px;object-fit:contain;display:block;margin-bottom:12px}
+    .kop-img{max-width:55%;max-height:130px;object-fit:contain;object-position:left top;display:block;margin-bottom:8px}
     .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1A1814}
     .vs-hdr-main{font-size:18px;font-weight:700;margin-bottom:2px}
-    .vs-hdr-sub{font-size:12px;color:#6B6560}
+    .vs-hdr-sub{font-size:12px;color:#6B6560;line-height:1.6}
     .rek-footer{margin-top:20px;padding:10px 12px;background:#F5F3EE;border-radius:4px;font-size:12px}
     .rek-footer-title{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
     .rek-row{display:flex;gap:12px;margin-bottom:3px}
     .rek-bank{font-weight:600;min-width:80px}
   `;
-  // Header block
-  const vsSubLines=[vs.alamat?vs.alamat.replace(/\n/g,', '):'',vs.telp||''].filter(Boolean);
+  // Header block — logo kiri, alamat & tlp di bawahnya rata kiri
+  const vsAddrLines=[vs.nama,vs.alamat||'',vs.telp||''].filter(Boolean);
   const hdrHtml=kopSrc
-    ?`<img src="${kopSrc}" class="kop-img"><div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #D8D3C8;font-size:12px;color:#6B6560">${vsSubLines.join(' &nbsp;·&nbsp; ')}</div>`
-    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div>${vsSubLines.map(l=>`<div class="vs-hdr-sub">${l}</div>`).join('')}</div>`;
-  // Lookup dapur phone
+    ?`<div class="vs-hdr"><img src="${kopSrc}" class="kop-img">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${l.replace(/\n/g,'<br>')}</div>`).join('')}</div>`
+    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div>${[vs.alamat,vs.telp].filter(Boolean).map(l=>`<div class="vs-hdr-sub">${l.replace(/\n/g,'<br>')}</div>`).join('')}</div>`;
+  // Lookup dapur full info
   const dapurInfo=getDapurInfo(inv.dapur);
   // Invoice info
   const infoHtml=`<div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
-    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${inv.dapur}</div>${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${dapurInfo.tlp}</div>`:''}</div>
+    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${dapurInfo.nama||inv.dapur}</div>${dapurInfo.alamat?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${dapurInfo.alamat.replace(/\n/g,'<br>')}</div>`:''}${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560">${dapurInfo.tlp}</div>`:''}</div>
     <div style="text-align:right">
       <div style="font-size:20px;font-weight:700">INVOICE</div>
       <div style="font-size:11px;color:#6B6560;font-family:'IBM Plex Mono',monospace">${inv.no} · ${inv.tgl}</div>

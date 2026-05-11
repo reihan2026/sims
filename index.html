@@ -456,7 +456,7 @@ input[type=checkbox],input[type=radio]{width:auto}
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
-        <div class="ct" style="margin:0">Vendor Milik Saya</div>
+        <div class="ct" style="margin:0">Vendor Mitra</div>
         <button class="btn bp bsm" onclick="openModalVendorSaya()">+ Tambah</button>
       </div>
       <div id="vendor-saya-list"><div class="empty" style="padding:10px">Belum ada vendor</div></div>
@@ -574,7 +574,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- Vendor Milik Saya -->
 <div class="modal-bg" id="modal-vendor-saya"><div class="modal mw">
-  <div class="mh"><span class="mht" id="vs-modal-title">Tambah Vendor Milik Saya</span><button class="btn bgh bsm" onclick="closeModal('modal-vendor-saya')">✕</button></div>
+  <div class="mh"><span class="mht" id="vs-modal-title">Tambah Vendor Mitra</span><button class="btn bgh bsm" onclick="closeModal('modal-vendor-saya')">✕</button></div>
   <div class="mb">
     <input type="hidden" id="vs-edit-id">
     <div class="r2">
@@ -898,7 +898,7 @@ input[type=checkbox],input[type=radio]{width:auto}
   <div class="mh"><span class="mht">Buat Invoice ke Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-invd')">✕</button></div>
   <div class="mb">
     <div class="fg" style="margin-bottom:11px;padding:10px 12px;background:var(--abg);border:1px solid var(--ab);border-radius:var(--r)">
-      <label class="lbl" style="color:var(--at)">Penerbit invoice (vendor milik saya)</label>
+      <label class="lbl" style="color:var(--at)">Penerbit invoice (vendor mitra)</label>
       <select id="invd-vendor-saya" style="margin-top:3px"><option value="">— Tanpa kop (internal) —</option></select>
       <div style="font-size:10px;color:var(--t3);margin-top:3px">Pilih untuk generate PDF invoice formal dengan kop surat vendor.</div>
     </div>
@@ -1174,6 +1174,13 @@ function loadAllData(){
           }
         });
         if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
+
+        // Dedup vendor_saya by nama (keep first occurrence per name)
+        if((_cache.vendor_saya||[]).length>0){
+          const seen=new Set();const before=_cache.vendor_saya.length;
+          _cache.vendor_saya=_cache.vendor_saya.filter(v=>{if(seen.has(v.nama))return false;seen.add(v.nama);return true;});
+          if(_cache.vendor_saya.length<before){saveData(['vendor_saya']);console.log(`[SIMS] Deduped vendor_saya: ${before}→${_cache.vendor_saya.length}`);}
+        }
 
         _rc.invalidate();
 
@@ -5523,7 +5530,7 @@ function renderVendorSaya(){
 }
 function openModalVendorSaya(id){
   const vs=id?getVendorSaya().find(v=>v.id===id):null;
-  document.getElementById('vs-modal-title').textContent=vs?'Edit Vendor Milik Saya':'Tambah Vendor Milik Saya';
+  document.getElementById('vs-modal-title').textContent=vs?'Edit Vendor Mitra':'Tambah Vendor Mitra';
   document.getElementById('vs-edit-id').value=id||'';
   document.getElementById('vs-nama').value=vs?.nama||'';
   document.getElementById('vs-telp').value=vs?.telp||'';

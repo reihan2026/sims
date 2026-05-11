@@ -1565,11 +1565,11 @@ function editVendor(i){const m=getMaster();const v=m.vendor[i];if(!v)return;docu
 document.getElementById('v-cashback').onchange=function(){document.getElementById('v-cb-wrap').style.display=this.checked?'block':'none';};
 function saveVendor(){const nama=document.getElementById('v-nama').value.trim();if(!nama){showToast('Isi nama vendor!',true);return;}const v={nama,kat:document.getElementById('v-kat').value,hp:document.getElementById('v-hp').value.trim(),cashback:document.getElementById('v-cashback').checked,cashback_pct:parseFloat(document.getElementById('v-cb-pct').value)||0,catatan:document.getElementById('v-cat').value.trim()};const m=getMaster();const idx=document.getElementById('v-edit-idx').value;if(idx!=='')m.vendor[parseInt(idx)]=v;else m.vendor.push(v);setMaster(m);closeModal('modal-vendor');renderMaster();showToast('Vendor disimpan');}
 function rmVendor(i){if(!confirm('Hapus vendor ini?'))return;const m=getMaster();m.vendor.splice(i,1);setMaster(m);renderMaster();}
-function getDapurInfo(nama){
+function getDapurInfo(val){
   const m=getMaster();
-  const found=m.dapur.find(d=>(typeof d==='string'?d:d.nama)===nama);
-  if(!found)return{kode:'',nama:nama||'',tlp:''};
-  return typeof found==='string'?{kode:'',nama:found,tlp:''}:found;
+  const found=m.dapur.find(d=>typeof d==='string'?d===val:(d.nama===val||d.kode===val));
+  if(!found)return{kode:'',nama:val||'',alamat:'',tlp:''};
+  return typeof found==='string'?{kode:'',nama:found,alamat:'',tlp:''}:{alamat:'',...found};
 }
 function updateDL(){
   const m=getMaster();

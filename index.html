@@ -460,15 +460,12 @@ input[type=checkbox],input[type=radio]{width:auto}
       </div>
     </div>
     <div class="card"><div class="ct">Rekening / sumber dana</div><div class="bg" style="margin-bottom:9px"><button class="btn bp bsm" onclick="openModalRek()">+ Tambah rekening</button></div><div id="master-rek-list"></div></div>
-    <div class="card"><div class="ct">Vendor</div><div class="bg" style="margin-bottom:9px"><button class="btn bp bsm" onclick="openModalVendor()">+ Tambah vendor</button></div>
-      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama vendor</th><th>Kategori</th><th>No. HP</th><th>Sistem cashback</th><th>Aksi</th></tr></thead><tbody id="vendor-tbl"></tbody></table></div>
-    </div>
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
-        <div class="ct" style="margin:0">Vendor Mitra</div>
-        <button class="btn bp bsm" onclick="openModalVendorSaya()">+ Tambah</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
+        <div class="ct" style="margin:0">Vendor</div>
+        <div class="bg"><button class="btn bp bsm" onclick="openModalVendor()">+ Tambah vendor</button><button class="btn bsm" style="border:1px solid var(--ac);color:var(--ac)" onclick="openModalVendorSaya()">+ Tambah mitra</button></div>
       </div>
-      <div id="vendor-saya-list"><div class="empty" style="padding:10px">Belum ada vendor</div></div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama vendor</th><th>Kategori / Rekening</th><th>No. HP / Telp</th><th>Cashback</th><th>Aksi</th></tr></thead><tbody id="vendor-tbl"></tbody></table></div>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
@@ -1514,12 +1511,14 @@ function nav(name){
 
 // ===== MASTER DATA =====
 function renderMaster(){
-  renderKats();renderVendorSaya();
+  renderKats();
   const m=getMaster();const reks=getReks();
   document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${o.kode?`<span style="font-family:var(--mn);color:var(--ac);margin-right:6px">${o.kode}</span>`:''}${o.nama}</div>${o.tlp?`<div style="font-size:11px;color:var(--t3)">${o.tlp}</div>`:''}</div><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`;}).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';
   const vtbl=document.getElementById('vendor-tbl');
-  vtbl.innerHTML=m.vendor.length?m.vendor.map((v,i)=>`<tr><td style="font-weight:500">${v.nama}</td><td>${catBadge(v.kat)}</td><td style="font-family:var(--mn);font-size:11px">${v.hp||'—'}</td><td>${v.cashback?`<span class="tag tpu">CB ~${v.cashback_pct||'?'}%</span>`:'—'}</td><td><div class="bg"><button class="btn bxs bi" onclick="editVendor(${i})">Edit</button><button class="btn bxs bd-" onclick="rmVendor(${i})">Hapus</button></div></td></tr>`).join(''):`<tr><td colspan="5"><div class="empty">Belum ada vendor</div></td></tr>`;
+  const mitraRows=getVendorSaya().map(vs=>`<tr style="background:color-mix(in srgb,var(--ac) 4%,transparent)"><td style="font-weight:500">${vs.nama}<span class="tag" style="margin-left:6px;background:var(--ac);color:#fff;font-size:9px">MITRA</span></td><td style="font-size:11px;color:var(--t2)">${(vs.rekening||[]).map(r=>r.bank+' '+r.no).join('<br>')||'—'}</td><td style="font-family:var(--mn);font-size:11px">${vs.telp||'—'}</td><td>—</td><td><div class="bg"><button class="btn bxs bi" onclick="openModalVendorSaya('${vs.id}')">Edit</button><button class="btn bxs bd-" onclick="delVendorSaya('${vs.id}')">Hapus</button></div></td></tr>`).join('');
+  const supplierRows=m.vendor.map((v,i)=>`<tr><td style="font-weight:500">${v.nama}</td><td>${catBadge(v.kat)}</td><td style="font-family:var(--mn);font-size:11px">${v.hp||'—'}</td><td>${v.cashback?`<span class="tag tpu">CB ~${v.cashback_pct||'?'}%</span>`:'—'}</td><td><div class="bg"><button class="btn bxs bi" onclick="editVendor(${i})">Edit</button><button class="btn bxs bd-" onclick="rmVendor(${i})">Hapus</button></div></td></tr>`).join('');
+  vtbl.innerHTML=mitraRows+supplierRows||`<tr><td colspan="5"><div class="empty">Belum ada vendor</div></td></tr>`;
   updateDL();
 }
 function addKat(){
@@ -5543,22 +5542,7 @@ function openWAPOV(pov){
 }
 
 // ===== VENDOR MILIK SAYA =====
-function renderVendorSaya(){
-  const list=getVendorSaya();
-  const el=document.getElementById('vendor-saya-list');if(!el)return;
-  if(!list.length){el.innerHTML='<div class="empty" style="padding:10px">Belum ada vendor</div>';return;}
-  el.innerHTML=list.map(vs=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)">
-    <div>
-      <div style="font-weight:500;font-size:13px">🏢 ${vs.nama}</div>
-      <div style="font-size:11px;color:var(--t3)">${vs.telp||''}${vs.alamat?' · '+vs.alamat.split('\n')[0]:''}</div>
-      ${(vs.rekening||[]).length?`<div style="font-size:11px;color:var(--t2)">${vs.rekening.map(r=>`${r.bank} ${r.no}`).join(' | ')}</div>`:''}
-    </div>
-    <div class="bg">
-      <button class="btn bxs bi" onclick="openModalVendorSaya('${vs.id}')">Edit</button>
-      <button class="btn bxs bd-" onclick="delVendorSaya('${vs.id}')">Hapus</button>
-    </div>
-  </div>`).join('');
-}
+function renderVendorSaya(){renderMaster();}
 function openModalVendorSaya(id){
   const vs=id?getVendorSaya().find(v=>v.id===id):null;
   document.getElementById('vs-modal-title').textContent=vs?'Edit Vendor Mitra':'Tambah Vendor Mitra';

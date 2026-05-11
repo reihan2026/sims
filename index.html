@@ -455,6 +455,13 @@ input[type=checkbox],input[type=radio]{width:auto}
       <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama vendor</th><th>Kategori</th><th>No. HP</th><th>Sistem cashback</th><th>Aksi</th></tr></thead><tbody id="vendor-tbl"></tbody></table></div>
     </div>
     <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+        <div class="ct" style="margin:0">Vendor Milik Saya</div>
+        <button class="btn bp bsm" onclick="openModalVendorSaya()">+ Tambah</button>
+      </div>
+      <div id="vendor-saya-list"><div class="empty" style="padding:10px">Belum ada vendor</div></div>
+    </div>
+    <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div class="ct" style="margin:0">Log Aktivitas</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -563,6 +570,36 @@ input[type=checkbox],input[type=radio]{width:auto}
     <input type="hidden" id="v-edit-idx">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-vendor')">Batal</button><button class="btn bp" onclick="saveVendor()">Simpan</button></div>
+</div></div>
+
+<!-- Vendor Milik Saya -->
+<div class="modal-bg" id="modal-vendor-saya"><div class="modal mw">
+  <div class="mh"><span class="mht" id="vs-modal-title">Tambah Vendor Milik Saya</span><button class="btn bgh bsm" onclick="closeModal('modal-vendor-saya')">✕</button></div>
+  <div class="mb">
+    <input type="hidden" id="vs-edit-id">
+    <div class="r2">
+      <div class="fg"><label class="lbl">Nama perusahaan</label><input type="text" id="vs-nama" placeholder="PT. / CV. / UD. ..."></div>
+      <div class="fg"><label class="lbl">No. telepon</label><input type="text" id="vs-telp" placeholder="021-xxx / 0812-xxx"></div>
+    </div>
+    <div class="fg"><label class="lbl">Alamat</label><textarea id="vs-alamat" rows="2" style="resize:vertical" placeholder="Jl. ..."></textarea></div>
+    <div class="fg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <label class="lbl" style="margin:0">Rekening bank</label>
+        <button class="btn bxs bi" onclick="addVsRek()">+ Tambah rekening</button>
+      </div>
+      <div id="vs-rekening-wrap"></div>
+    </div>
+    <div class="fg">
+      <label class="lbl">Kop surat (gambar)</label>
+      <div id="vs-kop-preview" style="display:none;margin-bottom:8px"><img id="vs-kop-img" style="max-width:100%;max-height:120px;border:1px solid var(--bd);border-radius:var(--r);object-fit:contain"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="vs-kop-file" accept="image/*" style="flex:1" onchange="previewVsKop(this)">
+        <button class="btn bxs bd-" id="vs-kop-del" style="display:none" onclick="delVsKop()">Hapus kop</button>
+      </div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px">Format PNG/JPG. Disarankan lebar penuh (800×200px). Akan tampil di bagian atas invoice PDF.</div>
+    </div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-vendor-saya')">Batal</button><button class="btn bp" onclick="saveVendorSaya()">Simpan</button></div>
 </div></div>
 
 <!-- Buat PO ke Vendor -->
@@ -860,6 +897,11 @@ input[type=checkbox],input[type=radio]{width:auto}
 <div class="modal-bg" id="modal-invd"><div class="modal mw">
   <div class="mh"><span class="mht">Buat Invoice ke Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-invd')">✕</button></div>
   <div class="mb">
+    <div class="fg" style="margin-bottom:11px;padding:10px 12px;background:var(--abg);border:1px solid var(--ab);border-radius:var(--r)">
+      <label class="lbl" style="color:var(--at)">Penerbit invoice (vendor milik saya)</label>
+      <select id="invd-vendor-saya" style="margin-top:3px"><option value="">— Tanpa kop (internal) —</option></select>
+      <div style="font-size:10px;color:var(--t3);margin-top:3px">Pilih untuk generate PDF invoice formal dengan kop surat vendor.</div>
+    </div>
     <div class="r4">
       <div class="fg"><label class="lbl">No. Invoice</label><input type="text" id="invd-no" placeholder="INV-D-001"></div>
       <div class="fg"><label class="lbl">Tanggal</label><input type="date" id="invd-tgl"></div>
@@ -1081,7 +1123,7 @@ function showForgotPw(){
 }
 
 // ===== DATA LAYER =====
-const _cache={po:[],invv:[],invd:[],pov:[],rek:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0,ctr_pov:0};
+const _cache={po:[],invv:[],invd:[],pov:[],rek:[],vendor_saya:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0,ctr_pov:0};
 function loadAllData(){
   return new Promise((resolve)=>{
     // Unsubscribe any existing listener first
@@ -1249,6 +1291,8 @@ const getInvD=()=>_cache.invd;
 const setInvD=d=>{_cache.invd=d;_rc.invalidate();saveData(['invd']);};
 const getPOVs=()=>_cache.pov||[];
 const setPOVs=d=>{_cache.pov=d;saveData(['pov']);};
+const getVendorSaya=()=>_cache.vendor_saya||[];
+const setVendorSaya=d=>{_cache.vendor_saya=d;saveData(['vendor_saya']);};
 function nextCtrPOV(){_cache.ctr_pov=(_cache.ctr_pov||0)+1;saveData(['ctr_pov']);return String(_cache.ctr_pov).padStart(3,'0');};
 
 // Batch setter — update multiple keys at once, single Firebase write
@@ -1281,7 +1325,7 @@ const loadFile=async(key)=>{
   return null;
 };
 function backupData(){
-  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'5'};
+  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),vendor_saya:getVendorSaya(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'5'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();showToast('Backup berhasil didownload!');
 }
@@ -1290,7 +1334,7 @@ function restoreData(){
   input.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{
     try{const data=JSON.parse(ev.target.result);if(!data.po||!data.invv)throw new Error('Format tidak valid');
       if(!confirm(`Restore dari backup ${data.exported?.split('T')[0]||'?'}?\n\nSEMUA DATA SAAT INI AKAN DIGANTIKAN.`))return;
-      ['po','invv','invd','pov','rek','master','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
+      ['po','invv','invd','pov','rek','vendor_saya','master','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
       saveData();showToast('Restore berhasil! Memuat ulang...');setTimeout(()=>location.reload(),1200);
     }catch(err){showToast('Gagal restore: '+err.message,true);}
   };r.readAsText(file);};input.click();
@@ -1454,7 +1498,7 @@ function nav(name){
 
 // ===== MASTER DATA =====
 function renderMaster(){
-  renderKats();
+  renderKats();renderVendorSaya();
   const m=getMaster();const reks=getReks();
   document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><span style="font-size:13px">${d}</span><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';
@@ -3329,6 +3373,9 @@ function openNewInvD(poId){
   // PT dropdown: only unpaid invoice vendor
   const unpaidInvV=getInvV().filter(iv=>iv.bayar_status!=='lunas');
   document.getElementById('invd-pt-inv').innerHTML='<option value="">— Pilih invoice vendor —</option>'+unpaidInvV.map(iv=>`<option value="${iv.id}">${iv.no} — ${iv.vendor} (${fmtF(iv.total)})</option>`).join('')+(unpaidInvV.length===0?'<option disabled>Tidak ada invoice vendor yang belum dibayar</option>':'');
+  // Populate vendor saya dropdown
+  const vsEl=document.getElementById('invd-vendor-saya');
+  if(vsEl){const vs=getVendorSaya();vsEl.innerHTML='<option value="">— Tanpa kop (internal) —</option>'+vs.map(v=>`<option value="${v.id}">${v.nama}</option>`).join('');}
   updateDL();if(poId)loadInvDItems();openModal('modal-invd');
 }
 function toggleInvDType(){
@@ -3517,7 +3564,8 @@ function saveInvD(){
     if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);
   }
-  const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,terima_status:'belum',payments:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
+  const vendor_saya_id=document.getElementById('invd-vendor-saya')?.value||'';
+  const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,vendor_saya_id,terima_status:'belum',payments:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   const invs=getInvD();invs.push(inv);
   // Batch write invD + counter in one round trip
   setBatch({invd:invs,ctr_invd:_cache.ctr_invd});
@@ -3618,6 +3666,7 @@ function renderInvD(){
         <span class="tag ${iv.terima_status==='lunas'?'tok':'tno'}" style="margin-left:3px">${iv.terima_status==='lunas'?'Lunas':'Blm diterima'}</span>
         <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0">${iv.dapur} · ${iv.tgl}${iv.jatuh?' · Jt: '+iv.jatuh:''}</div>
         ${po?`<div style="font-size:11px;color:var(--t2)">PO: ${po.no}</div>`:''}
+        ${iv.vendor_saya_id?(()=>{const vs=getVendorSaya().find(v=>v.id===iv.vendor_saya_id);return vs?`<div style="font-size:11px;color:var(--ac);margin-top:2px">🏢 ${vs.nama}</div>`:''})():''}
         <div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
           <span>Total: <strong>${fmtF(iv.total)}</strong></span><span class="${sisa>0?'a':'g'}">Sisa: ${fmtF(sisa)}</span>
         </div>
@@ -3626,13 +3675,15 @@ function renderInvD(){
         ${iv.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${iv.id}')">Rekam terima</button>`:''}
         ${iv.type==='passthrough'&&iv.terima_status==='lunas'&&iv.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===iv.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
           ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();renderInvD();showToast('Invoice vendor diupdate!')">Sync vendor</button>`:''}
+        ${iv.vendor_saya_id?`<button class="btn bsm bp" onclick="printInvDFormal('${iv.id}')">🖨 Cetak Invoice</button>`:''}
         <button class="btn bsm bi" onclick="showInvDDetail('${iv.id}')">Detail</button>
         <div class="kbb">
           <button class="kbb-btn" onclick="openKbb('kbb-invd-${iv.id}',event)">⋯</button>
           <div class="kbb-menu" id="kbb-invd-${iv.id}">
             ${iv.type==='passthrough'&&iv.pt_inv_id?`<button onclick="showInvVDetail('${iv.pt_inv_id}')">Lihat inv vendor</button>`:''}
             ${po?`<button onclick="showDetail('${po.id}')">Lihat PO</button>`:''}
-            <button onclick="printInvD('${iv.id}')">🖨 Cetak</button>
+            ${iv.vendor_saya_id?`<button onclick="printInvDFormal('${iv.id}')">🖨 Cetak invoice formal</button>`:''}
+            <button onclick="printInvD('${iv.id}')">🖨 Cetak internal</button>
             <div class="kbb-div"></div>
             <button class="kd" onclick="delInvD('${iv.id}')">Hapus</button>
           </div>
@@ -5451,6 +5502,190 @@ function openWAPOV(pov){
   const hp=(pov.vendor_hp||'').replace(/[^0-9]/g,'').replace(/^0/,'62');
   const text=encodeURIComponent(waTextPOV(pov));
   window.open(`https://wa.me/${hp}?text=${text}`,'_blank');
+}
+
+// ===== VENDOR MILIK SAYA =====
+function renderVendorSaya(){
+  const list=getVendorSaya();
+  const el=document.getElementById('vendor-saya-list');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty" style="padding:10px">Belum ada vendor</div>';return;}
+  el.innerHTML=list.map(vs=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bd)">
+    <div>
+      <div style="font-weight:500;font-size:13px">🏢 ${vs.nama}</div>
+      <div style="font-size:11px;color:var(--t3)">${vs.telp||''}${vs.alamat?' · '+vs.alamat.split('\n')[0]:''}</div>
+      ${(vs.rekening||[]).length?`<div style="font-size:11px;color:var(--t2)">${vs.rekening.map(r=>`${r.bank} ${r.no}`).join(' | ')}</div>`:''}
+    </div>
+    <div class="bg">
+      <button class="btn bxs bi" onclick="openModalVendorSaya('${vs.id}')">Edit</button>
+      <button class="btn bxs bd-" onclick="delVendorSaya('${vs.id}')">Hapus</button>
+    </div>
+  </div>`).join('');
+}
+function openModalVendorSaya(id){
+  const vs=id?getVendorSaya().find(v=>v.id===id):null;
+  document.getElementById('vs-modal-title').textContent=vs?'Edit Vendor Milik Saya':'Tambah Vendor Milik Saya';
+  document.getElementById('vs-edit-id').value=id||'';
+  document.getElementById('vs-nama').value=vs?.nama||'';
+  document.getElementById('vs-telp').value=vs?.telp||'';
+  document.getElementById('vs-alamat').value=vs?.alamat||'';
+  // Rekening rows
+  const wrap=document.getElementById('vs-rekening-wrap');
+  wrap.innerHTML='';
+  (vs?.rekening||[{bank:'',no:'',atas:''}]).forEach(r=>wrap.insertAdjacentHTML('beforeend',vsRekRow(r.bank,r.no,r.atas)));
+  // Kop image
+  const prev=document.getElementById('vs-kop-preview');
+  const img=document.getElementById('vs-kop-img');
+  const delBtn=document.getElementById('vs-kop-del');
+  const fileInput=document.getElementById('vs-kop-file');
+  fileInput.value='';
+  if(vs?.id){
+    const existing=getFile('kop_'+vs.id);
+    if(existing){img.src=existing;prev.style.display='block';delBtn.style.display='';}
+    else{prev.style.display='none';delBtn.style.display='none';}
+  } else {prev.style.display='none';delBtn.style.display='none';}
+  openModal('modal-vendor-saya');
+}
+function vsRekRow(bank='',no='',atas=''){
+  return`<div class="r2" style="margin-bottom:6px;align-items:center">
+    <input type="text" placeholder="Nama bank (BCA, Mandiri…)" value="${bank}" data-vs="bank" style="flex:1">
+    <input type="text" placeholder="Nomor rekening" value="${no}" data-vs="no" style="flex:1">
+    <input type="text" placeholder="Atas nama" value="${atas}" data-vs="atas" style="flex:1">
+    <button class="btn bxs bd-" onclick="this.closest('.r2').remove()">✕</button>
+  </div>`;
+}
+function addVsRek(){
+  document.getElementById('vs-rekening-wrap').insertAdjacentHTML('beforeend',vsRekRow());
+}
+function previewVsKop(input){
+  const f=input.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const img=document.getElementById('vs-kop-img');
+    img.src=e.target.result;
+    document.getElementById('vs-kop-preview').style.display='block';
+    document.getElementById('vs-kop-del').style.display='';
+  };
+  r.readAsDataURL(f);
+}
+function delVsKop(){
+  document.getElementById('vs-kop-img').src='';
+  document.getElementById('vs-kop-preview').style.display='none';
+  document.getElementById('vs-kop-del').style.display='none';
+  document.getElementById('vs-kop-file').value='';
+}
+async function saveVendorSaya(){
+  const nama=document.getElementById('vs-nama').value.trim();
+  if(!nama){showToast('Isi nama perusahaan!',true);return;}
+  const reks=[...document.getElementById('vs-rekening-wrap').querySelectorAll('.r2')].map(row=>({
+    bank:row.querySelector('[data-vs="bank"]').value.trim(),
+    no:row.querySelector('[data-vs="no"]').value.trim(),
+    atas:row.querySelector('[data-vs="atas"]').value.trim()
+  })).filter(r=>r.bank||r.no);
+  const editId=document.getElementById('vs-edit-id').value;
+  const vsId=editId||uid();
+  // Handle kop image
+  const img=document.getElementById('vs-kop-img');
+  const fileInput=document.getElementById('vs-kop-file');
+  if(fileInput.files[0]){
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      await saveFile('kop_'+vsId,e.target.result);
+      _finishSaveVS(vsId,nama,reks);
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+  } else {
+    // If preview is hidden and there was an existing kop, it means user deleted it
+    if(document.getElementById('vs-kop-preview').style.display==='none'&&editId){
+      // Delete from cache (mark as null)
+      _cache['file_kop_'+vsId]=null;
+    }
+    _finishSaveVS(vsId,nama,reks);
+  }
+}
+function _finishSaveVS(vsId,nama,reks){
+  const telp=document.getElementById('vs-telp').value.trim();
+  const alamat=document.getElementById('vs-alamat').value.trim();
+  const list=getVendorSaya();
+  const idx=list.findIndex(v=>v.id===vsId);
+  const obj={id:vsId,nama,telp,alamat,rekening:reks};
+  if(idx>=0)list[idx]=obj;else list.push(obj);
+  setVendorSaya(list);
+  closeModal('modal-vendor-saya');
+  renderVendorSaya();
+  showToast('Vendor disimpan');
+}
+function delVendorSaya(id){
+  if(!confirm('Hapus vendor ini?'))return;
+  setVendorSaya(getVendorSaya().filter(v=>v.id!==id));
+  renderVendorSaya();
+  showToast('Vendor dihapus');
+}
+async function printInvDFormal(invId){
+  const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
+  const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
+  if(!vs){showToast('Vendor tidak ditemukan!',true);return;}
+  const po=getPOs().find(p=>p.id===inv.po_id);
+  const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+  const sisa=inv.total-recv;
+  // Load kop image
+  let kopSrc=getFile('kop_'+vs.id);
+  if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
+  // Build hari map from PO items
+  const hariMap={};
+  if(po){(po.items||[]).forEach(pi=>{if(pi.nama&&pi.hari)hariMap[pi.nama.toLowerCase()]=pi.hari;});}
+  const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total,hari:''}]:inv.items;
+  const css=PRINT_CSS+`
+    .kop-img{width:100%;max-height:150px;object-fit:contain;display:block;margin-bottom:12px}
+    .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1A1814}
+    .vs-hdr-main{font-size:18px;font-weight:700;margin-bottom:2px}
+    .vs-hdr-sub{font-size:12px;color:#6B6560}
+    .rek-footer{margin-top:20px;padding:10px 12px;background:#F5F3EE;border-radius:4px;font-size:12px}
+    .rek-footer-title{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+    .rek-row{display:flex;gap:12px;margin-bottom:3px}
+    .rek-bank{font-weight:600;min-width:80px}
+  `;
+  // Header block
+  const hdrHtml=kopSrc
+    ?`<img src="${kopSrc}" class="kop-img">`
+    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div><div class="vs-hdr-sub">${vs.alamat?vs.alamat.replace(/\n/g,', '):''}</div><div class="vs-hdr-sub">${vs.telp||''}</div></div>`;
+  // Invoice info
+  const infoHtml=`<div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
+    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${inv.dapur}</div></div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:700">INVOICE</div>
+      <div style="font-size:11px;color:#6B6560;font-family:'IBM Plex Mono',monospace">${inv.no} · ${inv.tgl}</div>
+      ${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}
+      ${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}
+    </div>
+  </div>`;
+  // Table
+  const hasHari=items.some(i=>hariMap[i.nama?.toLowerCase()]);
+  const tableHtml=`<table class="tbl"><thead><tr>
+    <th>Nama item</th>${hasHari?'<th>Hari kirim</th>':''}
+    <th>Qty</th><th>Sat</th>
+    <th style="text-align:right">Harga (Rp)</th><th style="text-align:right">Subtotal</th>
+  </tr></thead><tbody>
+    ${items.map(i=>`<tr><td>${i.nama}</td>${hasHari?`<td>${hariMap[i.nama?.toLowerCase()]||'—'}</td>`:''}
+    <td>${i.qty}</td><td>${i.satuan||''}</td>
+    <td style="text-align:right">Rp ${Math.round(i.harga_dapur||0).toLocaleString('id-ID')}</td>
+    <td style="text-align:right">Rp ${Math.round((i.qty||0)*(i.harga_dapur||0)).toLocaleString('id-ID')}</td></tr>`).join('')}
+  </tbody></table>`;
+  // Totals
+  const totHtml=`<div class="tot">
+    ${recv>0?`<div style="font-size:12px;color:#6B6560;margin-bottom:3px">Sudah dibayar: Rp ${Math.round(recv).toLocaleString('id-ID')}</div>`:''}
+    <div class="tot-main">Total: Rp ${Math.round(inv.total).toLocaleString('id-ID')}</div>
+    ${sisa>0?`<div style="font-size:13px;color:#8B2020;margin-top:2px">Sisa tagihan: Rp ${Math.round(sisa).toLocaleString('id-ID')}</div>`:'<div style="font-size:12px;color:#2D5A3D;margin-top:2px">✓ Lunas</div>'}
+  </div>`;
+  // Rekening footer
+  const rekFooter=(vs.rekening||[]).length?`<div class="rek-footer">
+    <div class="rek-footer-title">Informasi pembayaran</div>
+    ${vs.rekening.map(r=>`<div class="rek-row"><span class="rek-bank">${r.bank}</span><span>${r.no}</span>${r.atas?`<span style="color:#6B6560">a.n. ${r.atas}</span>`:''}</div>`).join('')}
+  </div>`:'';
+  const stampHtml=`<div class="stamp"><div class="stamp-box">Dibuat oleh</div><div class="stamp-box">Disetujui</div><div class="stamp-box">Penerima</div></div>`;
+  const body=`<div class="w">${hdrHtml}${infoHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}<div class="ft">Dicetak: ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`;
+  const w=window.open('','_blank','width=820,height=800');
+  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
+  w.document.close();
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

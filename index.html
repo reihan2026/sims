@@ -2467,7 +2467,7 @@ function saveKirim(){
   });
   setPOs(pos);closeModal('modal-kirim');
   addLog('update_kirim','Update kirim','po',poId,'',stat+' · '+idxs.length+' item');showToast(idxs.length>1?`${idxs.length} item diperbarui!`:'Status kirim diperbarui!');
-  showDetail(poId);
+  if(_currentPage==='inv-vendor')renderInvV();else showDetail(poId);
 }
 
 // Bulk kirim update from invoice vendor list

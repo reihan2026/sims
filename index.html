@@ -3054,7 +3054,7 @@ function saveBayarInvV(){
   if(totalPaid>=netTotal)inv.bayar_status='lunas';
   const cbJml=parseFloat(document.getElementById('bayar-cb-jml').value)||0;
   if(cbJml>0){if(!inv.cashbacks)inv.cashbacks=[];inv.cashbacks.push({id:uid(),jumlah:cbJml,tgl:document.getElementById('bayar-cb-tgl').value,rek_id:rekId,catatan:'Cashback saat bayar'});}
-  addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPage==='inv-vendor')renderInvV();else if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 
 function uploadInvVFile(invId){

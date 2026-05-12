@@ -1919,13 +1919,20 @@ function buildLookup(poId){
         (id2.items||[]).forEach(i=>{
           const storedNama=(i.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
           const iKey=`${storedNama.toLowerCase().trim()}||${i.hari||''}||${i.deadline||''}`;
-          // Pass 1: composite key match
+          let matched=false;
+          // Pass 1: composite key match (nama+hari+deadline)
           po.items.forEach((pi,pidx)=>{
             const piKey=`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`;
-            if(!(pidx in itemInvD)&&piKey===iKey)itemInvD[pidx]=id2;
+            if(!(pidx in itemInvD)&&piKey===iKey){itemInvD[pidx]=id2;matched=true;}
           });
-          // Pass 2: nama-only for legacy items without hari/deadline
+          // Pass 2: nama-only if invoice item has no hari/deadline
           if(!i.hari&&!i.deadline){
+            po.items.forEach((pi,pidx)=>{
+              if(!(pidx in itemInvD)&&pi.nama.toLowerCase()===storedNama.toLowerCase()){itemInvD[pidx]=id2;matched=true;}
+            });
+          }
+          // Pass 3: nama-only fallback jika Pass 1+2 gagal (hari/deadline berubah di PO setelah invoice dibuat)
+          if(!matched){
             po.items.forEach((pi,pidx)=>{
               if(!(pidx in itemInvD)&&pi.nama.toLowerCase()===storedNama.toLowerCase())itemInvD[pidx]=id2;
             });

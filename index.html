@@ -1869,8 +1869,10 @@ function buildLookup(poId){
     // Pass 1: exact idx match (most reliable)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
-      if(directIdx>=0&&po.items[directIdx]&&!(directIdx in itemInvV))
+      if(directIdx>=0&&po.items[directIdx]&&!(directIdx in itemInvV)){
+        if(po.items[directIdx].nama!==i.nama)console.warn('[SIMS debug] Pass1 idx mismatch:',iv.no,'item',i.nama,'idx='+directIdx,'tapi di PO ada',po.items[directIdx].nama);
         itemInvV[directIdx]=iv;
+      }
     }));
     // Pass 2: composite key match — only for items whose stored idx is stale/missing
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{

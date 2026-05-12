@@ -3554,7 +3554,9 @@ function loadInvDItems(){
   // Group by hari
   const byHari={};available.forEach(i=>{const k=i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
 
-  let html='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  const noInvVCount=available.filter(i=>i._noInvV).length;
+  let html=noInvVCount?`<div style="margin-bottom:8px;padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt)">⚠ ${noInvVCount} item belum memiliki invoice vendor — pastikan sudah diinput sebelum menagih ke dapur.</div>`:'';
+  html+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
   html+=`<thead><tr style="background:var(--s2)">
     <th style="padding:6px 8px;width:30px;border-bottom:1px solid var(--bd)"><input type="checkbox" id="invd-all" checked onchange="document.querySelectorAll(\'.invd-cb\').forEach(c=>c.checked=this.checked);calcInvDTotal()"></th>
     <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;color:var(--t3)">Nama item</th>
@@ -3577,7 +3579,7 @@ function loadInvDItems(){
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
           data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}"
           checked onchange="calcInvDTotal()"></td>
-        <td style="padding:7px 8px;font-weight:500">${item.nama}${item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}</td>
+        <td style="padding:7px 8px;font-weight:500">${item.nama}${item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}</td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${item.harga_ref?fmtF(item.harga_ref):'—'}</td>
         <td style="padding:7px 8px"><input type="number" class="invd-h" id="h-${rid}" value="${item.harga||''}" min="0"

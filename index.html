@@ -1866,13 +1866,11 @@ function buildLookup(poId){
 
   const itemInvV={};
   if(po){
-    // Pass 1: exact idx match (most reliable)
+    // Pass 1: exact idx+nama match (skip if item at idx has different name — stale idx)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
-      if(directIdx>=0&&po.items[directIdx]&&!(directIdx in itemInvV)){
-        if(po.items[directIdx].nama!==i.nama)console.warn('[SIMS debug] Pass1 idx mismatch:',iv.no,'item',i.nama,'idx='+directIdx,'tapi di PO ada',po.items[directIdx].nama);
+      if(directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama&&!(directIdx in itemInvV))
         itemInvV[directIdx]=iv;
-      }
     }));
     // Pass 2: composite key match — only for items whose stored idx is stale/missing
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
@@ -2516,11 +2514,6 @@ function showStatPopup(event,poId,idx){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
   const {invV,invD,itemInvV,itemInvD,itemPassthrough}=buildLookup(poId);
   const ivObj=itemInvV[idx];const idObj=itemInvD[idx];
-  // DEBUG — hapus setelah bug ditemukan
-  const _allInvV=getInvV().filter(v=>v.po_id===poId);
-  console.log('[DBG] item idx='+idx,'nama='+item.nama,'assigned to='+ivObj?.no);
-  console.log('[DBG] semua invV PO ini:',_allInvV.map(iv=>iv.no+' items:['+( iv.items||[]).map(i=>i.nama+'(idx='+i.idx+')').join(',')+']'));
-  console.log('[DBG] itemInvV map:',Object.entries(itemInvV).map(([k,v])=>k+'→'+v.no+'('+po.items[k]?.nama+')').join(', '));
   const isPT=itemPassthrough.has(idx);// vendor paid directly by dapur, no invD needed
   const s1=!!ivObj;
   const s2=ivObj&&ivObj.bayar_status==='lunas';const s2w=ivObj&&!s2;
@@ -2812,10 +2805,10 @@ function loadInvVItems(){
   const coveredIdx=new Set();
   const coveredKey=new Set();
   existingInvV.forEach(iv=>(iv.items||[]).forEach(i=>{
-    if(typeof i.idx==='number')coveredIdx.add(i.idx);
     const directIdx=typeof i.idx==='number'?i.idx:-1;
-    const idxStale=directIdx<0||!po.items[directIdx]||po.items[directIdx].nama!==i.nama;
-    if((i.hari||i.deadline)&&idxStale)coveredKey.add(itemKey(i));
+    const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
+    if(idxFresh)coveredIdx.add(directIdx);
+    if(!idxFresh&&(i.hari||i.deadline))coveredKey.add(itemKey(i));
   }));
   const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>{
     if(coveredIdx.has(item._idx))return false;

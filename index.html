@@ -2850,7 +2850,7 @@ function loadInvVItems(){
           </div>
         </td>
         <td style="padding:7px 8px;text-align:right"><input type="number" class="invv-hv" data-idx="${item._idx}" value="${useHarga||''}" placeholder="0" min="0" style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px" oninput="updateInvVHarga(this,${item._idx})">${suggestBadge}</td>
-        <td style="padding:7px 8px;text-align:right;font-family:var(--mn);white-space:nowrap" id="invv-sub-${item._idx}">${defaultHarga>0?fmtF((item.qty||0)*defaultHarga):'—'}</td>
+        <td style="padding:7px 8px;text-align:right;font-family:var(--mn);white-space:nowrap" id="invv-sub-${item._idx}">${useHarga>0?fmtF((item.qty||0)*useHarga):'—'}</td>
         <td style="padding:7px 8px;text-align:center"><button title="Edit qty/satuan invoice" style="background:none;border:1px solid var(--bd);border-radius:4px;cursor:pointer;padding:3px 6px;font-size:12px;color:var(--t3);line-height:1;transition:all .15s" onmouseenter="this.style.background='var(--s2)'" onmouseleave="this.style.background='none'" onclick="toggleInvVEdit(${item._idx},'${item.satuan}')">✏</button></td>
       </tr>`;
     });
@@ -2886,7 +2886,7 @@ function updateInvVHarga(input,idx){
   calcInvVTotal();
 }
 function calcInvVTotal(){
-  let total=0;document.querySelectorAll('.invv-cb:checked').forEach(cb=>{total+=(parseFloat(cb.dataset.qty)||0)*(parseFloat(cb.dataset.hv)||0);});
+  let total=0;document.querySelectorAll('.invv-cb:checked').forEach(cb=>{const hvEl=document.querySelector(`.invv-hv[data-idx="${cb.dataset.idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;total+=(parseFloat(cb.dataset.qty)||0)*hv;});
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   document.getElementById('invv-total').value=Math.round(total+ongkir);
 }

@@ -1882,9 +1882,11 @@ function buildLookup(poId){
         if(!(pidx in itemInvV)&&itemKey(pi)===iKey)itemInvV[pidx]=iv;
       });
     }));
-    // Pass 3: nama-only match for truly legacy data (no idx stored at all)
+    // Pass 3: nama-only fallback for items with stale/missing idx and no hari/deadline key
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
-      if(!i.hari&&!i.deadline&&typeof i.idx!=='number'){
+      const directIdx=typeof i.idx==='number'?i.idx:-1;
+      const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
+      if(!i.hari&&!i.deadline&&!idxFresh){
         po.items.forEach((pi,pidx)=>{
           if(!(pidx in itemInvV)&&pi.nama===i.nama)itemInvV[pidx]=iv;
         });
@@ -2813,8 +2815,8 @@ function loadInvVItems(){
   const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>{
     if(coveredIdx.has(item._idx))return false;
     if((item.hari||item.deadline)&&coveredKey.has(itemKey(item)))return false;
-    // Legacy: invV items without hari/deadline AND without idx stored — nama-only fallback
-    if(!item.hari&&!item.deadline&&existingInvV.some(iv=>(iv.items||[]).some(i=>!i.hari&&!i.deadline&&typeof i.idx!=='number'&&i.nama===item.nama)))return false;
+    // Nama-only fallback for items with stale/missing idx and no hari/deadline key
+    if(!item.hari&&!item.deadline&&existingInvV.some(iv=>(iv.items||[]).some(i=>{const dIdx=typeof i.idx==='number'?i.idx:-1;const iFresh=dIdx>=0&&po.items[dIdx]&&po.items[dIdx].nama===i.nama;return!i.hari&&!i.deadline&&!iFresh&&i.nama===item.nama;})))return false;
     return true;
   });
 

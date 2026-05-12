@@ -1872,8 +1872,11 @@ function buildLookup(poId){
       if(directIdx>=0&&po.items[directIdx]&&!(directIdx in itemInvV))
         itemInvV[directIdx]=iv;
     }));
-    // Pass 2: composite key match (nama+hari+deadline) — handles duplicate names
+    // Pass 2: composite key match — only for items whose stored idx is stale/missing
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
+      const directIdx=typeof i.idx==='number'?i.idx:-1;
+      const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
+      if(idxFresh)return;// Pass 1 already handled this correctly
       const iKey=itemKey(i);
       po.items.forEach((pi,pidx)=>{
         if(!(pidx in itemInvV)&&itemKey(pi)===iKey)itemInvV[pidx]=iv;
@@ -2803,7 +2806,9 @@ function loadInvVItems(){
   const coveredKey=new Set();
   existingInvV.forEach(iv=>(iv.items||[]).forEach(i=>{
     if(typeof i.idx==='number')coveredIdx.add(i.idx);
-    if(i.hari||i.deadline)coveredKey.add(itemKey(i));
+    const directIdx=typeof i.idx==='number'?i.idx:-1;
+    const idxStale=directIdx<0||!po.items[directIdx]||po.items[directIdx].nama!==i.nama;
+    if((i.hari||i.deadline)&&idxStale)coveredKey.add(itemKey(i));
   }));
   const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>{
     if(coveredIdx.has(item._idx))return false;

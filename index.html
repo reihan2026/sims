@@ -2833,7 +2833,7 @@ function loadInvVItems(){
       const useHarga=hv||(suggestHarga||item.harga_po||0);
       const suggestBadge=suggestHarga?`<div title="Histori: ${fmtF(suggestHarga)} (${_histH.no} - ${_histH.vendor})" style="font-size:9px;color:var(--in);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${suggestHarga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">💡 Histori: ${fmtF(suggestHarga)}</div>`:'';
       html+=`<tr id="invv-tr-${item._idx}">
-        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
+        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
         <td style="padding:7px 8px" colspan="2">
           <div style="font-weight:500">${item.nama}</div>
           ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
@@ -2908,7 +2908,7 @@ function saveInvV(){
     const satChanged=satOrig&&satInv&&satOrig.toLowerCase()!==satInv.toLowerCase();
     // harga_vendor saved to PO: only apply konv when satuan genuinely changed AND konv>0
     const hvForPO=satChanged&&konv>0?hv/konv:hv;
-    items.push({idx,nama:cb.dataset.nama,qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
+    items.push({idx,nama:cb.dataset.nama,hari:cb.dataset.hari||'',deadline:cb.dataset.deadline||'',qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
   // All valid — now disable button
@@ -4810,12 +4810,19 @@ function buildLaporanData(poId){
   const totalInvD=invDs.reduce((s,d)=>s+d.total,0);
   const totalTerima=invDs.reduce((s,d)=>s+(d.payments||[]).reduce((a,p)=>a+p.jumlah,0),0);
 
-  // Items by hari
+  // Items by hari — use buildLookup to get accurate harga_vendor per position
+  const {itemInvV}=buildLookup(poId);
   const byHari={};
   po.items.forEach((item,idx)=>{
     const h=item.hari||'—';
     if(!byHari[h])byHari[h]=[];
-    byHari[h].push({...item,idx});
+    const ivObj=itemInvV[idx];
+    const ivMatch=ivObj?.items?.find(i=>{
+      const idxFresh=typeof i.idx==='number'&&po.items[i.idx]?.nama===i.nama;
+      return idxFresh?i.idx===idx:i.nama===item.nama;
+    });
+    const hv=ivMatch?(ivMatch.harga_vendor_po!=null?ivMatch.harga_vendor_po:ivMatch.harga_vendor):item.harga_vendor||0;
+    byHari[h].push({...item,idx,harga_vendor:hv});
   });
 
   return{po,invVs,invDs,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari};

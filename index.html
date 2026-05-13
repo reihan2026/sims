@@ -2047,11 +2047,14 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     items.forEach(item=>{
       const idx=item._idx;
       const ip=(item.qty||0)*(item.harga_po||0);
-      const iv2=item.harga_vendor?(item.qty||0)*(item.harga_vendor||0):null;
-      const im=iv2!==null?ip-iv2:null;
-      const mc=im===null?'mzero':im>0?'mpos':'mneg';
       const nk=item.nota_key?getFile(item.nota_key):null;
       const ivObj=itemInvV[idx];const idObj=itemInvD[idx];
+      const ivItemMatch=ivObj?.items?.find(i=>i.nama===item.nama);
+      const displayVendor=item.vendor||ivObj?.vendor||'';
+      const displayHargaV=item.harga_vendor||(ivItemMatch?(ivItemMatch.harga_vendor_po!=null?ivItemMatch.harga_vendor_po:ivItemMatch.harga_vendor):0);
+      const iv2=displayHargaV?(item.qty||0)*displayHargaV:null;
+      const im=iv2!==null?ip-iv2:null;
+      const mc=im===null?'mzero':im>0?'mpos':'mneg';
       const isPT=itemPassthrough.has(idx);
       const s2w=ivObj&&ivObj.bayar_status!=='lunas';
       const s3=item.status_kirim==='diterima';const s3w=item.status_kirim==='dikirim';
@@ -2059,7 +2062,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       const allDone=isPT?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3):(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');
       const hasWarn=!isPT&&(s2w||s5w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0))||isPT&&(s2w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0));
       const rowStatus=allDone?'done':hasWarn?'todo':'running';
-      html+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
+      html+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${displayVendor.toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
         <td style="font-weight:500;min-width:110px">${item.nama}${item.retur?`<br><span style="font-size:9px;color:var(--dn)">Retur: ${fmtF(item.retur.val)}</span>`:''}</td>
         <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${getCats().map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
         <td>${tipeTag(item.tipe_kirim)}</td>
@@ -2067,8 +2070,8 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <td class="num" style="white-space:nowrap">${item.qty}</td>
         <td class="num" style="white-space:nowrap">${fmtF(item.harga_po)}</td>
         ${spekVisible?`<td style="font-size:11px;color:var(--t2);max-width:150px;word-break:break-word">${item.spek||'—'}</td>`:''}
-        <td class="col-vendor" style="font-size:12px">${item.vendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
-        <td style="white-space:nowrap">${item.harga_vendor?`<span class="num">${fmtF(item.harga_vendor)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${item.vendor||''}')">+ Isi via invoice</button>`}</td>
+        <td class="col-vendor" style="font-size:12px">${displayVendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
+        <td style="white-space:nowrap">${displayHargaV?`<span class="num">${fmtF(displayHargaV)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${displayVendor||''}')">+ Isi via invoice</button>`}</td>
         <td class="col-margin ${mc}" style="white-space:nowrap">${im!==null?fmtF(im):'—'}</td>
         <td style="text-align:center">
           <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" title="Lihat detail status & aksi">${statusIcon(allDone,hasWarn)}</button>
@@ -2933,7 +2936,13 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
-  if(po){items.forEach(i=>{if(po.items[i.idx]){if(i.harga_vendor>0){po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);if(vendor)po.items[i.idx].vendor=vendor;if(i.konv)po.items[i.idx].satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}}}); }
+  if(po){items.forEach(i=>{
+    // Find correct PO item by idx+nama (or fallback to nama-only if idx stale)
+    let poItem=null;
+    if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama)poItem=po.items[i.idx];
+    else poItem=po.items.find(pi=>pi.nama===i.nama)||null;
+    if(poItem&&i.harga_vendor>0){poItem.harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);if(vendor)poItem.vendor=vendor;if(i.konv)poItem.satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}
+  });}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
   autoMaster('',vendor?[vendor]:[]);

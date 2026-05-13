@@ -1138,30 +1138,6 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
-function _patchAllInvDLinks(){
-  const invDs=getInvD();const pos=getPOs();
-  let patched=0;const dirtyPOs=new Set();
-  invDs.forEach(function(d){
-    if(d.type==='passthrough')return;
-    const po=pos.find(function(p){return p.id===d.po_id;});if(!po)return;
-    const lk=buildLookup(d.po_id);const itemInvV=lk.itemInvV;
-    (d.items||[]).forEach(function(it){
-      if(it.invv_id)return;
-      const itNama=(it.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
-      const itKey=itNama.toLowerCase()+'||'+(it.hari||'')+'||'+(it.deadline||'');
-      let pidx=po.items.findIndex(function(pi){return pi.nama.toLowerCase().trim()+'||'+(pi.hari||'')+'||'+(pi.deadline||'')===itKey;});
-      if(pidx<0)pidx=po.items.findIndex(function(pi){return pi.nama.toLowerCase().trim()===itNama.toLowerCase();});
-      if(pidx<0){console.log('[skip]',d.no,it.nama,'— PO item tidak ditemukan');return;}
-      const ivMatch=itemInvV[pidx];
-      if(!ivMatch){console.log('[skip]',d.no,it.nama,'— tidak ada invV untuk posisi ini');return;}
-      it.invv_id=ivMatch.id;dirtyPOs.add(d.po_id);patched++;
-      console.log('[patch]',d.no,it.nama,it.hari||'-','→',ivMatch.no);
-    });
-  });
-  if(patched>0){setInvD(invDs);dirtyPOs.forEach(function(pid){invalidatePO(pid);});}
-  console.log('[done] Patched',patched,'item dari',dirtyPOs.size,'PO');
-  showToast('Patch selesai: '+patched+' item');
-}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;

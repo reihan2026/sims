@@ -1138,43 +1138,28 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
-function _patchTelurAyamInvD(){
-  const invDs=getInvD();
-  const invVs=getInvV();
-  const pos=getPOs();
-  const v128=invVs.find(v=>v.no==='INV-V-128');
-  const v179=invVs.find(v=>v.no==='INV-V-179');
-  if(!v128||!v179){console.log('[patch] INV-V-128 atau INV-V-179 tidak ditemukan');return;}
-  // Get hari of PO items covered by each invV
-  const getPoHari=function(iv,invVItems){
-    const i=invVItems.find(x=>x.no===iv.no);
-    if(!i)return null;
-    const poObj=pos.find(p=>p.id===i.po_id);
-    if(!poObj)return null;
-    const pi=poObj.items[i.itemIdx];
-    return pi?pi.hari||'':null;
-  };
-  const po128=pos.find(p=>p.id===v128.po_id);
-  const po179=pos.find(p=>p.id===v179.po_id);
-  const hari128=po128&&v128.items[0]?po128.items[v128.items[0].idx]?.hari||'':'';
-  const hari179=po179&&v179.items[0]?po179.items[v179.items[0].idx]?.hari||'':'';
-  console.log('[info] Telur Ayam INV-V-128 PO hari:',hari128||'(kosong)','| INV-V-179 PO hari:',hari179||'(kosong)');
-  const poIds=new Set();
-  let patched=0;
+function _patchAllInvDLinks(){
+  const invDs=getInvD();const pos=getPOs();
+  let patched=0;const dirtyPOs=new Set();
   invDs.forEach(function(d){
+    if(d.type==='passthrough')return;
+    const po=pos.find(function(p){return p.id===d.po_id;});if(!po)return;
+    const lk=buildLookup(d.po_id);const itemInvV=lk.itemInvV;
     (d.items||[]).forEach(function(it){
-      if(it.nama!=='Telur Ayam'||it.invv_id)return;
-      // Match by hari: if item hari matches PO item hari of that invV → assign
-      let target=null;
-      if(hari179&&it.hari===hari179)target=v179;
-      else if(hari128&&it.hari===hari128)target=v128;
-      else if(!hari128&&!hari179)target=v179;// fallback if PO has no hari
-      if(target){it.invv_id=target.id;poIds.add(d.po_id);patched++;console.log('[patch]',d.no,it.nama,it.hari,'→',target.no);}
-      else console.log('[skip]',d.no,it.nama,it.hari,'— hari tidak cocok, cek manual');
+      if(it.invv_id)return;
+      const itNama=(it.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
+      const itKey=itNama.toLowerCase()+'||'+(it.hari||'')+'||'+(it.deadline||'');
+      let pidx=po.items.findIndex(function(pi){return pi.nama.toLowerCase().trim()+'||'+(pi.hari||'')+'||'+(pi.deadline||'')===itKey;});
+      if(pidx<0)pidx=po.items.findIndex(function(pi){return pi.nama.toLowerCase().trim()===itNama.toLowerCase();});
+      if(pidx<0){console.log('[skip]',d.no,it.nama,'— PO item tidak ditemukan');return;}
+      const ivMatch=itemInvV[pidx];
+      if(!ivMatch){console.log('[skip]',d.no,it.nama,'— tidak ada invV untuk posisi ini');return;}
+      it.invv_id=ivMatch.id;dirtyPOs.add(d.po_id);patched++;
+      console.log('[patch]',d.no,it.nama,it.hari||'-','→',ivMatch.no);
     });
   });
-  if(patched>0){setInvD(invDs);poIds.forEach(function(pid){invalidatePO(pid);});}
-  console.log('[done] Patched',patched,'item');
+  if(patched>0){setInvD(invDs);dirtyPOs.forEach(function(pid){invalidatePO(pid);});}
+  console.log('[done] Patched',patched,'item dari',dirtyPOs.size,'PO');
   showToast('Patch selesai: '+patched+' item');
 }
 function showForgotPw(){

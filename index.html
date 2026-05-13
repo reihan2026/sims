@@ -4984,7 +4984,6 @@ function renderLaporanHTML(d){
       <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${item.margin===null?'#ccc':item.margin>=0?'#16a34a':'#dc2626'}">${item.margin===null?'—':fmtF(item.margin)}</td>
     </tr>`;
   });
-  const totalItemMargin=allItems.reduce((s,i)=>s+(i.margin||0),0);
   itemMarginHtml+=`<tr style="border-top:2px solid #222;font-weight:600">
     <td colspan="5" style="padding:6px 8px;text-align:right">Total margin</td>
     <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${totalItemMargin>=0?'#16a34a':'#dc2626'}">${fmtF(totalItemMargin)}</td>

@@ -1138,6 +1138,30 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
+function _patchInvDLink(){
+  const invDs=getInvD();
+  const invVs=getInvV();
+  // Fix INV-D-070: Telur Ayam → INV-V-179
+  const d070=invDs.find(d=>d.no==='INV-D-070');
+  const v179=invVs.find(v=>v.no==='INV-V-179');
+  if(d070&&v179){
+    const ti=d070.items.find(i=>i.nama==='Telur Ayam');
+    if(ti&&!ti.invv_id){ti.invv_id=v179.id;console.log('[patch] INV-D-070 Telur Ayam → INV-V-179 OK');}
+    else console.log('[patch] INV-D-070 Telur Ayam: sudah ter-patch atau tidak ditemukan');
+  } else console.log('[patch] INV-D-070 atau INV-V-179 tidak ditemukan');
+  // Cek invV yang punya Beras untuk INV-D-072
+  const d072=invDs.find(d=>d.no==='INV-D-072');
+  if(d072){
+    console.log('[info] INV-D-072 Beras → invV yang cocok:');
+    invVs.filter(v=>v.po_id===d072.po_id).forEach(v=>{
+      const bi=(v.items||[]).find(i=>i.nama==='Beras');
+      if(bi)console.log(' ',v.no,'idx:',bi.idx,'harga:',bi.harga_vendor);
+    });
+  }
+  setInvD(invDs);
+  if(d070)invalidatePO(d070.po_id);
+  showToast('Patch selesai — cek Console untuk detail');
+}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;

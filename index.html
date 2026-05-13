@@ -1138,6 +1138,23 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
+function _patchInvD074(){
+  const invDs=getInvD();
+  const invVs=getInvV();
+  const d074=invDs.find(d=>d.no==='INV-D-074');
+  const v179=invVs.find(v=>v.no==='INV-V-179');
+  if(!d074){console.log('[patch] INV-D-074 tidak ditemukan');return;}
+  console.log('[info] INV-D-074 items:');
+  (d074.items||[]).forEach(function(i,x){console.log(x,i.nama,'hari:',i.hari||'-','invv_id:',i.invv_id||'(kosong)');});
+  if(v179){
+    const ti=d074.items.find(i=>i.nama==='Telur Ayam');
+    if(ti){ti.invv_id=v179.id;console.log('[patch] INV-D-074 Telur Ayam → INV-V-179 OK');}
+    else console.log('[patch] Telur Ayam tidak ditemukan di INV-D-074 — cek nama item di atas');
+  }
+  setInvD(invDs);
+  invalidatePO(d074.po_id);
+  showToast('Patch INV-D-074 selesai');
+}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;

@@ -1969,7 +1969,8 @@ function detMetrics(po,t,invVs){
 
 function detNextSteps(id,po,invV,invD){
   const vendors=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
-  const noVendorItems=po.items.filter(i=>!i.vendor||!i.harga_vendor);
+  const {itemInvV}=buildLookup(id);
+  const noVendorItems=po.items.filter((i,idx)=>(!i.vendor||!i.harga_vendor)&&!itemInvV[idx]);
   const anyInvVUnpaid=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id));
   const notKirim=po.items.filter(i=>i.status_kirim!=='diterima');
   const hasInvD=invD.length>0;

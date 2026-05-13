@@ -4822,7 +4822,8 @@ function buildLaporanData(poId){
       return idxFresh?i.idx===idx:i.nama===item.nama;
     });
     const hv=ivMatch?(ivMatch.harga_vendor_po!=null?ivMatch.harga_vendor_po:ivMatch.harga_vendor):item.harga_vendor||0;
-    byHari[h].push({...item,idx,harga_vendor:hv});
+    const displayVendor=item.vendor||ivObj?.vendor||'';
+    byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor});
   });
 
   return{po,invVs,invDs,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari};
@@ -4837,6 +4838,21 @@ function openLaporanPO(poId){
 
 function renderLaporanHTML(d){
   const{po,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,invDs}=d;
+
+  // Pre-compute allItems and vMarginMap so all sections use the same source
+  const allItems=[];
+  Object.entries(byHari).forEach(([hari,items])=>items.forEach(item=>{
+    const margin=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*(item.qty||0):null;
+    allItems.push({...item,hari,margin});
+  }));
+  const totalItemMargin=allItems.reduce((s,i)=>s+(i.margin||0),0);
+  const vMarginMap={};
+  allItems.forEach(item=>{
+    if(item.margin===null)return;
+    const v=item.vendor||'(Belum)';
+    vMarginMap[v]=(vMarginMap[v]||0)+item.margin;
+  });
+
   const marginBersih=t.margin+totalCashback;
   const pct=t.tpFilled>0?(marginBersih/t.tpFilled*100).toFixed(1):null;
 
@@ -4892,13 +4908,7 @@ function renderLaporanHTML(d){
     let vendorHtml='';
     vendorEntries.forEach(([nama,v])=>{
       const allInvItems=v.invs.flatMap(iv=>(iv.items||[]).map(i=>({...i,iv})));
-      // Compute total margin for this vendor
-      // Hitung dari PO items yang vendor-nya sesuai — konsisten dengan poTotals
-      const vendorMargin=d.po.items.reduce((s,pi)=>{
-        if(!(pi.harga_vendor>0))return s;
-        if((pi.vendor||'').toLowerCase()!==(nama||'').toLowerCase())return s;
-        return s+(pi.harga_po-pi.harga_vendor)*(pi.qty||0);
-      },0);
+      const vendorMargin=vMarginMap[nama]||0;
       const marginBersihVendor=vendorMargin-v.ongkir+v.cashback;
 
       vendorHtml+=`
@@ -4955,11 +4965,6 @@ function renderLaporanHTML(d){
 
 
   // Margin by item
-  const allItems=[];
-  Object.entries(byHari).forEach(([hari,items])=>items.forEach(item=>{
-    const margin=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*(item.qty||0):null;
-    allItems.push({...item,hari,margin});
-  }));
   let itemMarginHtml=`<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="background:#f5f5f5">
       <th style="padding:5px 8px;text-align:left">Item</th>
@@ -4998,10 +5003,7 @@ function renderLaporanHTML(d){
       <th style="padding:5px 8px;text-align:right">%</th>
     </tr></thead><tbody>`;
   Object.entries(vendorMap).forEach(([nama,v])=>{
-    const vMargin=v.invs.flatMap(iv=>(iv.items||[])).reduce((s,i)=>{
-      const poItem=findPoItem(po,i);
-      return poItem&&i.harga_vendor>0?s+(poItem.harga_po-i.harga_vendor)*(i.qty||0):s;
-    },0);
+    const vMargin=vMarginMap[nama]||0;
     const vMarginBersih=vMargin-(v.ongkir||0)+(v.cashback||0);
     const pctV=v.total>0?(vMarginBersih/v.total*100).toFixed(1):null;
     vendorMarginHtml+=`<tr style="border-bottom:1px solid #f0f0f0">
@@ -5017,8 +5019,7 @@ function renderLaporanHTML(d){
   vendorMarginHtml+='</tbody></table>';
   // Add total row
   const grandModal=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
-  // Grand margin: pakai poTotals agar konsisten dengan angka di atas
-  const grandMargin=t.tpFilled-t.tv; // tp-tv tanpa ongkir (ongkir dihitung terpisah)
+  const grandMargin=totalItemMargin;
   const grandOngkir=Object.values(vendorMap).reduce((s,v)=>s+(v.ongkir||0),0);
   const grandCashback=Object.values(vendorMap).reduce((s,v)=>s+(v.cashback||0),0);
   const grandBersih=grandMargin-grandOngkir+grandCashback;

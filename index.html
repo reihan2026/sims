@@ -4105,8 +4105,14 @@ function showInvDDetail(invId){
       }
       if(!ivMatch)return;
       if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
-      const ivItem=(ivMatch.items||[]).find(i=>i.nama===diNama||(typeof i.idx==='number'&&po.items[i.idx]?.nama===diNama));
-      const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):po.items.find(pi=>pi.nama===diNama)?.harga_vendor||0;
+      const ivItemByHari=(ivMatch.items||[]).find(i=>{
+        const nm=(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama);
+        return nm&&di.hari&&(i.hari||'')===(di.hari||'');
+      });
+      const ivItem=ivItemByHari||(ivMatch.items||[]).find(i=>
+        (i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama)
+      );
+      const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
       vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
     });
 

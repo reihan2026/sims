@@ -3733,7 +3733,7 @@ function saveTerima(){
     } else showToast('Penerimaan direkam!');
   }
   addLog('terima_invd','Terima dari dapur','invd',inv.id,inv.no,fmtF(jml)+' dari '+inv.dapur);
-  closeModal('modal-terima');if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
+  closeModal('modal-terima');if(_currentPage==='inv-dapur')renderInvD();else if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
 }
 
 // ===== RENDER INVOICE DAPUR =====

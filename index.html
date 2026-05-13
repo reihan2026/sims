@@ -4086,33 +4086,28 @@ function showInvDDetail(invId){
   const po=getPOs().find(p=>p.id===inv.po_id);
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
 
-  // Build vendor breakdown — match each invD item back to its invV using composite key
+  // Build vendor breakdown — use buildLookup for accurate per-position invV matching
   let vendorBreakdownHtml='';
   if(inv.type!=='passthrough'&&po&&inv.items?.length){
-    const invVForPO=getInvV().filter(iv=>iv.po_id===inv.po_id);
-    // Map: invV.id → {invV, items:[]}
+    const {itemInvV}=buildLookup(inv.po_id);
     const vendorMap={};
     inv.items.forEach(di=>{
-      // Find PO item for this invD item using composite key
-      const poItem=po.items.find(pi=>{
-        const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim().toLowerCase();
-        return pi.nama.toLowerCase()===diNama&&((!di.hari&&!pi.hari)||di.hari===pi.hari)&&((!di.deadline&&!pi.deadline)||di.deadline===pi.deadline);
-      })||po.items.find(pi=>(di.nama||'').toLowerCase().includes(pi.nama.toLowerCase()));
-      if(!poItem)return;
-      // Find which invV covers this PO item
-      let ivMatch=null;
-      for(const iv of invVForPO){
-        const found=(iv.items||[]).find(i=>{
-          if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx]===poItem)return true;
-          return itemKey(i)===itemKey(poItem)||i.nama===poItem.nama;
-        });
-        if(found){ivMatch=iv;break;}
-      }
+      // Find PO item position by composite key (nama+hari+deadline), fallback nama-only
+      const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
+      const diKey=`${diNama.toLowerCase()}||${di.hari||''}||${di.deadline||''}`;
+      let pidx=po.items.findIndex(pi=>`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`===diKey);
+      if(pidx<0)pidx=po.items.findIndex(pi=>pi.nama.toLowerCase().trim()===diNama.toLowerCase());
+      if(pidx<0)return;
+      const poItem=po.items[pidx];
+      const ivMatch=itemInvV[pidx];
       if(!ivMatch)return;
       if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
-      // Use qty from invV item (more accurate), fallback to invD item qty
-      const ivItem=(ivMatch.items||[]).find(i=>itemKey(i)===itemKey(poItem)||i.nama===poItem.nama);
-      vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:ivItem?.harga_vendor||poItem.harga_vendor||0});
+      const ivItem=(ivMatch.items||[]).find(i=>{
+        const idxFresh=typeof i.idx==='number'&&po.items[i.idx]?.nama===i.nama;
+        return idxFresh?i.idx===pidx:i.nama===poItem.nama;
+      });
+      const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):poItem.harga_vendor||0;
+      vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
     });
 
     const entries=Object.values(vendorMap);

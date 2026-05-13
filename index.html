@@ -1899,21 +1899,10 @@ function buildLookup(poId){
   if(po){
     invD.forEach(id2=>{
       if(id2.type==='passthrough'&&id2.pt_inv_id){
-        // Pass-through: find the linked invV and map all its items to this invD
-        const linkedInvV=invV.find(iv=>iv.id===id2.pt_inv_id);
-        if(linkedInvV){
-          (linkedInvV.items||[]).forEach(i=>{
-            // Same matching as itemInvV Pass 1+2
-            if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama){
-              if(!(i.idx in itemInvD))itemInvD[i.idx]=id2;
-            } else {
-              const k=itemKey(i);
-              po.items.forEach((pi,pidx)=>{
-                if(!(pidx in itemInvD)&&itemKey(pi)===k)itemInvD[pidx]=id2;
-              });
-            }
-          });
-        }
+        // Pass-through: all PO items already linked to this invV (via itemInvV) are covered by this invD
+        po.items.forEach((pi,pidx)=>{
+          if(!(pidx in itemInvD)&&itemInvV[pidx]?.id===id2.pt_inv_id)itemInvD[pidx]=id2;
+        });
       } else {
         // Normal markup invoice: match by item nama/hari/deadline
         (id2.items||[]).forEach(i=>{
@@ -1950,16 +1939,9 @@ function buildLookup(poId){
       if(iv.bayar_status!=='lunas')return;
       const isPTPayment=(iv.payments||[]).some(p=>(p.catatan||'').toLowerCase().includes('pass-through'));
       if(!isPTPayment)return;
-      // Mark all items in this invV as pass-through covered
-      (iv.items||[]).forEach(i=>{
-        if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama){
-          if(!(i.idx in itemInvD))itemPassthrough.add(i.idx);
-        } else {
-          const k=itemKey(i);
-          po.items.forEach((pi,pidx)=>{
-            if(itemKey(pi)===k&&!(pidx in itemInvD))itemPassthrough.add(pidx);
-          });
-        }
+      // Mark all PO items linked to this invV as pass-through covered
+      po.items.forEach((pi,pidx)=>{
+        if(itemInvV[pidx]?.id===iv.id&&!(pidx in itemInvD))itemPassthrough.add(pidx);
       });
     });
   }

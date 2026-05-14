@@ -5068,16 +5068,15 @@ function renderLaporanHTML(d){
   vendorMarginHtml+='</tbody></table>';
   // Add total row
   const grandModal=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
-  const grandMargin=totalItemMargin;
   const grandOngkir=Object.values(vendorMap).reduce((s,v)=>s+(v.ongkir||0),0);
   const grandCashback=Object.values(vendorMap).reduce((s,v)=>s+(v.cashback||0),0);
-  const grandBersih=grandMargin-grandOngkir+grandCashback;
+  const grandBersih=marginBersih!==null?marginBersih:totalItemMargin-grandOngkir+grandCashback;
   const grandPct=grandModal>0?(grandBersih/grandModal*100).toFixed(1):null;
   vendorMarginHtml+=`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 8px;border-top:2px solid #222;margin-top:2px;font-weight:600;font-size:13px">
     <span>Total keseluruhan</span>
     <div style="display:flex;gap:20px;font-family:monospace">
       <span style="color:#555">Modal: ${fmtF(grandModal)}</span>
-      <span style="color:${grandMargin>=0?'#16a34a':'#dc2626'}">Margin: ${fmtF(grandMargin)}</span>
+      ${totalInvD>0?`<span style="color:#555">Dapur: ${fmtF(totalInvD)}</span>`:''}
       ${grandOngkir?`<span style="color:#dc2626">Ongkir: -${fmtF(grandOngkir)}</span>`:''}
       ${grandCashback?`<span style="color:#7c3aed">CB: +${fmtF(grandCashback)}</span>`:''}
       <span style="color:${grandBersih>=0?'#16a34a':'#dc2626'}">Bersih: ${fmtF(grandBersih)}${grandPct?' ('+grandPct+'%)':''}</span>

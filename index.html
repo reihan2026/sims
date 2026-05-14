@@ -4987,7 +4987,7 @@ function renderLaporanHTML(d){
             <tbody>${allInvItems.map(i=>{
               const qtyPO=findPoItem(po,i)?.qty||i.qty||0;
               const diKey=`${(i.nama||'').trim()}||${i.hari||''}`;
-              const hd=passThroughInvVIds.has(i.iv?.id)?i.harga_vendor:(invDItemMap[diKey]??null);
+              const hd=passThroughInvVIds.has(i.iv?.id)?i.harga_vendor:(invDItemMap[diKey]??invDItemMap[`${(i.nama||'').trim()}||__any__`]??null);
               const marginTotal=hd!=null&&i.harga_vendor>0?(hd-i.harga_vendor)*qtyPO:null;
               return`<tr style="border-bottom:1px solid #f0f0f0">
                 <td style="padding:5px 14px;font-weight:500">${i.nama}</td>

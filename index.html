@@ -1138,22 +1138,6 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
-function _fixHargaVendorPo(){
-  var invVs=getInvV();var patched=0;
-  invVs.forEach(function(iv){
-    var changed=false;
-    (iv.items||[]).forEach(function(i){
-      if(!i.konv&&i.harga_vendor_po!=null&&i.harga_vendor_po!==i.harga_vendor){
-        console.log('[fix]',iv.no,i.nama,'hvpo:'+i.harga_vendor_po,'->',i.harga_vendor);
-        i.harga_vendor_po=i.harga_vendor;changed=true;patched++;
-      }
-    });
-    if(changed)invalidatePO(iv.po_id);
-  });
-  if(patched>0)setInvV(invVs);
-  console.log('[done] Fixed '+patched+' item');
-  showToast('Fix selesai: '+patched+' item');
-}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;

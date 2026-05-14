@@ -4831,11 +4831,16 @@ function buildLaporanData(poId){
   // Build invD item map: (nama||hari) → harga_dapur
   const invDItemMap={};
   const passThroughInvVIds=new Set();
+  const cleanInvDNama=n=>(n||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
   invDs.forEach(d=>{
     if(d.type==='passthrough'){if(d.pt_inv_id)passThroughInvVIds.add(d.pt_inv_id);return;}
     (d.items||[]).forEach(i=>{
-      const key=`${(i.nama||'').trim()}||${i.hari||''}`;
+      const iNama=cleanInvDNama(i.nama);
+      const key=`${iNama}||${i.hari||''}`;
       if(!(key in invDItemMap))invDItemMap[key]=i.harga_dapur;
+      // Fallback key for old items without hari
+      const fallback=`${iNama}||__any__`;
+      if(!(fallback in invDItemMap))invDItemMap[fallback]=i.harga_dapur;
     });
   });
 
@@ -4866,6 +4871,7 @@ function buildLaporanData(poId){
     const diKey=`${nm}||${item.hari||''}`;
     let harga_dapur=null;
     if(invDItemMap[diKey]!=null)harga_dapur=invDItemMap[diKey];
+    else if(invDItemMap[`${nm}||__any__`]!=null)harga_dapur=invDItemMap[`${nm}||__any__`];
     else if(passThroughInvVIds.has(bestIv?.id))harga_dapur=hv;
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur});
   });

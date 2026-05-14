@@ -3016,14 +3016,16 @@ function saveEditInvV(){
   const oldTotal=inv.total;let newTotal=0;
   (inv.items||[]).forEach((item,i)=>{
     const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||item.harga_vendor||0;
-    item.harga_vendor=hv;newTotal+=(item.qty||0)*hv;
+    item.harga_vendor=hv;
+    item.harga_vendor_po=item.konv?hv*item.konv:hv;
+    newTotal+=(item.qty||0)*hv;
   });
   inv.total=newTotal;inv.jatuh=document.getElementById('einvv-jatuh').value;
   if(!inv.edits)inv.edits=[];
   inv.edits.push({tgl:today(),total_lama:oldTotal,total_baru:newTotal,catatan:catRev||'Revisi harga vendor'});
-  // Sync harga_vendor back ke PO items
+  // Sync harga_vendor_po back ke PO items (consistent with saveInvV)
   const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
-  if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=i.harga_vendor;});
+  if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
   addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setBatch({po:pos,invv:invs});closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 

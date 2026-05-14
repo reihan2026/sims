@@ -4819,10 +4819,13 @@ function buildLaporanData(poId){
     const h=item.hari||'—';
     if(!byHari[h])byHari[h]=[];
     const ivObj=itemInvV[idx];
-    const ivMatch=ivObj?.items?.find(i=>{
-      const idxFresh=typeof i.idx==='number'&&po.items[i.idx]?.nama===i.nama;
-      return idxFresh?i.idx===idx:i.nama===item.nama;
+    const ivItemByHari=(ivObj?.items||[]).find(i=>{
+      const nm=(i.nama||'').trim()===item.nama.trim()||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===item.nama.trim());
+      return nm&&item.hari&&(i.hari||'')===(item.hari||'');
     });
+    const ivMatch=ivItemByHari||(ivObj?.items||[]).find(i=>
+      (i.nama||'').trim()===item.nama.trim()||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===item.nama.trim())
+    );
     const hv=ivMatch?(ivMatch.harga_vendor_po!=null?ivMatch.harga_vendor_po:ivMatch.harga_vendor):item.harga_vendor||0;
     const displayVendor=item.vendor||ivObj?.vendor||'';
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor});

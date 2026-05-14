@@ -1138,22 +1138,21 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
-function _debugTelurAyam(){
-  var poId=getPOs().find(function(p){return p.no==='PO-KLU-BB-070526';});
-  if(!poId){console.log('PO tidak ditemukan');return;}
-  poId=poId.id;
-  var po=getPOs().find(function(p){return p.id===poId;});
-  var invVs=getInvV().filter(function(iv){return iv.po_id===poId;});
-  console.log('=== PO items Telur Ayam ===');
-  po.items.forEach(function(i,idx){if(i.nama==='Telur Ayam')console.log('idx:'+idx,'hari:'+i.hari,'hv:'+i.harga_vendor,'vendor:'+i.vendor);});
-  console.log('=== invV items Telur Ayam ===');
+function _fixHargaVendorPo(){
+  var invVs=getInvV();var patched=0;
   invVs.forEach(function(iv){
-    var t=(iv.items||[]).filter(function(i){return i.nama==='Telur Ayam';});
-    if(t.length)t.forEach(function(i){console.log(iv.no,iv.vendor,'idx:'+i.idx,'hari:'+i.hari,'hv:'+i.harga_vendor,'hvpo:'+i.harga_vendor_po);});
+    var changed=false;
+    (iv.items||[]).forEach(function(i){
+      if(!i.konv&&i.harga_vendor_po!=null&&i.harga_vendor_po!==i.harga_vendor){
+        console.log('[fix]',iv.no,i.nama,'hvpo:'+i.harga_vendor_po,'->',i.harga_vendor);
+        i.harga_vendor_po=i.harga_vendor;changed=true;patched++;
+      }
+    });
+    if(changed)invalidatePO(iv.po_id);
   });
-  console.log('=== itemInvV Telur Ayam positions ===');
-  var lk=buildLookup(poId);
-  po.items.forEach(function(i,idx){if(i.nama==='Telur Ayam')console.log('idx:'+idx,'->',lk.itemInvV[idx]?lk.itemInvV[idx].no:'(none)');});
+  if(patched>0)setInvV(invVs);
+  console.log('[done] Fixed '+patched+' item');
+  showToast('Fix selesai: '+patched+' item');
 }
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
@@ -4850,7 +4849,7 @@ function buildLaporanData(poId){
       bestIvItem=(ivObj?.items||[]).find(i=>(i.nama||'').trim()===nm);
       bestIv=ivObj||null;
     }
-    const hv=bestIvItem?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):item.harga_vendor||0;
+    const hv=bestIvItem?(bestIvItem.konv?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):bestIvItem.harga_vendor||bestIvItem.harga_vendor_po||0):item.harga_vendor||0;
     const displayVendor=item.vendor||bestIv?.vendor||'';
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor});
   });

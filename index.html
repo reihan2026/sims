@@ -4865,7 +4865,8 @@ function buildLaporanData(poId){
       bestIvItem=(ivObj?.items||[]).find(i=>(i.nama||'').trim()===nm);
       bestIv=ivObj||null;
     }
-    const hv=bestIvItem?(bestIvItem.konv?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):bestIvItem.harga_vendor||bestIvItem.harga_vendor_po||0):item.harga_vendor||0;
+    const hvRaw=bestIvItem?(bestIvItem.konv?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):bestIvItem.harga_vendor||bestIvItem.harga_vendor_po||0):0;
+    const hv=hvRaw||item.harga_vendor||0;
     const displayVendor=item.vendor||bestIv?.vendor||'';
     // harga_dapur from invD item (actual revenue per unit)
     const diKey=`${nm}||${item.hari||''}`;

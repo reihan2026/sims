@@ -4812,22 +4812,29 @@ function buildLaporanData(poId){
   const totalInvD=invDs.reduce((s,d)=>s+d.total,0);
   const totalTerima=invDs.reduce((s,d)=>s+(d.payments||[]).reduce((a,p)=>a+p.jumlah,0),0);
 
-  // Items by hari — use buildLookup to get accurate harga_vendor per position
+  // Items by hari — search directly across all invVs by hari+nama to avoid stale-idx issues
   const {itemInvV}=buildLookup(poId);
   const byHari={};
   po.items.forEach((item,idx)=>{
     const h=item.hari||'—';
     if(!byHari[h])byHari[h]=[];
-    const ivObj=itemInvV[idx];
-    const ivItemByHari=(ivObj?.items||[]).find(i=>{
-      const nm=(i.nama||'').trim()===item.nama.trim()||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===item.nama.trim());
-      return nm&&item.hari&&(i.hari||'')===(item.hari||'');
-    });
-    const ivMatch=ivItemByHari||(ivObj?.items||[]).find(i=>
-      (i.nama||'').trim()===item.nama.trim()||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===item.nama.trim())
-    );
-    const hv=ivMatch?(ivMatch.harga_vendor_po!=null?ivMatch.harga_vendor_po:ivMatch.harga_vendor):item.harga_vendor||0;
-    const displayVendor=item.vendor||ivObj?.vendor||'';
+    const nm=item.nama.trim();
+    // Pass A: search all invVs for item matching hari+nama (bypasses stale idx)
+    let bestIv=null,bestIvItem=null;
+    if(item.hari){
+      for(const iv of invVs){
+        const m=(iv.items||[]).find(i=>(i.nama||'').trim()===nm&&(i.hari||'')===(item.hari||''));
+        if(m){bestIv=iv;bestIvItem=m;break;}
+      }
+    }
+    // Pass B: fallback to buildLookup position match + name-only
+    if(!bestIvItem){
+      const ivObj=itemInvV[idx];
+      bestIvItem=(ivObj?.items||[]).find(i=>(i.nama||'').trim()===nm);
+      bestIv=ivObj||null;
+    }
+    const hv=bestIvItem?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):item.harga_vendor||0;
+    const displayVendor=item.vendor||bestIv?.vendor||'';
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor});
   });
 

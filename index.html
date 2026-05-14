@@ -1872,21 +1872,21 @@ function buildLookup(poId){
       if(directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama&&!(directIdx in itemInvV))
         itemInvV[directIdx]=iv;
     }));
-    // Pass 2: composite key match — only for items whose stored idx is stale/missing
+    // Pass 2: composite key match — for items whose stored idx wasn't successfully assigned in Pass 1
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
       const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
-      if(idxFresh)return;// Pass 1 already handled this correctly
+      if(idxFresh&&itemInvV[directIdx]===iv)return;// Pass 1 assigned THIS iv to THIS position — skip
       const iKey=itemKey(i);
       po.items.forEach((pi,pidx)=>{
         if(!(pidx in itemInvV)&&itemKey(pi)===iKey)itemInvV[pidx]=iv;
       });
     }));
-    // Pass 3: nama-only fallback for items with stale/missing idx and no hari/deadline key
+    // Pass 3: nama-only fallback for items with no hari/deadline that weren't assigned in Pass 1
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
       const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
-      if(!i.hari&&!i.deadline&&!idxFresh){
+      if(!i.hari&&!i.deadline&&!(idxFresh&&itemInvV[directIdx]===iv)){
         po.items.forEach((pi,pidx)=>{
           if(!(pidx in itemInvV)&&pi.nama===i.nama)itemInvV[pidx]=iv;
         });

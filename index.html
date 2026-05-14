@@ -1138,6 +1138,23 @@ function doLogin(){
   });
 }
 function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
+function _debugTelurAyam(){
+  var poId=getPOs().find(function(p){return p.no==='PO-KLU-BB-070526';});
+  if(!poId){console.log('PO tidak ditemukan');return;}
+  poId=poId.id;
+  var po=getPOs().find(function(p){return p.id===poId;});
+  var invVs=getInvV().filter(function(iv){return iv.po_id===poId;});
+  console.log('=== PO items Telur Ayam ===');
+  po.items.forEach(function(i,idx){if(i.nama==='Telur Ayam')console.log('idx:'+idx,'hari:'+i.hari,'hv:'+i.harga_vendor,'vendor:'+i.vendor);});
+  console.log('=== invV items Telur Ayam ===');
+  invVs.forEach(function(iv){
+    var t=(iv.items||[]).filter(function(i){return i.nama==='Telur Ayam';});
+    if(t.length)t.forEach(function(i){console.log(iv.no,iv.vendor,'idx:'+i.idx,'hari:'+i.hari,'hv:'+i.harga_vendor,'hvpo:'+i.harga_vendor_po);});
+  });
+  console.log('=== itemInvV Telur Ayam positions ===');
+  var lk=buildLookup(poId);
+  po.items.forEach(function(i,idx){if(i.nama==='Telur Ayam')console.log('idx:'+idx,'->',lk.itemInvV[idx]?lk.itemInvV[idx].no:'(none)');});
+}
 function showForgotPw(){
   const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
   if(!email)return;

@@ -4828,6 +4828,17 @@ function buildLaporanData(poId){
   const totalInvD=invDs.reduce((s,d)=>s+d.total,0);
   const totalTerima=invDs.reduce((s,d)=>s+(d.payments||[]).reduce((a,p)=>a+p.jumlah,0),0);
 
+  // Build invD item map: (nama||hari) → harga_dapur
+  const invDItemMap={};
+  const passThroughInvVIds=new Set();
+  invDs.forEach(d=>{
+    if(d.type==='passthrough'){if(d.pt_inv_id)passThroughInvVIds.add(d.pt_inv_id);return;}
+    (d.items||[]).forEach(i=>{
+      const key=`${(i.nama||'').trim()}||${i.hari||''}`;
+      if(!(key in invDItemMap))invDItemMap[key]=i.harga_dapur;
+    });
+  });
+
   // Items by hari — search directly across all invVs by hari+nama to avoid stale-idx issues
   const {itemInvV}=buildLookup(poId);
   const byHari={};
@@ -4851,10 +4862,16 @@ function buildLaporanData(poId){
     }
     const hv=bestIvItem?(bestIvItem.konv?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):bestIvItem.harga_vendor||bestIvItem.harga_vendor_po||0):item.harga_vendor||0;
     const displayVendor=item.vendor||bestIv?.vendor||'';
-    byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor});
+    // harga_dapur from invD item (actual revenue per unit)
+    const diKey=`${nm}||${item.hari||''}`;
+    let harga_dapur=null;
+    if(invDItemMap[diKey]!=null)harga_dapur=invDItemMap[diKey];
+    else if(passThroughInvVIds.has(bestIv?.id))harga_dapur=hv;
+    byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur});
   });
 
-  return{po,invVs,invDs,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari};
+  const totalModalVendor=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
+  return{po,invVs,invDs,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,totalModalVendor,invDItemMap,passThroughInvVIds};
 }
 
 function openLaporanPO(poId){
@@ -4865,12 +4882,12 @@ function openLaporanPO(poId){
 }
 
 function renderLaporanHTML(d){
-  const{po,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,invDs}=d;
+  const{po,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,invDs,totalModalVendor,invDItemMap,passThroughInvVIds}=d;
 
-  // Pre-compute allItems and vMarginMap so all sections use the same source
+  // Pre-compute allItems and vMarginMap — margin = harga_dapur - harga_vendor (actual)
   const allItems=[];
   Object.entries(byHari).forEach(([hari,items])=>items.forEach(item=>{
-    const margin=item.harga_vendor>0?(item.harga_po-item.harga_vendor)*(item.qty||0):null;
+    const margin=item.harga_dapur!=null&&item.harga_vendor>0?(item.harga_dapur-item.harga_vendor)*(item.qty||0):null;
     allItems.push({...item,hari,margin});
   }));
   const totalItemMargin=allItems.reduce((s,i)=>s+(i.margin||0),0);
@@ -4881,8 +4898,9 @@ function renderLaporanHTML(d){
     vMarginMap[v]=(vMarginMap[v]||0)+item.margin;
   });
 
-  const marginBersih=t.margin+totalCashback;
-  const pct=t.tpFilled>0?(marginBersih/t.tpFilled*100).toFixed(1):null;
+  // Overall margin: actual invD revenue - vendor cost (accrual basis)
+  const marginBersih=totalInvD>0?totalInvD-totalModalVendor-totalOngkir+totalCashback:null;
+  const pct=marginBersih!=null&&totalInvD>0?(marginBersih/totalInvD*100).toFixed(1):null;
 
   const sec=(title,content)=>`
     <div style="margin-bottom:22px">
@@ -4913,22 +4931,19 @@ function renderLaporanHTML(d){
 
   // Ringkasan finansial
   html+=sec('Ringkasan Finansial',`
-    ${metRow('Nilai PO ('+po.items.length+' item)',fmtF(t.tp))}
-    ${metRow('Total modal vendor',t.wv>0?fmtF(t.tv):'—',t.wv<t.total?t.wv+'/'+t.total+' item terisi':'')}
-    ${totalOngkir?metRow('Total ongkos kirim','-'+fmtF(totalOngkir),'','#dc2626'):''}
-    ${totalCashback?metRow('Total cashback diterima','+'+fmtF(totalCashback),'','#7c3aed'):''}
+    ${metRow('Total invoice ke dapur (pendapatan)',totalInvD>0?fmtF(totalInvD):'—')}
+    ${metRow('Total modal vendor',totalModalVendor>0?fmtF(totalModalVendor):'—')}
+    ${totalOngkir?metRow('Ongkos kirim','-'+fmtF(totalOngkir),'','#dc2626'):''}
+    ${totalCashback?metRow('Cashback diterima','+'+fmtF(totalCashback),'','#7c3aed'):''}
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:8px 0 4px;border-top:2px solid #222;margin-top:4px">
       <span style="font-weight:700">Margin bersih</span>
-      <span style="font-family:monospace;font-weight:700;font-size:16px;color:${marginBersih>=0?'#16a34a':'#dc2626'}">${fmtF(marginBersih)}${pct?` <span style="font-size:11px;font-weight:400;color:#888">(${pct}%)</span>`:''}</span>
+      <span style="font-family:monospace;font-weight:700;font-size:16px;color:${marginBersih===null?'#999':marginBersih>=0?'#16a34a':'#dc2626'}">${marginBersih===null?'—':fmtF(marginBersih)}${pct?` <span style="font-size:11px;font-weight:400;color:#888">(${pct}%)</span>`:''}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0">
-      <span style="color:#555">Total invoice ke dapur</span>
-      <span style="font-family:monospace">${fmtF(totalInvD)}</span>
-    </div>
-    <div style="display:flex;justify-content:space-between;padding:4px 0">
       <span style="color:#555">Sudah diterima dari dapur</span>
       <span style="font-family:monospace;color:${totalTerima>=totalInvD&&totalInvD>0?'#16a34a':'#888'}">${fmtF(totalTerima)}${totalInvD>0?' / '+fmtF(totalInvD):''}</span>
-    </div>`);
+    </div>
+    ${metRow('Nilai PO (referensi)',fmtF(t.tp),'','#aaa')}`);
 
   // Per vendor
   const vendorEntries=Object.entries(vendorMap);
@@ -4958,19 +4973,19 @@ function renderLaporanHTML(d){
             <thead><tr style="background:#fafafa">
               <th style="padding:5px 14px;text-align:left;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Item</th>
               <th style="padding:5px 14px;text-align:right;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Qty</th>
-              <th style="padding:5px 14px;text-align:right;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Hrg PO</th>
+              <th style="padding:5px 14px;text-align:right;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Hrg dapur</th>
               <th style="padding:5px 14px;text-align:right;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Hrg vendor</th>
               <th style="padding:5px 14px;text-align:right;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8">Margin</th>
             </tr></thead>
             <tbody>${allInvItems.map(i=>{
-              const poItem=findPoItem(po,i);
-              const hpo=poItem?.harga_po||0;
-              const qtyPO=poItem?.qty||i.qty||0;
-              const marginTotal=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):null;
+              const qtyPO=findPoItem(po,i)?.qty||i.qty||0;
+              const diKey=`${(i.nama||'').trim()}||${i.hari||''}`;
+              const hd=passThroughInvVIds.has(i.iv?.id)?i.harga_vendor:(invDItemMap[diKey]??null);
+              const marginTotal=hd!=null&&i.harga_vendor>0?(hd-i.harga_vendor)*qtyPO:null;
               return`<tr style="border-bottom:1px solid #f0f0f0">
                 <td style="padding:5px 14px;font-weight:500">${i.nama}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${i.qty} ${i.satuan||''}</td>
-                <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${hpo?fmtF(hpo):'—'}</td>
+                <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${hd!=null?fmtF(hd):'—'}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${fmtF(i.harga_vendor||0)}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;font-weight:600;color:${marginTotal===null?'#ccc':marginTotal>=0?'#16a34a':'#dc2626'}">${marginTotal===null?'—':fmtF(marginTotal)}</td>
               </tr>`;
@@ -4998,7 +5013,7 @@ function renderLaporanHTML(d){
       <th style="padding:5px 8px;text-align:left">Item</th>
       <th style="padding:5px 8px;text-align:left">Hari</th>
       <th style="padding:5px 8px;text-align:right">Qty</th>
-      <th style="padding:5px 8px;text-align:right">Hrg PO</th>
+      <th style="padding:5px 8px;text-align:right">Hrg dapur</th>
       <th style="padding:5px 8px;text-align:right">Hrg vendor</th>
       <th style="padding:5px 8px;text-align:right">Margin</th>
     </tr></thead><tbody>`;
@@ -5007,7 +5022,7 @@ function renderLaporanHTML(d){
       <td style="padding:5px 8px;font-weight:500">${item.nama}${item.kat?` <span style="font-size:10px;color:#888">${item.kat}</span>`:''}</td>
       <td style="padding:5px 8px;color:#666;font-size:11px">${item.hari||'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.qty} ${item.satuan}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${fmtF(item.harga_po)}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.harga_dapur!=null?fmtF(item.harga_dapur):'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.harga_vendor?fmtF(item.harga_vendor):'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${item.margin===null?'#ccc':item.margin>=0?'#16a34a':'#dc2626'}">${item.margin===null?'—':fmtF(item.margin)}</td>
     </tr>`;

@@ -1890,8 +1890,15 @@ function renderDaftar(){
   const _dPg=_pg.daftar;const _dPgTotal=Math.ceil(filtered.length/PG_SIZE);
   const pagedDaftar=filtered.slice(_dPg*PG_SIZE,(_dPg+1)*PG_SIZE);
   el.innerHTML=pagedDaftar.map(po=>{
-    const t=poTotals(po);const m=t.margin;const mc=m>0?'mpos':m<0?'mneg':'mzero';
+    const t=poTotals(po);
     const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
+    const tInvD=myD.reduce((s,d)=>s+d.total,0);
+    const tInvV=myV.reduce((s,iv)=>s+iv.total,0);
+    const tOngkir=myV.reduce((s,iv)=>s+(iv.ongkir||0),0);
+    const tCB=myV.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((a,c)=>a+c.jumlah,0),0);
+    const m=tInvD>0?tInvD-tInvV-tOngkir+tCB:t.margin;
+    if(window._dbgPo)console.log('[margin]',po.no,{tInvD,tInvV,tOngkir,tCB,m,invVcount:myV.length,invDcount:myD.length});
+    const mc=m>0?'mpos':m<0?'mneg':'mzero';
     const kirimOk=po.items.filter(i=>i.status_kirim==='diterima').length;
     const pct=t.total>0?Math.round(t.wv/t.total*100):0;
     const vendorNames=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
@@ -2076,14 +2083,18 @@ let _currentPoId=null;
 window._spekVisible=false; // default: spek tersembunyi
 // ===== DETAIL PO — split into sub-functions for partial re-render =====
 
-function detMetrics(po,t,invVs){
-  const m=t.margin;
-  const totalCB=(invVs||[]).reduce((s,iv)=>(iv.cashbacks||[]).reduce((a,cb)=>a+cb.jumlah,s),0);
-  const mBersih=m+totalCB;
+function detMetrics(po,t,invVs,invDs){
+  const _tInvD=(invDs||[]).reduce((s,d)=>s+d.total,0);
+  const _tInvV=(invVs||[]).reduce((s,iv)=>s+iv.total,0);
+  const _tOngkir=(invVs||[]).reduce((s,iv)=>s+(iv.ongkir||0),0);
+  const _tCB=(invVs||[]).reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((a,c)=>a+c.jumlah,0),0);
+  const mBersih=_tInvD>0?_tInvD-_tInvV-_tOngkir+_tCB:(t.wv>0?t.margin+_tCB:null);
+  const modalVal=_tInvV>0?_tInvV:(t.wv>0?t.tv:null);
+  const marginSub=_tInvD>0?'dari invoice dapur':t.wv>0?'estimasi':'—';
   return`<div class="mg">
     <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
-    <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${t.wv<t.total?'a':''}">${t.wv>0?fmt(t.tv):'—'}</div><div class="ms">${t.wv}/${t.total} terisi</div></div>
-    <div class="met"><div class="ml">Margin</div><div class="mv num ${mBersih>=0?'g':'r'}">${t.wv>0?fmt(mBersih):'—'}</div><div class="ms">${t.wv>0&&t.wv<t.total?'dari item terisi':'semua item terisi'}</div></div>
+    <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${!_tInvV&&t.wv<t.total?'a':''}">${modalVal!==null?fmt(modalVal):'—'}</div><div class="ms">${_tInvV>0?(invVs||[]).length+' inv':t.wv+'/'+t.total+' terisi'}</div></div>
+    <div class="met"><div class="ml">Margin bersih</div><div class="mv num ${mBersih===null?'':mBersih>=0?'g':'r'}">${mBersih!==null?fmt(mBersih):'—'}</div><div class="ms">${marginSub}</div></div>
     <div class="met"><div class="ml">Progres kirim</div><div class="mv">${po.items.filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
   </div>`;
 }
@@ -2379,7 +2390,7 @@ function showDetail(id){
   });
 
   document.getElementById('det-body').innerHTML=
-    detMetrics(po,t,invV)+
+    detMetrics(po,t,invV,invD)+
     detNextSteps(id,po,invV,invD)+
     filterBar+
     detVendorSummary(id,po,invV)+

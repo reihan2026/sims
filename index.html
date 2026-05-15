@@ -3612,7 +3612,10 @@ function delInvV(id){
     const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
     if(po){
       (inv.items||[]).forEach(i=>{
-        if(po.items[i.idx]){po.items[i.idx].harga_vendor=0;po.items[i.idx].vendor='';}
+        const poItem=(typeof i.idx==='number'&&po.items[i.idx]?.nama===i.nama)
+          ?po.items[i.idx]
+          :po.items.find(pi=>pi.nama===i.nama);
+        if(poItem&&poItem.status_kirim!=='diterima'){poItem.harga_vendor=0;poItem.vendor='';}
       });
       setPOs(pos);
     }

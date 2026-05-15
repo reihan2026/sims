@@ -1610,7 +1610,14 @@ function addDapur(){
   ['new-dapur-kode','new-dapur-nama','new-dapur-alamat','new-dapur-tlp'].forEach(id=>document.getElementById(id).value='');
   renderMaster();showToast('Dapur ditambahkan');
 }
-function rmDapur(i){const m=getMaster();m.dapur.splice(i,1);setMaster(m);renderMaster();}
+function rmDapur(i){
+  const m=getMaster();const d=m.dapur[i];if(!d)return;
+  const nama=typeof d==='string'?d:(d.nama||'');
+  const usedInPO=getPOs().filter(p=>p.dapur===nama);
+  if(usedInPO.length){showToast(`Tidak bisa hapus — "${nama}" masih dipakai di: ${usedInPO.map(p=>p.no).slice(0,5).join(', ')}${usedInPO.length>5?' ...':''}`,true);return;}
+  if(!confirm(`Hapus dapur "${nama}"?`))return;
+  m.dapur.splice(i,1);setMaster(m);renderMaster();
+}
 function openEditDapur(i){
   const m=getMaster();const d=m.dapur[i];
   const o=typeof d==='string'?{kode:'',nama:d,alamat:'',tlp:''}:d;
@@ -1633,7 +1640,20 @@ function openModalVendor(){document.getElementById('vmodal-title').textContent='
 function editVendor(i){const m=getMaster();const v=m.vendor[i];if(!v)return;document.getElementById('vmodal-title').textContent='Edit Vendor';document.getElementById('v-nama').value=v.nama||'';document.getElementById('v-kat').value=v.kat||'';document.getElementById('v-hp').value=v.hp||'';document.getElementById('v-cashback').checked=!!v.cashback;document.getElementById('v-cb-pct').value=v.cashback_pct||'';document.getElementById('v-cb-wrap').style.display=v.cashback?'block':'none';document.getElementById('v-cat').value=v.catatan||'';document.getElementById('v-edit-idx').value=i;openModal('modal-vendor');}
 document.getElementById('v-cashback').onchange=function(){document.getElementById('v-cb-wrap').style.display=this.checked?'block':'none';};
 function saveVendor(){const nama=document.getElementById('v-nama').value.trim();if(!nama){showToast('Isi nama vendor!',true);return;}const v={nama,kat:document.getElementById('v-kat').value,hp:document.getElementById('v-hp').value.trim(),cashback:document.getElementById('v-cashback').checked,cashback_pct:parseFloat(document.getElementById('v-cb-pct').value)||0,catatan:document.getElementById('v-cat').value.trim()};const m=getMaster();const idx=document.getElementById('v-edit-idx').value;if(idx!=='')m.vendor[parseInt(idx)]=v;else m.vendor.push(v);setMaster(m);closeModal('modal-vendor');renderMaster();showToast('Vendor disimpan');}
-function rmVendor(i){if(!confirm('Hapus vendor ini?'))return;const m=getMaster();m.vendor.splice(i,1);setMaster(m);renderMaster();}
+function rmVendor(i){
+  const m=getMaster();const v=m.vendor[i];if(!v)return;
+  const nama=v.nama||'';
+  const usedInPO=getPOs().filter(p=>p.items.some(it=>it.vendor===nama));
+  const usedInInvV=getInvV().filter(iv=>iv.vendor===nama);
+  if(usedInPO.length||usedInInvV.length){
+    const parts=[];
+    if(usedInPO.length)parts.push('PO: '+usedInPO.map(p=>p.no).slice(0,3).join(', ')+(usedInPO.length>3?' ...':''));
+    if(usedInInvV.length)parts.push('Invoice Vendor: '+usedInInvV.map(iv=>iv.no).slice(0,3).join(', ')+(usedInInvV.length>3?' ...':''));
+    showToast(`Tidak bisa hapus — "${nama}" masih dipakai di:\n${parts.join('\n')}`,true);return;
+  }
+  if(!confirm(`Hapus vendor "${nama}"?`))return;
+  m.vendor.splice(i,1);setMaster(m);renderMaster();
+}
 function getDapurInfo(val){
   const m=getMaster();
   const found=m.dapur.find(d=>typeof d==='string'?d===val:(d.nama===val||d.kode===val));
@@ -3006,7 +3026,7 @@ function saveInvV(){
   const file=document.getElementById('invv-file').files[0];
   if(file){
     const nk='invv_'+inv.id;const r=new FileReader();
-    r.onload=e=>{try{saveFile(nk,e.target.result);inv.file_key=nk;}catch(e2){console.error('file save error:',e2);}done();};
+    r.onload=async e=>{try{await saveFile(nk,e.target.result);inv.file_key=nk;}catch(e2){console.error('file save error:',e2);}done();};
     r.onerror=()=>{console.error('FileReader error');done();};
     r.readAsDataURL(file);
   }else done();
@@ -3220,11 +3240,14 @@ function hitungKonvCB(){
   const pctEl=document.getElementById('konv-cb-pct');
   const nomEl=document.getElementById('konv-cb-nominal');
   if(document.activeElement===pctEl){
-    const pct=parseFloat(pctEl.value)||0;
-    nomEl.value=pct>0?Math.round(total*pct/100):'';
+    const pct=Math.min(100,Math.max(0,parseFloat(pctEl.value)||0));
+    pctEl.value=pct||'';
+    nomEl.value=pct>0&&total>0?Math.round(total*pct/100):'';
   } else {
     const nom=parseFloat(nomEl.value)||0;
-    pctEl.value=nom>0&&total>0?(nom/total*100).toFixed(2):'';
+    const clampedNom=total>0?Math.min(nom,total):nom;
+    if(clampedNom!==nom)nomEl.value=clampedNom||'';
+    pctEl.value=clampedNom>0&&total>0?(clampedNom/total*100).toFixed(2):'';
   }
 }
 
@@ -3633,7 +3656,7 @@ function loadInvDItems(){
     if(Object.keys(byHari).length>1)html+=`<tr><td colspan="7" style="padding:3px 8px;background:var(--bg);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">${hari}</td></tr>`;
     items.forEach((item,ri)=>{
       const rid='invd-'+Date.now()+'-'+ri+'-'+hari.replace(/[^a-z0-9]/gi,'_');
-      const pct=item.harga_ref&&item.harga&&item.harga>item.harga_ref?(((item.harga-item.harga_ref)/item.harga_ref)*100).toFixed(1):null;
+      const pct=item.harga_ref>0&&item.harga>item.harga_ref?(((item.harga-item.harga_ref)/item.harga_ref)*100).toFixed(1):null;
       const sub=(item.qty||0)*(item.harga||0);
       html+=`<tr style="border-bottom:1px solid var(--bd)">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invd-cb" id="cb-${rid}"
@@ -3665,7 +3688,7 @@ function updateInvDHarga(input){
   const hv=parseFloat(cb.dataset.hv)||0;
   const h=parseFloat(input.value)||0;
   const sub=qty*h;
-  const pct=hv&&h>hv?(((h-hv)/hv)*100).toFixed(1):null;
+  const pct=hv>0&&h>hv?(((h-hv)/hv)*100).toFixed(1):null;
   const subEl=document.getElementById('sub-'+rid);
   const pctEl=document.getElementById('pct-'+rid);
   if(subEl)subEl.textContent=sub>0?fmtF(sub):'—';

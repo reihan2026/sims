@@ -4033,7 +4033,7 @@ function renderCashflow(){
   const rekSel=document.getElementById('cf-rek-filter');
   if(rekSel){
     const curR=rekSel.value;
-    rekSel.innerHTML='<option value="">Semua rekening</option>'+reks.map(r=>`<option value="${r.id}" ${r.id===curR?'selected':''}>${r.nama}</option>`).join('')+'<option value="__none__" ${'__none__'===curR?'selected':''}>Tanpa rekening</option>';
+    rekSel.innerHTML='<option value="">Semua rekening</option>'+reks.map(r=>`<option value="${r.id}" ${r.id===curR?'selected':''}>${r.nama}</option>`).join('')+`<option value="__none__" ${curR==='__none__'?'selected':''}>Tanpa rekening</option>`;
   }
 
   let filteredPay=allPay;

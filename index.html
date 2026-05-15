@@ -1897,7 +1897,6 @@ function renderDaftar(){
     const tOngkir=myV.reduce((s,iv)=>s+(iv.ongkir||0),0);
     const tCB=myV.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((a,c)=>a+c.jumlah,0),0);
     const m=tInvD>0?tInvD-tInvV-tOngkir+tCB:t.margin;
-    if(window._dbgPo)console.log('[margin]',po.no,{tInvD,tInvV,tOngkir,tCB,m,invVcount:myV.length,invDcount:myD.length});
     const mc=m>0?'mpos':m<0?'mneg':'mzero';
     const kirimOk=po.items.filter(i=>i.status_kirim==='diterima').length;
     const pct=t.total>0?Math.round(t.wv/t.total*100):0;

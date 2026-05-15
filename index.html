@@ -408,6 +408,7 @@ input[type=checkbox],input[type=radio]{width:auto}
       <select id="f-invd-stat" onchange="renderInvD()"><option value="">Semua status</option><option value="belum">Belum diterima</option><option value="lunas">Lunas</option></select>
       <select id="f-invd-bln" onchange="filterInvDBln()"><option value="">Semua bulan</option></select>
       <select id="f-invd-po" onchange="renderInvD()"><option value="">Semua PO</option></select>
+      <select id="f-invd-vs" onchange="renderInvD()"><option value="">Semua vendor mitra</option></select>
     </div>
     <div id="invd-list"></div>
   </div>
@@ -821,6 +822,27 @@ input[type=checkbox],input[type=radio]{width:auto}
     <input type="hidden" id="einvv-id">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-edit-invv')">Batal</button><button class="btn bw" onclick="saveEditInvV()">Simpan revisi</button></div>
+</div></div>
+
+<!-- Edit Invoice Dapur -->
+<div class="modal-bg" id="modal-edit-invd"><div class="modal">
+  <div class="mh"><span class="mht">Edit Invoice Dapur — <span id="edit-invd-no"></span></span><button class="btn bgh bsm" onclick="closeModal('modal-edit-invd')">✕</button></div>
+  <div class="mb">
+    <div style="padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt);margin-bottom:10px">Hanya header invoice yang bisa diedit. Items dan total tidak berubah.</div>
+    <div class="r2">
+      <div class="fg"><label class="lbl">No. Invoice</label><input type="text" id="einvd-no"></div>
+      <div class="fg"><label class="lbl">Tanggal</label><input type="date" id="einvd-tgl"></div>
+    </div>
+    <div class="r2">
+      <div class="fg"><label class="lbl">Jatuh tempo</label><input type="date" id="einvd-jatuh"></div>
+      <div class="fg"><label class="lbl">Vendor mitra (opsional)</label>
+        <select id="einvd-vs"><option value="">— Tidak ada —</option></select>
+      </div>
+    </div>
+    <div class="fg"><label class="lbl">Catatan</label><input type="text" id="einvd-cat" placeholder="Catatan invoice..."></div>
+    <input type="hidden" id="einvd-id">
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-edit-invd')">Batal</button><button class="btn bw" onclick="saveEditInvD()">Simpan</button></div>
 </div></div>
 
 <!-- Bayar Invoice Vendor -->
@@ -1821,7 +1843,7 @@ function renderDaftar(){
   fDE.innerHTML='<option value="">Semua dapur</option>'+[...dSet].sort().map(d=>`<option value="${d}" ${d===cdv?'selected':''}>${d}</option>`).join('');
   const invV=getInvV();const invD=getInvD();
   let filtered=pos.filter(po=>{
-    if(srch&&!po.no.toLowerCase().includes(srch)&&!po.dapur.toLowerCase().includes(srch))return false;
+    if(srch&&!po.no.toLowerCase().includes(srch)&&!po.dapur.toLowerCase().includes(srch)&&!po.items.some(i=>(i.vendor||'').toLowerCase().includes(srch)))return false;
     if(fB&&!po.date.startsWith(fB))return false;if(fD&&po.dapur!==fD)return false;
     const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
     const allKirim=po.items.every(i=>i.status_kirim==='diterima');
@@ -3067,9 +3089,39 @@ function gantiFileInvV(invId){
   input.click();
 }
 
+// ===== EDIT INVOICE DAPUR =====
+function openEditInvD(invId){
+  const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
+  document.getElementById('edit-invd-no').textContent=inv.no;
+  document.getElementById('einvd-id').value=invId;
+  document.getElementById('einvd-no').value=inv.no||'';
+  document.getElementById('einvd-tgl').value=inv.tgl||'';
+  document.getElementById('einvd-jatuh').value=inv.jatuh||'';
+  document.getElementById('einvd-cat').value=inv.catatan||'';
+  const vsEl=document.getElementById('einvd-vs');
+  vsEl.innerHTML='<option value="">— Tidak ada —</option>'+getVendorSaya().map(v=>`<option value="${v.id}" ${v.id===inv.vendor_saya_id?'selected':''}>${v.nama}</option>`).join('');
+  openModal('modal-edit-invd');
+}
+function saveEditInvD(){
+  const invId=document.getElementById('einvd-id').value;
+  const no=document.getElementById('einvd-no').value.trim();
+  if(!no){showToast('No. invoice tidak boleh kosong!',true);return;}
+  const invs=getInvD();const inv=invs.find(d=>d.id===invId);if(!inv)return;
+  inv.no=no;
+  inv.tgl=document.getElementById('einvd-tgl').value||inv.tgl;
+  inv.jatuh=document.getElementById('einvd-jatuh').value||'';
+  inv.catatan=document.getElementById('einvd-cat').value||'';
+  inv.vendor_saya_id=document.getElementById('einvd-vs').value||'';
+  setInvD(invs);
+  addLog('edit_invd','Edit invoice dapur','invd',invId,no,'');
+  closeModal('modal-edit-invd');showToast('Invoice dapur diperbarui!');
+  if(_currentPoId)showDetail(_currentPoId);else renderInvD();
+}
+
 // ===== REVISI INVOICE VENDOR =====
 function openEditInvV(invId){
   const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
+  if(inv.bayar_status==='lunas'&&!confirm(`Invoice ${inv.no} sudah LUNAS.\nRevisi harga dapat menyebabkan inkonsistensi laporan.\n\nYakin tetap revisi?`))return;
   document.getElementById('edit-invv-no').textContent=inv.no;
   document.getElementById('einvv-id').value=invId;
   document.getElementById('einvv-jatuh').value=inv.jatuh||'';
@@ -3503,6 +3555,8 @@ function renderInvV(){
   }).join('');
 }
 function delInvV(id){
+  const _chkInvV=getInvV().find(v=>v.id===id);
+  if(_chkInvV?.bayar_status==='lunas'&&!confirm(`Invoice ${_chkInvV.no} sudah LUNAS.\nMenghapus invoice lunas dapat menyebabkan inkonsistensi cashflow.\n\nYakin tetap hapus?`))return;
   if(!confirm('Hapus invoice vendor? Harga vendor pada item PO terkait akan direset.'))return;
   const inv=getInvV().find(v=>v.id===id);
   if(inv){
@@ -3806,10 +3860,23 @@ function saveTerima(){
   closeModal('modal-terima');if(_currentPage==='inv-dapur')renderInvD();else if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
 }
 
+function delPaymentInvD(invId,payRef){
+  if(!confirm('Hapus catatan pembayaran ini?'))return;
+  const invs=getInvD();const inv=invs.find(d=>d.id===invId);if(!inv)return;
+  const before=inv.payments.length;
+  inv.payments=inv.payments.filter((p,i)=>p.id?p.id!==payRef:String(i)!==String(payRef));
+  if(inv.payments.length===before){showToast('Pembayaran tidak ditemukan',true);return;}
+  const recv=inv.payments.reduce((s,p)=>s+p.jumlah,0);
+  if(recv<inv.total)inv.terima_status='belum';
+  setInvD(invs);
+  addLog('hapus_payment_invd','Hapus pembayaran','invd',invId,inv.no,fmtF(inv.total-recv)+' sisa');
+  if(_currentPage==='inv-dapur')renderInvD();else if(_currentPoId)showDetail(_currentPoId);
+}
+
 // ===== RENDER INVOICE DAPUR =====
 function renderInvD(){
   const invs=getInvD();/* summary computed after filter */
-  const srch=(document.getElementById('srch-invd')?.value||'').toLowerCase();const fS=document.getElementById('f-invd-stat')?.value||'';const fB=document.getElementById('f-invd-bln')?.value||'';const fP=document.getElementById('f-invd-po')?.value||'';
+  const srch=(document.getElementById('srch-invd')?.value||'').toLowerCase();const fS=document.getElementById('f-invd-stat')?.value||'';const fB=document.getElementById('f-invd-bln')?.value||'';const fP=document.getElementById('f-invd-po')?.value||'';const fVS=document.getElementById('f-invd-vs')?.value||'';
   const pos=getPOs();
   const bSet=new Set(invs.filter(v=>v.tgl&&v.tgl.length>=7).map(v=>v.tgl.substring(0,7)));
   const fBE=document.getElementById('f-invd-bln');const cbv=fBE?.value||'';
@@ -3818,7 +3885,12 @@ function renderInvD(){
   const poSel=document.getElementById('f-invd-po');const curPo=poSel?.value||'';
   const posInMonth=pos.filter(p=>!fB||invs.some(iv=>iv.po_id===p.id&&iv.tgl.startsWith(fB)));
   if(poSel)poSel.innerHTML='<option value="">Semua PO</option>'+posInMonth.map(p=>`<option value="${p.id}" ${p.id===curPo?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
+  // Vendor mitra filter
+  const vsSel=document.getElementById('f-invd-vs');const curVS=vsSel?.value||'';
+  const vsAll=getVendorSaya();
+  const vsInList=new Set(invs.map(iv=>iv.vendor_saya_id).filter(Boolean));
+  if(vsSel)vsSel.innerHTML='<option value="">Semua vendor mitra</option>'+vsAll.filter(v=>vsInList.has(v.id)).map(v=>`<option value="${v.id}" ${v.id===curVS?'selected':''}>${v.nama}</option>`).join('');
+  let filtered=invs.filter(iv=>{if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.dapur.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;if(fS&&iv.terima_status!==fS)return false;if(fB&&!(iv.tgl||'').startsWith(fB))return false;if(fP&&iv.po_id!==fP)return false;if(fVS&&iv.vendor_saya_id!==fVS)return false;return true;}).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
   // Hitung summary dari hasil filter
   {let _bT=0,_ln=0,_tt=0;
   filtered.forEach(iv=>{_tt+=iv.total;const r=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);if(iv.terima_status==='lunas')_ln+=iv.total;else _bT+=iv.total-r;});
@@ -3849,6 +3921,7 @@ function renderInvD(){
           <div class="kbb-menu" id="kbb-invd-${iv.id}">
             ${iv.type==='passthrough'&&iv.pt_inv_id?`<button onclick="showInvVDetail('${iv.pt_inv_id}')">Lihat inv vendor</button>`:''}
             ${po?`<button onclick="showDetail('${po.id}')">Lihat PO</button>`:''}
+            <button onclick="openEditInvD('${iv.id}')">Edit header</button>
             ${iv.vendor_saya_id?`<button onclick="printInvDFormal('${iv.id}')">🖨 Cetak invoice formal</button>`:''}
             <button onclick="printInvD('${iv.id}')">🖨 Cetak internal</button>
             <div class="kbb-div"></div>
@@ -3857,13 +3930,14 @@ function renderInvD(){
         </div>
       </div>
     </div>
-    ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num g">+${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
+    ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map((p,pi)=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong>${p.catatan?' · '+p.catatan:''}</span><span style="display:flex;align-items:center;gap:8px"><span class="num g">+${fmtF(p.jumlah)}</span>${iv.terima_status!=='lunas'?`<button class="btn bxs bd-" style="padding:1px 6px;font-size:10px" onclick="delPaymentInvD('${iv.id}','${p.id||pi}')">✕</button>`:''}</span></div>`).join('')}</div>`:''}
     </div>`;
   }).join('');
 }
 function delInvD(id){
-  if(!confirm('Hapus invoice dapur?'))return;
   const _delInvD=getInvD().find(d=>d.id===id);
+  if(_delInvD?.terima_status==='lunas'&&!confirm(`Invoice ${_delInvD.no} sudah LUNAS.\nMenghapus invoice lunas dapat menyebabkan inkonsistensi laporan.\n\nYakin tetap hapus?`))return;
+  if(!confirm('Hapus invoice dapur?'))return;
   addLog('hapus_invd','Hapus invoice dapur','invd',id,_delInvD?.no||id,(_delInvD?.dapur||'')+(_delInvD?.total?' · '+fmtF(_delInvD.total):''));
   setInvD(getInvD().filter(d=>d.id!==id));renderInvD();showToast('Invoice dihapus');
 }
@@ -3929,7 +4003,7 @@ function renderRekening(){
   </div>`).join(''):'<div class="empty">Belum ada riwayat pembayaran</div>';
 }
 
-const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',buat_pov:'var(--ac)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)',catat_ongkir:'var(--wn)',restore_backup:'var(--dn)',tambah_rekening:'var(--ac)',hapus_rekening:'var(--dn)'};
+const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',buat_pov:'var(--ac)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)',catat_ongkir:'var(--wn)',restore_backup:'var(--dn)',tambah_rekening:'var(--ac)',hapus_rekening:'var(--dn)',edit_invd:'var(--t3)',hapus_payment_invd:'var(--dn)'};
 // ===== DASHBOARD =====
 function renderDashboard(){
   const el=document.getElementById('hdr-date');if(el)el.textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});

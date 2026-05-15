@@ -416,8 +416,20 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- CASHFLOW -->
 <div id="page-cashflow" class="page">
-  <div class="ph"><div><div class="ph-t">Cashflow</div><div class="ph-s">Arus kas masuk &amp; keluar</div></div></div>
-  <div class="pc"><div class="mg" id="cf-met"></div><div class="card"><div class="ct">Riwayat transaksi</div><div id="cf-rows"></div></div></div>
+  <div class="ph"><div><div class="ph-t">Cashflow</div><div class="ph-s" id="cf-ph-s">Arus kas masuk &amp; keluar</div></div>
+    <button class="btn bsm" id="btn-rekon" onclick="_rekonMode=!_rekonMode;renderCashflow()">Rekonsiliasi</button>
+  </div>
+  <div class="pc">
+    <div class="mg" id="cf-met"></div>
+    <div id="cf-rekon-bar" style="display:none;padding:8px 0 4px;display:none">
+      <div class="fbar">
+        <select id="cf-rek-filter" onchange="renderCashflow()"><option value="">Semua rekening</option></select>
+        <select id="cf-dir-filter" onchange="renderCashflow()"><option value="">Semua arah</option><option value="out">Bayar vendor</option><option value="in">Terima dapur</option><option value="cb">Cashback</option></select>
+      </div>
+      <div id="cf-rekon-met" style="padding:6px 0;font-size:12px;color:var(--t2)"></div>
+    </div>
+    <div class="card"><div class="ct" id="cf-ct">Riwayat transaksi</div><div id="cf-rows"></div></div>
+  </div>
 </div>
 
 <!-- REKENING -->
@@ -1302,6 +1314,22 @@ function stripUndefined(obj){
   return obj;
 }
 
+function _pgBar(pgKey,pgFn,pg,pgTotal,total){
+  if(pgTotal<=1)return'';
+  const start=pg*PG_SIZE+1;const end=Math.min((pg+1)*PG_SIZE,total);
+  return`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0;font-size:12px;color:var(--t2)">
+    <button class="btn bsm" onclick="${pgFn}(-1)" ${pg===0?'disabled':''}>← Prev</button>
+    <span style="font-family:var(--mn)">${start}–${end} dari ${total}</span>
+    <button class="btn bsm" onclick="${pgFn}(1)" ${pg>=pgTotal-1?'disabled':''}>Next →</button>
+  </div>`;
+}
+function pgInvV(d){_pg.invv=Math.max(0,_pg.invv+d);renderInvV();}
+function pgInvD(d){_pg.invd=Math.max(0,_pg.invd+d);renderInvD();}
+function pgDaftar(d){_pg.daftar=Math.max(0,_pg.daftar+d);renderDaftar();}
+function _rekonKeys(){try{return new Set(JSON.parse(localStorage.getItem('sims_rekon')||'[]'));}catch(e){return new Set();}}
+function _rekonKey(p){return p.id||(p.dir+'|'+p.no+'|'+p.tgl+'|'+p.jumlah);}
+function toggleRekon(key){const s=_rekonKeys();if(s.has(key))s.delete(key);else s.add(key);localStorage.setItem('sims_rekon',JSON.stringify([...s]));renderCashflow();}
+
 // ===== BATCH FIREBASE WRITE =====
 // Collects all changes within 300ms window, sends as single write
 const _dirty=new Set();
@@ -1311,6 +1339,10 @@ let _pendingAfterSave=false;
 let _snapshotUnsub=null; // onSnapshot unsubscribe handle
 let _ignoreNextSnapshot=false; // skip snapshot triggered by our own save
 let _currentPage='dash'; // track active page for selective re-render
+const _pg={invv:0,invd:0,daftar:0};
+const _pgHash={invv:'',invd:'',daftar:''};
+const PG_SIZE=20;
+let _rekonMode=false;
 
 function saveData(keys){
   if(!_currentUser)return;
@@ -1854,7 +1886,10 @@ function renderDaftar(){
   document.getElementById('daftar-hdr').textContent=filtered.length+' PO';
   const el=document.getElementById('daftar-list');
   if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada PO</div>';return;}
-  el.innerHTML=filtered.map(po=>{
+  const _dHash=[srch,fS,fB,fD].join('|');if(_dHash!==_pgHash.daftar){_pg.daftar=0;_pgHash.daftar=_dHash;}
+  const _dPg=_pg.daftar;const _dPgTotal=Math.ceil(filtered.length/PG_SIZE);
+  const pagedDaftar=filtered.slice(_dPg*PG_SIZE,(_dPg+1)*PG_SIZE);
+  el.innerHTML=pagedDaftar.map(po=>{
     const t=poTotals(po);const m=t.margin;const mc=m>0?'mpos':m<0?'mneg':'mzero';
     const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
     const kirimOk=po.items.filter(i=>i.status_kirim==='diterima').length;
@@ -1884,7 +1919,7 @@ function renderDaftar(){
         ${!myD.length?'<span class="tag tno">Belum ada inv dapur</span>':blmD?`<span class="tag twn">${blmD} inv dapur blm terima</span>`:'<span class="tag tok">Dapur lunas</span>'}
       </div>
     </div>`;
-  }).join('');
+  }).join('')+_pgBar('daftar','pgDaftar',_dPg,_dPgTotal,filtered.length);
 }
 function clonePO(poId){
   const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
@@ -3468,8 +3503,11 @@ function renderInvV(){
 
   const el=document.getElementById('invv-list');
   if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';return;}
+  const _vHash=[srch,fS,fK,fB,fP].join('|');if(_vHash!==_pgHash.invv){_pg.invv=0;_pgHash.invv=_vHash;}
+  const _vPg=_pg.invv;const _vPgTotal=Math.ceil(filtered.length/PG_SIZE);
+  const pagedInvV=filtered.slice(_vPg*PG_SIZE,(_vPg+1)*PG_SIZE);
 
-  el.innerHTML=filtered.map(iv=>{
+  el.innerHTML=pagedInvV.map(iv=>{
     try{
     const n=invVNet(iv);const po=pos.find(p=>p.id===iv.po_id);
     const vObj=getVendorObj(iv.vendor);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
@@ -3552,7 +3590,7 @@ function renderInvV(){
     ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num r">-${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
     </div>`;
     }catch(e){console.error('renderInvV card error:',iv?.id,e);return`<div class="inv-card" style="color:var(--dn);font-size:12px;padding:10px">⚠ Error render invoice ${iv?.no||iv?.id||'?'} — coba hapus dan buat ulang</div>`;}
-  }).join('');
+  }).join('')+_pgBar('invv','pgInvV',_vPg,_vPgTotal,filtered.length);
 }
 function delInvV(id){
   const _chkInvV=getInvV().find(v=>v.id===id);
@@ -3896,7 +3934,10 @@ function renderInvD(){
   filtered.forEach(iv=>{_tt+=iv.total;const r=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);if(iv.terima_status==='lunas')_ln+=iv.total;else _bT+=iv.total-r;});
   const _me=document.getElementById('invd-met');if(_me)_me.innerHTML=`<div class="met"><div class="ml">Total invoice dapur</div><div class="mv num">${fmt(_tt)}</div></div><div class="met"><div class="ml">Belum diterima</div><div class="mv num a">${fmt(_bT)}</div></div><div class="met"><div class="ml">Sudah diterima</div><div class="mv num g">${fmt(_ln)}</div></div><div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${filtered.length}</div></div>`;}
   const el=document.getElementById('invd-list');if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice ke dapur</div>';return;}
-  el.innerHTML=filtered.map(iv=>{
+  const _dIHash=[srch,fS,fB,fP,fVS].join('|');if(_dIHash!==_pgHash.invd){_pg.invd=0;_pgHash.invd=_dIHash;}
+  const _dIPg=_pg.invd;const _dIPgTotal=Math.ceil(filtered.length/PG_SIZE);
+  const pagedInvD=filtered.slice(_dIPg*PG_SIZE,(_dIPg+1)*PG_SIZE);
+  el.innerHTML=pagedInvD.map(iv=>{
     const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;const po=pos.find(p=>p.id===iv.po_id);
     return`<div class="inv-card"><div class="inv-hdr">
       <div>
@@ -3932,7 +3973,7 @@ function renderInvD(){
     </div>
     ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map((p,pi)=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong>${p.catatan?' · '+p.catatan:''}</span><span style="display:flex;align-items:center;gap:8px"><span class="num g">+${fmtF(p.jumlah)}</span>${iv.terima_status!=='lunas'?`<button class="btn bxs bd-" style="padding:1px 6px;font-size:10px" onclick="delPaymentInvD('${iv.id}','${p.id||pi}')">✕</button>`:''}</span></div>`).join('')}</div>`:''}
     </div>`;
-  }).join('');
+  }).join('')+_pgBar('invd','pgInvD',_dIPg,_dIPgTotal,filtered.length);
 }
 function delInvD(id){
   const _delInvD=getInvD().find(d=>d.id===id);
@@ -3954,20 +3995,78 @@ function renderCashflow(){
     <div class="met"><div class="ml">Sudah keluar ke vendor</div><div class="mv num r">${fmt(keluarL)}</div></div>
     <div class="met"><div class="ml">Sudah masuk dari dapur</div><div class="mv num g">${fmt(masukL)}</div></div>
     <div class="met"><div class="ml">Cashback diterima</div><div class="mv num p">${fmt(totalCB)}</div></div>`;
+
+  // Build all payments
   const allPay=[];
-  invV.forEach(iv=>(iv.payments||[]).forEach(p=>allPay.push({...p,no:iv.no,pihak:iv.vendor,dir:'out'})));
-  invV.forEach(iv=>(iv.cashbacks||[]).forEach(c=>allPay.push({...c,no:iv.no,pihak:iv.vendor,dir:'cb'})));
-  invD.forEach(iv=>(iv.payments||[]).forEach(p=>allPay.push({...p,no:iv.no,pihak:iv.dapur,dir:'in'})));
+  invV.forEach(iv=>(iv.payments||[]).forEach(p=>allPay.push({...p,no:iv.no,pihak:iv.vendor,dir:'out',rek_id:p.rek_id||''})));
+  invV.forEach(iv=>(iv.cashbacks||[]).forEach(c=>allPay.push({...c,no:iv.no,pihak:iv.vendor,dir:'cb',rek_id:c.rek_id||''})));
+  invD.forEach(iv=>(iv.payments||[]).forEach(p=>allPay.push({...p,no:iv.no,pihak:iv.dapur,dir:'in',rek_id:p.rek_id||''})));
   allPay.sort((a,b)=>b.tgl.localeCompare(a.tgl));
+
+  // Toggle rekon UI
+  const rekonBar=document.getElementById('cf-rekon-bar');
+  const btnRekon=document.getElementById('btn-rekon');
+  const cfCt=document.getElementById('cf-ct');
+  if(btnRekon)btnRekon.textContent=_rekonMode?'← Kembali':'Rekonsiliasi';
+  if(cfCt)cfCt.textContent=_rekonMode?'Rekonsiliasi transaksi':'Riwayat transaksi';
+  if(rekonBar)rekonBar.style.display=_rekonMode?'block':'none';
+
   const el=document.getElementById('cf-rows');
-  el.innerHTML=allPay.length?allPay.map(p=>`<div style="padding:8px 0;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px">
-    <div>
-      <span class="tag ${p.dir==='out'?'tno':p.dir==='cb'?'tpu':'tok'}" style="margin-right:4px">${p.dir==='out'?'Bayar vendor':p.dir==='cb'?'Cashback':'Terima dapur'}</span>
-      <strong>${p.no}</strong> · ${p.pihak}
-      <div style="font-size:10px;color:var(--t3);font-family:var(--mn);margin-top:1px">${p.tgl} · ${getRekNama(p.rek_id)}</div>
-    </div>
-    <span class="num ${p.dir==='out'?'r':p.dir==='cb'?'p':'g'}">${p.dir==='out'?'-':'+'}${fmtF(p.jumlah)}</span>
-  </div>`).join(''):'<div class="empty">Belum ada transaksi</div>';
+  if(!_rekonMode){
+    el.innerHTML=allPay.length?allPay.map(p=>`<div style="padding:8px 0;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px">
+      <div>
+        <span class="tag ${p.dir==='out'?'tno':p.dir==='cb'?'tpu':'tok'}" style="margin-right:4px">${p.dir==='out'?'Bayar vendor':p.dir==='cb'?'Cashback':'Terima dapur'}</span>
+        <strong>${p.no}</strong> · ${p.pihak}
+        <div style="font-size:10px;color:var(--t3);font-family:var(--mn);margin-top:1px">${p.tgl} · ${getRekNama(p.rek_id)}</div>
+      </div>
+      <span class="num ${p.dir==='out'?'r':p.dir==='cb'?'p':'g'}">${p.dir==='out'?'-':'+'}${fmtF(p.jumlah)}</span>
+    </div>`).join(''):'<div class="empty">Belum ada transaksi</div>';
+    return;
+  }
+
+  // === REKON MODE ===
+  const rekonSet=_rekonKeys();
+  const fRek=document.getElementById('cf-rek-filter')?.value||'';
+  const fDir=document.getElementById('cf-dir-filter')?.value||'';
+
+  // Populate rekening filter
+  const rekSel=document.getElementById('cf-rek-filter');
+  if(rekSel){
+    const curR=rekSel.value;
+    rekSel.innerHTML='<option value="">Semua rekening</option>'+reks.map(r=>`<option value="${r.id}" ${r.id===curR?'selected':''}>${r.nama}</option>`).join('')+'<option value="__none__" ${'__none__'===curR?'selected':''}>Tanpa rekening</option>';
+  }
+
+  let filteredPay=allPay;
+  if(fRek==='__none__')filteredPay=filteredPay.filter(p=>!p.rek_id);
+  else if(fRek)filteredPay=filteredPay.filter(p=>p.rek_id===fRek);
+  if(fDir)filteredPay=filteredPay.filter(p=>p.dir===fDir);
+
+  // Running balance (ascending date order)
+  const ascending=[...filteredPay].reverse();
+  let running=0;const runMap={};
+  ascending.forEach(p=>{const sign=p.dir==='out'?-1:1;running+=sign*p.jumlah;runMap[_rekonKey(p)]=running;});
+
+  const totalRekon=filteredPay.filter(p=>rekonSet.has(_rekonKey(p))).reduce((s,p)=>s+(p.dir==='out'?-p.jumlah:p.jumlah),0);
+  const countRekon=filteredPay.filter(p=>rekonSet.has(_rekonKey(p))).length;
+  const countBlm=filteredPay.length-countRekon;
+  const rekonMet=document.getElementById('cf-rekon-met');
+  if(rekonMet)rekonMet.innerHTML=`<span style="margin-right:16px">✓ <strong>${countRekon}</strong> direkonsiliasi</span><span style="margin-right:16px;color:var(--wt)">○ <strong>${countBlm}</strong> belum</span><span>Saldo rekonsiliasi: <strong class="num ${totalRekon>=0?'g':'r'}">${fmtF(totalRekon)}</strong></span>`;
+
+  el.innerHTML=filteredPay.length?filteredPay.map(p=>{
+    const key=_rekonKey(p);const checked=rekonSet.has(key);const bal=runMap[key];
+    return`<div style="padding:8px 0;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;font-size:12px;${checked?'opacity:0.55':''}">
+      <input type="checkbox" ${checked?'checked':''} onchange="toggleRekon('${key.replace(/'/g,"\\'")}')" style="flex-shrink:0;width:15px;height:15px;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <span class="tag ${p.dir==='out'?'tno':p.dir==='cb'?'tpu':'tok'}" style="margin-right:4px">${p.dir==='out'?'Bayar vendor':p.dir==='cb'?'Cashback':'Terima dapur'}</span>
+        <strong>${p.no}</strong> · ${p.pihak}
+        <div style="font-size:10px;color:var(--t3);font-family:var(--mn);margin-top:1px">${p.tgl} · ${getRekNama(p.rek_id)||'Tanpa rekening'}${p.catatan?' · '+p.catatan:''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="num ${p.dir==='out'?'r':p.dir==='cb'?'p':'g'}">${p.dir==='out'?'-':'+'}${fmtF(p.jumlah)}</div>
+        <div style="font-size:10px;color:var(--t3);font-family:var(--mn)">Saldo ${fmtF(bal)}</div>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">Tidak ada transaksi sesuai filter</div>';
 }
 
 // ===== REKENING =====

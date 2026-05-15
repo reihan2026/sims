@@ -4223,7 +4223,7 @@ function renderDashboard(){
 
   // Metrics
   let ttlM=0,blmBV=0,blmTD=0,blmVnd=0;
-  pos.forEach(po=>{const t=poTotals(po);ttlM+=t.margin;blmVnd+=t.total-t.wv;});
+  pos.forEach(po=>{const t=poTotals(po);ttlM+=t.margin;blmVnd+=po.items.filter(i=>!(i.harga_vendor>0)&&i.status_kirim!=='diterima').length;});
   invV.forEach(iv=>{const n=invVNet(iv);if(iv.bayar_status!=='lunas'&&!isPassthrough(iv.id))blmBV+=n.sisa;});
   invD.forEach(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);blmTD+=id.total-r;});
 

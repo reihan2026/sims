@@ -270,6 +270,7 @@ input[type=checkbox],input[type=radio]{width:auto}
   <div class="ph"><div><div class="ph-t">Dashboard</div><div class="ph-s" id="hdr-date"></div></div><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div>
   <div class="pc">
     <div id="cf-today-bar"></div>
+    <div id="backup-reminder" style="display:none;margin-bottom:10px;padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);font-size:12px;color:var(--wt)"></div>
     <div class="agenda" id="agenda-box"></div>
     <div class="mg" id="dash-met"></div>
     <div class="r2">
@@ -1207,6 +1208,14 @@ function loadAllData(){
 
         _rc.invalidate();
 
+        // Save to localStorage for offline fallback
+        try{localStorage.setItem('sims_cache',JSON.stringify({data:{po:_cache.po,invv:_cache.invv,invd:_cache.invd,rek:_cache.rek,master:_cache.master},saved:new Date().toISOString()}));}catch(e){}
+
+        // Detect concurrent edit from another user
+        if(!_ignoreNextSnapshot&&_dirty.size>0&&resolved){_showConcurrentWarning();}
+
+        _hideOfflineBanner();
+
         if(!resolved){
           // First snapshot — resolve the promise (used by initial login flow)
           resolved=true;
@@ -1218,10 +1227,32 @@ function loadAllData(){
       },
       err=>{
         console.error('[SIMS] onSnapshot error:',err);
+        // Try to load from localStorage as read-only fallback
+        try{
+          const cached=localStorage.getItem('sims_cache');
+          if(cached){const{data,saved}=JSON.parse(cached);Object.assign(_cache,data);_showOfflineBanner(saved);}
+        }catch(e){}
         if(!resolved){resolved=true;resolve();}
       }
     );
   });
+}
+
+function _showOfflineBanner(saved){
+  let b=document.getElementById('offline-banner');
+  if(!b){b=document.createElement('div');b.id='offline-banner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px';document.body.prepend(b);}
+  const tgl=saved?new Date(saved).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'tidak diketahui';
+  b.innerHTML=`Koneksi terputus — menampilkan data offline per ${tgl}. Perubahan tidak bisa disimpan. <button onclick="this.closest('#offline-banner').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>`;
+}
+function _hideOfflineBanner(){const b=document.getElementById('offline-banner');if(b)b.remove();}
+let _concurrentWarnTimer=null;
+function _showConcurrentWarning(){
+  if(document.getElementById('concurrent-banner'))return;
+  const b=document.createElement('div');b.id='concurrent-banner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9998;background:#e67e22;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px';
+  b.innerHTML='Ada perubahan masuk dari pengguna lain. Tunggu status ✓ Tersimpan sebelum reload. <button onclick="this.closest(\'#concurrent-banner\').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>';
+  document.body.prepend(b);
+  if(_concurrentWarnTimer)clearTimeout(_concurrentWarnTimer);
+  _concurrentWarnTimer=setTimeout(()=>{const el=document.getElementById('concurrent-banner');if(el)el.remove();},8000);
 }
 
 function _reRenderActivePage(){
@@ -1289,8 +1320,11 @@ async function _flushSave(){
   try{
     _ignoreNextSnapshot=true; // our own write — skip the echo snapshot
     await db.collection('sims').doc('data').set(payload,{merge:true});
-    _setSaveStatus('✓ Tersimpan','var(--ac)');
-    setTimeout(()=>_setSaveStatus('✓ Tersimpan','var(--t3)'),2000);
+    const sizeKB=Math.round(JSON.stringify(Object.fromEntries(Object.entries(_cache).filter(([k])=>!k.startsWith('file_')))).length/1024);
+    const sizeColor=sizeKB>900?'var(--dn)':sizeKB>700?'var(--wn)':'var(--ac)';
+    _setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB / 1024 KB`,sizeColor);
+    setTimeout(()=>_setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB`,sizeKB>700?sizeColor:'var(--t3)'),2000);
+    const cb=document.getElementById('concurrent-banner');if(cb)cb.remove();
   }catch(e){
     console.error('Firebase save error:',e);
     _setSaveStatus('✕ Gagal simpan','var(--dn)');
@@ -1357,7 +1391,7 @@ const loadFile=async(key)=>{
 function backupData(){
   const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),vendor_saya:getVendorSaya(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'5'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();showToast('Backup berhasil didownload!');
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();localStorage.setItem('sims_last_backup',new Date().toISOString());showToast('Backup berhasil didownload!');
 }
 function restoreData(){
   const input=document.createElement('input');input.type='file';input.accept='.json';
@@ -1365,6 +1399,7 @@ function restoreData(){
     try{const data=JSON.parse(ev.target.result);if(!data.po||!data.invv)throw new Error('Format tidak valid');
       if(!confirm(`Restore dari backup ${data.exported?.split('T')[0]||'?'}?\n\nSEMUA DATA SAAT INI AKAN DIGANTIKAN.`))return;
       ['po','invv','invd','pov','rek','vendor_saya','master','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
+      addLog('restore_backup','Restore backup','sistem','','',data.exported||'unknown');
       saveData();showToast('Restore berhasil! Memuat ulang...');setTimeout(()=>location.reload(),1200);
     }catch(err){showToast('Gagal restore: '+err.message,true);}
   };r.readAsText(file);};input.click();
@@ -1620,8 +1655,8 @@ function autoMaster(dapur,vendors){
 
 // ===== REKENING =====
 function openModalRek(){['rek-nama','rek-pj','rek-no'].forEach(id=>document.getElementById(id).value='');openModal('modal-rek');}
-function saveRek(){const nama=document.getElementById('rek-nama').value.trim();if(!nama){showToast('Isi nama!',true);return;}const reks=getReks();reks.push({id:uid(),nama,pj:document.getElementById('rek-pj').value.trim(),no:document.getElementById('rek-no').value.trim(),pengembalian:[]});setReks(reks);closeModal('modal-rek');renderRekening();renderMaster();showToast('Rekening ditambahkan');}
-function delRek(id){if(!confirm('Hapus rekening?'))return;setReks(getReks().filter(r=>r.id!==id));renderRekening();renderMaster();}
+function saveRek(){const nama=document.getElementById('rek-nama').value.trim();if(!nama){showToast('Isi nama!',true);return;}const reks=getReks();const r={id:uid(),nama,pj:document.getElementById('rek-pj').value.trim(),no:document.getElementById('rek-no').value.trim(),pengembalian:[]};reks.push(r);setReks(reks);addLog('tambah_rekening','Tambah rekening','rek',r.id,r.nama,'');closeModal('modal-rek');renderRekening();renderMaster();showToast('Rekening ditambahkan');}
+function delRek(id){if(!confirm('Hapus rekening?'))return;const _delRek=getReks().find(r=>r.id===id);addLog('hapus_rekening','Hapus rekening','rek',id,_delRek?.nama||id,'');setReks(getReks().filter(r=>r.id!==id));renderRekening();renderMaster();}
 function openKembali(rekId){const rek=getReks().find(r=>r.id===rekId);if(!rek)return;document.getElementById('kembali-id').value=rekId;document.getElementById('kembali-jml').value='';document.getElementById('kembali-tgl').value=today();document.getElementById('kembali-cat').value='';document.getElementById('kembali-info').textContent=rek.nama+(rek.pj?' — '+rek.pj:'');openModal('modal-kembali');}
 function saveKembali(){const id=document.getElementById('kembali-id').value;const jml=parseFloat(document.getElementById('kembali-jml').value)||0;if(!jml){showToast('Isi jumlah!',true);return;}const reks=getReks();const rek=reks.find(r=>r.id===id);if(!rek)return;if(!rek.pengembalian)rek.pengembalian=[];rek.pengembalian.push({jumlah:jml,tgl:document.getElementById('kembali-tgl').value,catatan:document.getElementById('kembali-cat').value});setReks(reks);closeModal('modal-kembali');renderRekening();showToast('Pengembalian dicatat');}
 
@@ -1836,6 +1871,14 @@ function clonePO(poId){
   setTimeout(()=>showDetail(newPO.id),300);
 }
 function delPO(id){
+  const linkedInvV=getInvV().filter(iv=>iv.po_id===id);
+  const linkedInvD=getInvD().filter(d=>d.po_id===id);
+  if(linkedInvV.length||linkedInvD.length){
+    const parts=[];
+    if(linkedInvV.length)parts.push('Invoice Vendor: '+linkedInvV.map(iv=>iv.no).join(', '));
+    if(linkedInvD.length)parts.push('Invoice Dapur: '+linkedInvD.map(d=>d.no).join(', '));
+    showToast('Tidak bisa hapus — PO masih punya:\n'+parts.join('\n'),true);return;
+  }
   const _delPO=getPOs().find(p=>p.id===id);if(!confirm('Yakin hapus PO ini?'))return;addLog('hapus_po','Hapus PO','po',id,_delPO?.no,'');setPOs(getPOs().filter(p=>p.id!==id));renderDaftar();showToast('PO dihapus');
 }
 
@@ -2404,12 +2447,15 @@ function saveGantiItem(){
 function hapusItem(poId,idx){
   const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
   const item=po.items[idx];if(!item)return;
-  // Check if item has invoice vendor
+  // Check if item has invoice vendor or invoice dapur
   const invVForItem=getInvV().filter(iv=>iv.po_id===poId&&(iv.items||[]).some(i=>
     typeof i.idx==='number'?i.idx===idx:i.nama===item.nama
   ));
-  const warn=invVForItem.length
-    ?`\n\n⚠ Item ini sudah ada di invoice vendor: ${invVForItem.map(iv=>iv.no).join(', ')}.\nInvoice tersebut tidak otomatis terhapus.`:'';
+  const invDForItem=getInvD().filter(d=>d.po_id===poId&&(d.items||[]).some(i=>i.nama===item.nama));
+  const warnParts=[];
+  if(invVForItem.length)warnParts.push('Invoice Vendor: '+invVForItem.map(iv=>iv.no).join(', '));
+  if(invDForItem.length)warnParts.push('Invoice Dapur: '+invDForItem.map(d=>d.no).join(', '));
+  const warn=warnParts.length?'\n\n⚠ Item ini sudah ada di:\n'+warnParts.join('\n')+'\nInvoice tersebut tidak otomatis terhapus.':'';
   if(!confirm(`Hapus item "${item.nama}" (${item.qty} ${item.satuan})?${warn}`))return;
   // Record in revisions
   if(!po.revisions)po.revisions=[];
@@ -3105,6 +3151,7 @@ function openOngkir(invId){
   const invVs=getInvV();const iv=invVs.find(v=>v.id===invId);if(!iv)return;
   iv.ongkir=ongkir||0;
   setInvV(invVs);
+  addLog('catat_ongkir','Catat ongkir','invv',invId,iv.no,ongkir?fmtF(ongkir):'dihapus');
   showToast(ongkir?`Ongkir ${fmtF(ongkir)} disimpan — mengurangi margin`:'Ongkir dihapus');
   if(_currentPoId)showDetail(_currentPoId);else renderInvV();
 }
@@ -3859,7 +3906,7 @@ function renderRekening(){
   </div>`).join(''):'<div class="empty">Belum ada riwayat pembayaran</div>';
 }
 
-const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',buat_pov:'var(--ac)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)'};
+const ACTION_COLOR={buat_po:'var(--ac)',buat_invv:'var(--in)',buat_invd:'var(--pu)',buat_pov:'var(--ac)',bayar_invv:'var(--ac)',terima_invd:'var(--ac)',hapus_po:'var(--dn)',hapus_item:'var(--dn)',ganti_item:'var(--wn)',edit_item:'var(--t3)',tambah_item:'var(--ac)',update_kirim:'var(--tl)',konversi_pt:'var(--pu)',catat_cashback:'var(--pu)',clone_po:'var(--in)',edit_invv:'var(--t3)',catat_retur:'var(--wn)',catat_ongkir:'var(--wn)',restore_backup:'var(--dn)',tambah_rekening:'var(--ac)',hapus_rekening:'var(--dn)'};
 // ===== DASHBOARD =====
 function renderDashboard(){
   const el=document.getElementById('hdr-date');if(el)el.textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -3955,6 +4002,18 @@ function renderDashboard(){
     agHtml+=`</div>`;
   }
   agendaBox.innerHTML=agHtml;
+
+  // Backup reminder
+  const lastBackup=localStorage.getItem('sims_last_backup');
+  const daysSince=lastBackup?Math.floor((Date.now()-new Date(lastBackup))/86400000):999;
+  const backupEl=document.getElementById('backup-reminder');
+  if(backupEl){
+    if(daysSince>=7){
+      const tglBackup=lastBackup?new Date(lastBackup).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}):'belum pernah';
+      backupEl.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span>${daysSince>=999?'Belum pernah backup':'Backup terakhir '+tglBackup+' ('+daysSince+' hari lalu)'} — data bisa hilang permanen jika Firestore bermasalah.</span><button class="btn bxs bw" onclick="backupData()">Backup sekarang</button></div>`;
+      backupEl.style.display='block';
+    }else{backupEl.style.display='none';}
+  }
 
   // Metrics
   let ttlM=0,blmBV=0,blmTD=0,blmVnd=0;

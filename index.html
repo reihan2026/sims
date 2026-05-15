@@ -466,7 +466,8 @@ input[type=checkbox],input[type=radio]{width:auto}
           <input type="text" id="new-dapur-tlp" placeholder="No. telepon (opsional)" style="flex:1">
           <button class="btn bp bsm" onclick="addDapur()">Tambah</button>
         </div>
-        <div id="dapur-list"></div></div>
+        <div id="dapur-list"></div>
+        <button class="btn bsm bw" style="margin-top:8px" onclick="runMergeDapur()" title="Gabungkan entri dapur duplikat dan perbarui semua referensi PO">🔧 Gabungkan duplikat</button></div>
       <div class="card">
         <div class="ct">Kategori item</div>
         <div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-kat" placeholder="Nama kategori baru..."><button class="btn bp bsm" onclick="addKat()">Tambah</button></div>
@@ -1160,7 +1161,7 @@ auth.onAuthStateChanged(user=>{
     const name=user.email.split('@')[0];
     document.getElementById('user-display-name').textContent=user.email;
     document.getElementById('user-avatar').textContent=name.substring(0,2).toUpperCase();
-    loadAllData().then(()=>{syncPassthroughInvV();syncMissingPTInvD();initUserProfile();renderDashboard();updateDL();});
+    loadAllData().then(()=>{normalizeDapurRefs();syncPassthroughInvV();syncMissingPTInvD();initUserProfile();renderDashboard();updateDL();});
   } else {
     _currentUser=null;
     document.getElementById('login-screen').style.display='flex';
@@ -1636,6 +1637,11 @@ function renderMaster(){
   updateDL();
 }
 function saveCatatanVendor(){const m=getMaster();m.catatan_vendor=document.getElementById('master-cat-vendor').value.trim();setMaster(m);showToast('Catatan baku ke vendor disimpan');}
+function runMergeDapur(){
+  normalizeDapurRefs();
+  renderMaster();renderDaftar();
+  showToast('Duplikat dapur digabungkan & referensi PO diperbarui');
+}
 function addKat(){
   const val=document.getElementById('new-kat')?.value.trim();if(!val)return;
   const m=getMaster();
@@ -1717,15 +1723,44 @@ function rmVendor(i){
   if(!confirm(`Hapus vendor "${nama}"?`))return;
   m.vendor.splice(i,1);setMaster(m);renderMaster();
 }
+function normalizeDapurRefs(){
+  const m=getMaster();
+  const withKode=m.dapur.filter(d=>typeof d==='object'&&d.kode);
+  if(!withKode.length)return;
+  const namaToKode={};
+  withKode.forEach(d=>{if(d.nama&&d.kode)namaToKode[d.nama]=d.kode;});
+  const kodeSet=new Set(withKode.map(d=>d.kode));
+  // Remove duplicate entries: string "KLU003" OR codeless object {kode:'', nama:'KLU003'}
+  const lenBefore=m.dapur.length;
+  m.dapur=m.dapur.filter(d=>{
+    if(typeof d==='string')return!kodeSet.has(d);
+    if(!d.kode&&kodeSet.has(d.nama))return false;
+    return true;
+  });
+  if(m.dapur.length!==lenBefore)setMaster(m);
+  // Migrate po.dapur from nama → kode
+  const pos=getPOs();let posChanged=false;
+  pos.forEach(p=>{if(namaToKode[p.dapur]){p.dapur=namaToKode[p.dapur];posChanged=true;}});
+  if(posChanged)setPOs(pos);
+  // Migrate pov.dapur
+  const povs=getPOVs();let povChanged=false;
+  povs.forEach(p=>{if(namaToKode[p.dapur]){p.dapur=namaToKode[p.dapur];povChanged=true;}});
+  if(povChanged)setPOVs(povs);
+  // Migrate invd.dapur
+  const invds=getInvD();let invdChanged=false;
+  invds.forEach(i=>{if(namaToKode[i.dapur]){i.dapur=namaToKode[i.dapur];invdChanged=true;}});
+  if(invdChanged)setInvD(invds);
+}
 function getDapurInfo(val){
   const m=getMaster();
   const found=m.dapur.find(d=>typeof d==='string'?d===val:(d.nama===val||d.kode===val));
   if(!found)return{kode:'',nama:val||'',alamat:'',tlp:''};
   return typeof found==='string'?{kode:'',nama:found,alamat:'',tlp:''}:{alamat:'',...found};
 }
+function fmtDapurKode(val){const o=getDapurInfo(val);return o.kode||val;}
 function updateDL(){
   const m=getMaster();
-  ['dl-dapur','dl-dapur-invd'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=m.dapur.map(d=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<option value="${o.nama}">${o.kode?o.kode+' — '+o.nama:o.nama}</option>`;}).join('');});
+  ['dl-dapur','dl-dapur-invd'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=m.dapur.map(d=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<option value="${o.kode||o.nama}">${o.kode?o.kode+' — '+o.nama:o.nama}</option>`;}).join('');});
   const vnames=m.vendor.map(v=>v.nama);
   ['dl-vendor-invv'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=vnames.map(v=>`<option value="${v}">`).join('');});
 }
@@ -1880,12 +1915,12 @@ function renderDaftar(){
   const bSet=new Set(pos.map(p=>p.date.substring(0,7)));
   const fBE=document.getElementById('f-bln');const cbv=fBE.value;
   populateMonthFilter(fBE,bSet,cbv);
-  const dSet=new Set(pos.map(p=>p.dapur));const fDE=document.getElementById('f-dapur');const cdv=fDE.value;
+  const dSet=new Set(pos.map(p=>fmtDapurKode(p.dapur)));const fDE=document.getElementById('f-dapur');const cdv=fDE.value;
   fDE.innerHTML='<option value="">Semua dapur</option>'+[...dSet].sort().map(d=>`<option value="${d}" ${d===cdv?'selected':''}>${d}</option>`).join('');
   const invV=getInvV();const invD=getInvD();
   let filtered=pos.filter(po=>{
     if(srch&&!po.no.toLowerCase().includes(srch)&&!po.dapur.toLowerCase().includes(srch)&&!po.items.some(i=>(i.vendor||'').toLowerCase().includes(srch)))return false;
-    if(fB&&!po.date.startsWith(fB))return false;if(fD&&po.dapur!==fD)return false;
+    if(fB&&!po.date.startsWith(fB))return false;if(fD&&fmtDapurKode(po.dapur)!==fD)return false;
     const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
     const allKirim=po.items.every(i=>i.status_kirim==='diterima');
     const done=allKirim&&myV.every(v=>v.bayar_status==='lunas')&&myD.every(d=>d.terima_status==='lunas');
@@ -1920,7 +1955,7 @@ function renderDaftar(){
           <span style="font-weight:600;font-size:13px">${po.no}</span>
           ${jenisBadge(po.jenis)}
           ${po.revisions?.length?`<span class="tag tpu" style="margin-left:5px">Rev ${po.revisions.length}</span>`:''}
-          <span style="margin-left:7px;color:var(--t2);font-size:12px">${po.dapur}</span>
+          <span style="margin-left:7px;color:var(--t2);font-size:12px">${fmtDapurKode(po.dapur)}</span>
           <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0 5px">${po.date} · ${t.total} item · harga vendor ${pct}% terisi · kirim ${kirimOk}/${t.total}</div>
         </div>
         <div class="bg"><button class="btn bsm" onclick="showDetail('${po.id}')">Detail</button><button class="btn bsm bt" onclick="clonePO('${po.id}')">Clone</button><button class="btn bsm bd-" onclick="delPO('${po.id}')">Hapus</button></div>
@@ -2366,7 +2401,7 @@ function showDetail(id){
   const {invV,invD,itemInvV,itemInvD,itemPassthrough}=buildLookup(id);
 
   // Header
-  document.getElementById('det-t').textContent=po.no+' — '+po.dapur;
+  document.getElementById('det-t').textContent=po.no+' — '+fmtDapurKode(po.dapur);
   document.getElementById('det-s').innerHTML=po.date+' · '+t.total+' item'+(po.catatan?' · '+po.catatan:'')+' '+jenisBadge(po.jenis);
   document.getElementById('det-act').innerHTML=`
     <button class="btn bsm bp" onclick="openBuatPOV('${id}')">📤 PO ke Vendor</button>
@@ -4820,7 +4855,7 @@ function renderLog(){
   if(!el)return;
   if(!filtered.length){el.innerHTML='<div class="empty">Belum ada aktivitas tercatat</div>';return;}
 
-  const LOG_PREVIEW=30;
+  const LOG_PREVIEW=10;
   const hasFilter=fUser||fAction||fTgl;
   const visible=(_logShowAll||hasFilter)?filtered:filtered.slice(0,LOG_PREVIEW);
   const hidden=filtered.length-visible.length;
@@ -5892,6 +5927,8 @@ function _povItemRows(items){
 function printPOV(pov){
   if(!pov)return;
   const _catBaku=getMaster().catatan_vendor||'';
+  const _dapurInfo=getDapurInfo(pov.dapur);
+  const _dapurNama=_dapurInfo.nama||pov.dapur;
   const body=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
       <div><div style="font-size:22px;font-weight:700;color:#1E4029">PURCHASE ORDER</div><div style="font-size:12px;color:#666;margin-top:2px">SIMS — Sistem Internal Manajemen Suplai</div></div>
@@ -5899,7 +5936,7 @@ function printPOV(pov){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;padding:14px;background:#f8f7f4;border-radius:6px;border:1px solid #e0ddd6">
       <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Kepada (Vendor)</div><div style="font-weight:700;font-size:14px">${pov.vendor}</div>${pov.vendor_hp?`<div style="font-size:12px;color:#666;font-family:monospace">${pov.vendor_hp}</div>`:''}</div>
-      <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Untuk Dapur</div><div style="font-weight:600;font-size:13px">${pov.dapur}</div><div style="font-size:11px;color:#666">Dari PO: ${pov.po_no}</div></div>
+      <div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:4px">Untuk Dapur</div><div style="font-weight:600;font-size:13px">${_dapurNama}</div><div style="font-size:11px;color:#666">Dari PO: ${pov.po_no}</div></div>
     </div>
     ${_catBaku?`<div style="background:#FFF8E7;border:1px solid #D4B870;border-radius:4px;padding:9px 12px;font-size:12px;margin-bottom:8px;color:#5C4508"><strong>Catatan:</strong> ${_catBaku}</div>`:''}
     ${pov.catatan?`<div style="background:#FFF8E7;border:1px solid #D4B870;border-radius:4px;padding:9px 12px;font-size:12px;margin-bottom:16px;color:#5C4508"><strong>Catatan tambahan:</strong> ${pov.catatan}</div>`:''}
@@ -5921,7 +5958,8 @@ function waTextPOV(pov){
   const lines=pov.items.map((it,i)=>`${i+1}. ${it.nama} — ${it.qty} ${it.satuan}${it.deadline?' (deadline '+it.deadline+')':''}${it.spek?' | Spek: '+it.spek:''}`).join('\n');
   const catBaku=getMaster().catatan_vendor||'';
   const catatan=(catBaku?'\n\n⚠️ '+catBaku:'')+(pov.catatan?'\n\n📝 '+pov.catatan:'');
-  return`Halo ${pov.vendor},\n\nBerikut Purchase Order dari dapur *${pov.dapur}*:\n\n${lines}${catatan}\n\nNo. PO: *${pov.no}*\nTanggal: ${pov.tgl}\n\nMohon konfirmasi ketersediaan dan harga.\nTerima kasih 🙏`;
+  const dapurNama=getDapurInfo(pov.dapur).nama||pov.dapur;
+  return`Halo ${pov.vendor},\n\nBerikut Purchase Order dari dapur *${dapurNama}*:\n\n${lines}${catatan}\n\nNo. PO: *${pov.no}*\nTanggal: ${pov.tgl}\n\nMohon konfirmasi ketersediaan dan harga.\nTerima kasih 🙏`;
 }
 
 function openWAPOV(pov){

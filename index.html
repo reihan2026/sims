@@ -351,7 +351,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- DAFTAR PO -->
 <div id="page-daftar-po" class="page">
-  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="fixVendorData()" title="Bersihkan vendor yang salah terisi">🔧 Perbaiki vendor</button><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
+  <div class="ph"><div><div class="ph-t">Daftar PO</div><div class="ph-s" id="daftar-hdr"></div></div><div class="bg"><button class="btn bsm bw" onclick="openBulkKirim(null)">⚡ Bulk status</button><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
   <div class="pc">
     <div class="fbar">
       <input type="text" placeholder="Cari PO / dapur..." id="srch" oninput="renderDaftar()">
@@ -386,7 +386,7 @@ input[type=checkbox],input[type=radio]{width:auto}
 
 <!-- INVOICE VENDOR -->
 <div id="page-inv-vendor" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm bw" onclick="fixInvData()" title="Perbaiki data invoice bermasalah">🔧 Perbaiki data</button><button class="btn bsm bw" onclick="dedupInvV()" title="Hapus invoice duplikat">🧹 Bersihkan duplikat</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
+  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor / item..." id="srch-invv" oninput="renderInvV()">
@@ -466,8 +466,7 @@ input[type=checkbox],input[type=radio]{width:auto}
           <input type="text" id="new-dapur-tlp" placeholder="No. telepon (opsional)" style="flex:1">
           <button class="btn bp bsm" onclick="addDapur()">Tambah</button>
         </div>
-        <div id="dapur-list"></div>
-        <button class="btn bsm bw" style="margin-top:8px" onclick="runMergeDapur()" title="Gabungkan entri dapur duplikat dan perbarui semua referensi PO">🔧 Gabungkan duplikat</button></div>
+        <div id="dapur-list"></div></div>
       <div class="card">
         <div class="ct">Kategori item</div>
         <div style="display:flex;gap:7px;margin-bottom:9px"><input type="text" id="new-kat" placeholder="Nama kategori baru..."><button class="btn bp bsm" onclick="addKat()">Tambah</button></div>
@@ -1637,11 +1636,6 @@ function renderMaster(){
   updateDL();
 }
 function saveCatatanVendor(){const m=getMaster();m.catatan_vendor=document.getElementById('master-cat-vendor').value.trim();setMaster(m);showToast('Catatan baku ke vendor disimpan');}
-function runMergeDapur(){
-  normalizeDapurRefs();
-  renderMaster();renderDaftar();
-  showToast('Duplikat dapur digabungkan & referensi PO diperbarui');
-}
 function addKat(){
   const val=document.getElementById('new-kat')?.value.trim();if(!val)return;
   const m=getMaster();
@@ -3451,69 +3445,6 @@ function filterInvDBln(){
   renderInvD();
 }
 
-// Fix invoice data issues — fill missing tgl, etc
-function fixVendorData(){
-  // Clear vendor from PO items that have no matching invoice vendor
-  const pos=getPOs();const invVs=getInvV();let fixed=0;
-  pos.forEach(po=>{
-    po.items.forEach((item,idx)=>{
-      if(!item.vendor&&!item.harga_vendor)return;
-      // Check if this item actually has an invoice vendor
-      const hasInvV=invVs.some(iv=>iv.po_id===po.id&&(iv.items||[]).some(i=>
-        typeof i.idx==='number'?i.idx===idx:i.nama===item.nama
-      ));
-      if(!hasInvV&&item.vendor){
-        item.vendor='';item.harga_vendor=0;fixed++;
-      }
-    });
-  });
-  if(fixed>0){setPOs(pos);showToast(`${fixed} vendor salah dibersihkan!`);renderDaftar();}
-  else showToast('Tidak ada vendor yang perlu dibersihkan');
-}
-
-function fixHargaVendor(poId){
-  // Re-sync harga_vendor on PO items from latest invoice for that PO
-  const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
-  const invVList=getInvV().filter(iv=>iv.po_id===poId);
-  if(!invVList.length){showToast('Tidak ada invoice vendor untuk PO ini',true);return;}
-  let fixed=0;
-  po.items.forEach((item,idx)=>{
-    // Find the latest invoice that has this item
-    let bestHv=null,bestTgl='';
-    invVList.forEach(iv=>{
-      (iv.items||[]).forEach(it=>{
-        if(it.nama===item.nama&&(it.harga_vendor||0)>0&&(iv.tgl||'')>=bestTgl){
-          // Only use raw harga_vendor (no konv applied) if sat matches PO
-          const satMatch=!it.satuan||(it.satuan.toLowerCase()===(item.satuan||'').toLowerCase());
-          if(satMatch){bestHv=it.harga_vendor;bestTgl=iv.tgl||'';}
-        }
-      });
-    });
-    if(bestHv!==null&&bestHv!==item.harga_vendor){
-      po.items[idx].harga_vendor=bestHv;
-      // Clear any leftover satuan_konv if satuan matches
-      if(po.items[idx].satuan_konv){delete po.items[idx].satuan_konv;}
-      fixed++;
-    }
-  });
-  if(fixed>0){setPOs(pos);showToast(fixed+' harga vendor diperbaiki dari invoice!');if(_currentPoId===poId)showDetail(poId);}
-  else showToast('Tidak ada yang perlu diperbaiki',false);
-}
-
-function fixInvData(){
-  const invVs=getInvV();let fixed=0;
-  invVs.forEach(iv=>{
-    if(!iv.tgl||iv.tgl.trim()===''){iv.tgl=iv.created?.split('T')[0]||today();fixed++;}
-    if(!iv.no)iv.no='INV-V-?';
-    if(!iv.vendor)iv.vendor='?';
-    if(!iv.bayar_status)iv.bayar_status='belum';
-    if(!iv.payments)iv.payments=[];
-    if(!iv.items)iv.items=[];
-  });
-  if(fixed>0){setInvV(invVs);showToast(`${fixed} invoice diperbaiki!`);}
-  else showToast('Tidak ada masalah ditemukan');
-  renderInvV();
-}
 function renderInvV(){
   const invs=getInvV();/* summary computed after filter */
   const srch=(document.getElementById('srch-invv')?.value||'').toLowerCase();
@@ -4901,36 +4832,6 @@ let _rekapPoId=null,_rekapVendor=null;
 // Cleanup duplicate invoices
 // Strategy 1: exact same no+vendor+po_id+tgl
 // Strategy 2: same vendor+po_id+tgl+total+items (catches counter-restart duplicates)
-function dedupInvV(){
-  const invs=getInvV();
-  const before=invs.length;
-
-  // Build signature for each invoice (vendor+po_id+tgl+total+item names sorted)
-  const sig=(iv)=>{
-    const items=(iv.items||[]).map(i=>i.nama).sort().join('|');
-    return`${iv.vendor}|${iv.po_id}|${iv.tgl}|${iv.total}|${items}`;
-  };
-
-  const seenSig=new Set();
-  const seenNo=new Set();
-  const deduped=invs.filter(iv=>{
-    const s=sig(iv);
-    const n=`${iv.no}|${iv.vendor}|${iv.po_id}`;
-    if(seenSig.has(s)||seenNo.has(n))return false;
-    seenSig.add(s);seenNo.add(n);
-    return true;
-  });
-
-  const removed=before-deduped.length;
-  if(removed>0){
-    setInvV(deduped);
-    showToast(`${removed} invoice duplikat dihapus!`);
-    if(_currentPoId)showDetail(_currentPoId);else renderInvV();
-  } else {
-    showToast('Tidak ada duplikat ditemukan');
-  }
-}
-
 function openRekapVendor(poId,vendorEnc){
   const vname=decodeURIComponent(vendorEnc);
   _rekapPoId=poId;_rekapVendor=vname;

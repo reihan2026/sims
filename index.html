@@ -245,6 +245,7 @@ input[type=checkbox],input[type=radio]{width:auto}
     <button class="ni" onclick="nav('rekening')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Rekening &amp; Dana</button>
     <div class="nsec">Analitik</div>
     <button class="ni" onclick="nav('konsumsi')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 17V13M12 17V9M16 17V11"/></svg>Konsumsi Bahan Baku</button>
+    <button class="ni" onclick="nav('laporan-keu')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Laporan Keuangan</button>
     <div class="nsec">Pengaturan</div>
     <button class="ni" onclick="nav('master')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07"/></svg>Master Data</button>
   </nav>
@@ -561,6 +562,39 @@ input[type=checkbox],input[type=radio]{width:auto}
           <tbody id="k-table-body"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="page-laporan-keu" class="page">
+  <div class="ph">
+    <div><div class="ph-t">Laporan Keuangan</div><div class="ph-s">Ringkasan revenue, profit, dan biaya per periode</div></div>
+  </div>
+  <div class="pc">
+    <div class="fbar" style="margin-bottom:13px;flex-wrap:wrap;gap:8px;align-items:center">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="radio" name="lk-mode" value="tahun" onchange="_lkOnModeChange('tahun')"> Per Tahun</label>
+      <div id="lk-tahun-wrap" style="display:flex;align-items:center"><select id="lk-tahun-sel" style="min-width:90px"><option>2025</option></select></div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="radio" name="lk-mode" value="custom" onchange="_lkOnModeChange('custom')"> Custom</label>
+      <div id="lk-custom-wrap" style="display:none;align-items:center;gap:5px">
+        <input type="date" id="lk-dari" style="font-size:12px">
+        <span style="font-size:11px;color:var(--t3)">s/d</span>
+        <input type="date" id="lk-sampai" style="font-size:12px">
+      </div>
+      <button class="btn bp bsm" onclick="_lkTerapkan()">Terapkan</button>
+    </div>
+    <div id="lk-cards" style="margin-bottom:13px"></div>
+    <div class="card" style="margin-bottom:13px">
+      <div class="ct">Tren Revenue &amp; Profit</div>
+      <div style="position:relative;height:280px"><canvas id="lk-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:6px;margin-bottom:11px;border-bottom:1px solid var(--bd);padding-bottom:10px">
+        <button id="lk-tab-bulan" class="btn bsm bp" onclick="_lkSetTab('bulan')">Per Bulan</button>
+        <button id="lk-tab-po" class="btn bsm" onclick="_lkSetTab('po')">Per PO</button>
+        <button id="lk-tab-vendor" class="btn bsm" onclick="_lkSetTab('vendor')">Per Vendor</button>
+        <button id="lk-tab-dapur" class="btn bsm" onclick="_lkSetTab('dapur')">Per Dapur</button>
+      </div>
+      <div id="lk-body"></div>
     </div>
   </div>
 </div>
@@ -1602,12 +1636,12 @@ function inlineAddRek(targetSelId){
 }
 
 // ===== NAVIGATION =====
-const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','master'];
+const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','laporan-keu','master'];
 function nav(name){
   _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,cashflow:6,rekening:7,konsumsi:8,master:9};
+  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,cashflow:6,rekening:7,konsumsi:8,'laporan-keu':9,master:10};
   const i=MAP[name];if(i!==undefined)document.querySelectorAll('.ni')[i]?.classList.add('active');
   closeSidebar();closeStatPopup();
   if(name==='dash')renderDashboard();
@@ -1618,6 +1652,7 @@ function nav(name){
   if(name==='rekening')renderRekening();
   if(name==='pov')renderPOV();
   if(name==='konsumsi')renderKonsumsi();
+  if(name==='laporan-keu')renderLaporanKeu();
   if(name==='master'){renderMaster();initUserProfile();_logShowAll=false;renderLog();}
   if(name==='po-baru')initPOForm();
 }
@@ -5683,6 +5718,262 @@ function resetKonsumsiFilter(){
   document.getElementById('k-kat').value='';
   document.getElementById('k-satuan').value='';
   renderKonsumsi();
+}
+
+// ===== LAPORAN KEUANGAN =====
+let _lkChart=null,_lkLastData=null;
+
+function _lkGetRange(){
+  const mode=localStorage.getItem('lk-mode')||'tahun';
+  if(mode==='custom'){
+    const dari=localStorage.getItem('lk-dari')||'';
+    const sampai=localStorage.getItem('lk-sampai')||'';
+    if(dari&&sampai)return{from:dari,to:sampai};
+  }
+  const tahun=localStorage.getItem('lk-tahun')||new Date().getFullYear().toString();
+  return{from:tahun+'-01-01',to:tahun+'-12-31'};
+}
+
+function _lkBuildData(from,to){
+  const pos=getPOs().filter(po=>po.date>=from&&po.date<=to);
+  const allInvV=getInvV();const allInvD=getInvD();
+  let totalRevenue=0,totalModal=0,totalOngkir=0,totalCashback=0;
+  const monthly={},byVendor={},byDapur={},byPO=[];
+  pos.forEach(po=>{
+    const ivs=allInvV.filter(iv=>iv.po_id===po.id);
+    const ids=allInvD.filter(d=>d.po_id===po.id);
+    const revenue=ids.reduce((s,d)=>s+(d.total||0),0);
+    const modal=ivs.reduce((s,iv)=>s+(iv.total||0),0);
+    const ongkir=ivs.reduce((s,iv)=>s+(iv.ongkir||0),0);
+    const cashback=ivs.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((sc,c)=>sc+c.jumlah,0),0);
+    const profit=revenue-modal-ongkir+cashback;
+    totalRevenue+=revenue;totalModal+=modal;totalOngkir+=ongkir;totalCashback+=cashback;
+    const mk=po.date.substring(0,7);
+    if(!monthly[mk])monthly[mk]={revenue:0,modal:0,ongkir:0,cashback:0,profit:0,cnt:0};
+    monthly[mk].revenue+=revenue;monthly[mk].modal+=modal;monthly[mk].ongkir+=ongkir;
+    monthly[mk].cashback+=cashback;monthly[mk].profit+=profit;monthly[mk].cnt++;
+    ivs.forEach(iv=>{
+      const v=iv.vendor||'(tanpa vendor)';
+      if(!byVendor[v])byVendor[v]={modal:0,ongkir:0,cashback:0};
+      byVendor[v].modal+=iv.total||0;byVendor[v].ongkir+=iv.ongkir||0;
+      byVendor[v].cashback+=(iv.cashbacks||[]).reduce((sc,c)=>sc+c.jumlah,0);
+    });
+    ids.forEach(d=>{
+      const dp=d.dapur||po.dapur||'(tanpa dapur)';
+      if(!byDapur[dp])byDapur[dp]={revenue:0,cnt:0};
+      byDapur[dp].revenue+=d.total||0;byDapur[dp].cnt++;
+    });
+    byPO.push({po,revenue,modal,ongkir,cashback,profit});
+  });
+  const totalProfit=totalRevenue-totalModal-totalOngkir+totalCashback;
+  const totalMarginPct=totalRevenue>0?(totalProfit/totalRevenue*100):0;
+  return{totalRevenue,totalModal,totalOngkir,totalCashback,totalProfit,totalMarginPct,monthly,byVendor,byDapur,byPO,posCount:pos.length};
+}
+
+function renderLaporanKeu(){
+  const allYears=[...new Set(getPOs().map(po=>po.date.substring(0,4)))].sort().reverse();
+  const curY=new Date().getFullYear().toString();
+  const savedY=localStorage.getItem('lk-tahun')||curY;
+  const savedMode=localStorage.getItem('lk-mode')||'tahun';
+  const sel=document.getElementById('lk-tahun-sel');
+  if(sel){
+    sel.innerHTML=(allYears.length?allYears:[curY]).map(y=>`<option value="${y}" ${y===savedY?'selected':''}>${y}</option>`).join('');
+    sel.value=savedY;
+  }
+  const mTahun=document.querySelector('input[name="lk-mode"][value="tahun"]');
+  const mCustom=document.querySelector('input[name="lk-mode"][value="custom"]');
+  if(mTahun)mTahun.checked=savedMode==='tahun';
+  if(mCustom)mCustom.checked=savedMode==='custom';
+  const dariEl=document.getElementById('lk-dari');
+  const sampaiEl=document.getElementById('lk-sampai');
+  if(dariEl)dariEl.value=localStorage.getItem('lk-dari')||'';
+  if(sampaiEl)sampaiEl.value=localStorage.getItem('lk-sampai')||'';
+  _lkToggleMode(savedMode);
+  _lkRenderAll();
+}
+
+function _lkToggleMode(mode){
+  const isCustom=mode==='custom';
+  const tw=document.getElementById('lk-tahun-wrap');
+  const cw=document.getElementById('lk-custom-wrap');
+  if(tw)tw.style.display=isCustom?'none':'flex';
+  if(cw)cw.style.display=isCustom?'flex':'none';
+}
+
+function _lkOnModeChange(mode){
+  localStorage.setItem('lk-mode',mode);
+  _lkToggleMode(mode);
+}
+
+function _lkTerapkan(){
+  const mode=document.querySelector('input[name="lk-mode"]:checked')?.value||'tahun';
+  localStorage.setItem('lk-mode',mode);
+  if(mode==='tahun'){
+    const y=document.getElementById('lk-tahun-sel')?.value||new Date().getFullYear().toString();
+    localStorage.setItem('lk-tahun',y);
+  }else{
+    const dari=document.getElementById('lk-dari')?.value||'';
+    const sampai=document.getElementById('lk-sampai')?.value||'';
+    if(!dari||!sampai){showToast('Isi rentang tanggal terlebih dahulu',true);return;}
+    localStorage.setItem('lk-dari',dari);
+    localStorage.setItem('lk-sampai',sampai);
+  }
+  _lkRenderAll();
+}
+
+function _lkRenderAll(){
+  const{from,to}=_lkGetRange();
+  _lkLastData=_lkBuildData(from,to);
+  _lkRenderCards(_lkLastData);
+  _lkRenderChart(_lkLastData);
+  _lkSetTab(localStorage.getItem('lk-tab')||'bulan');
+}
+
+function _lkCard(label,val,color){
+  return`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:12px 14px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:${color};margin-bottom:4px">${label}</div>
+    <div style="font-size:14px;font-weight:700;font-family:var(--mn);color:var(--tx)">${fmt(val)}</div>
+  </div>`;
+}
+
+function _lkCardPct(label,val,color){
+  return`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:12px 14px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:${color};margin-bottom:4px">${label}</div>
+    <div style="font-size:14px;font-weight:700;font-family:var(--mn);color:${color}">${val.toFixed(1)}%</div>
+  </div>`;
+}
+
+function _lkRenderCards(data){
+  const{totalRevenue,totalModal,totalOngkir,totalCashback,totalProfit,totalMarginPct}=data;
+  const profitColor=totalProfit>=0?'#16a34a':'#dc2626';
+  const marginColor=totalMarginPct>=0?'#16a34a':'#dc2626';
+  const el=document.getElementById('lk-cards');
+  if(!el)return;
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">
+    ${_lkCard('Revenue',totalRevenue,'#3b82f6')}
+    ${_lkCard('Modal (COGS)',totalModal,'#f59e0b')}
+    ${_lkCard('Ongkir',totalOngkir,'#8b5cf6')}
+    ${_lkCard('Cashback',totalCashback,'#06b6d4')}
+    ${_lkCard('Profit Bersih',totalProfit,profitColor)}
+    ${_lkCardPct('Margin',totalMarginPct,marginColor)}
+  </div>`;
+}
+
+function _lkRenderChart(data){
+  const{monthly}=data;
+  const keys=Object.keys(monthly).sort();
+  const labels=keys.map(k=>_fmtBulan(k));
+  const revenues=keys.map(k=>monthly[k].revenue);
+  const profits=keys.map(k=>monthly[k].profit);
+  _lkChart=_renderChart('lk-chart',_lkChart,'bar',{
+    labels,
+    datasets:[
+      {label:'Revenue',type:'bar',data:revenues,backgroundColor:'rgba(59,130,246,0.7)',borderRadius:3,order:2},
+      {label:'Profit Bersih',type:'line',data:profits,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',tension:0.3,fill:false,pointBackgroundColor:'#16a34a',pointRadius:4,order:1}
+    ]
+  },{
+    plugins:{
+      legend:{display:true,position:'top',labels:{font:{size:11}}},
+      tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.raw)}}
+    },
+    scales:{
+      y:{ticks:{callback:v=>fmt(v),font:{size:10}}},
+      x:{ticks:{font:{size:10}}}
+    }
+  });
+}
+
+function _lkSetTab(tab){
+  localStorage.setItem('lk-tab',tab);
+  ['bulan','po','vendor','dapur'].forEach(t=>{
+    const btn=document.getElementById('lk-tab-'+t);
+    if(btn)btn.classList.toggle('bp',t===tab);
+  });
+  if(_lkLastData)_lkRenderTable(tab,_lkLastData);
+}
+
+function _lkRenderTable(tab,data){
+  const el=document.getElementById('lk-body');
+  if(!el)return;
+  if(tab==='bulan'){
+    const{monthly}=data;
+    const keys=Object.keys(monthly).sort().reverse();
+    if(!keys.length){el.innerHTML='<div class="empty">Tidak ada data pada periode ini</div>';return;}
+    el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Bulan</th><th style="text-align:right">Revenue</th><th style="text-align:right">Modal</th>
+      <th style="text-align:right">Ongkir</th><th style="text-align:right">Cashback</th>
+      <th style="text-align:right">Profit Bersih</th><th style="text-align:right">Margin</th><th style="text-align:right">PO</th>
+    </tr></thead><tbody>${keys.map(k=>{
+      const m=monthly[k];const pct=m.revenue>0?(m.profit/m.revenue*100):0;
+      const pc=m.profit>=0?'#16a34a':'#dc2626';
+      return`<tr>
+        <td style="font-weight:500">${_fmtBulan(k)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(m.revenue)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(m.modal)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(m.ongkir)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(m.cashback)}</td>
+        <td style="text-align:right;font-family:var(--mn);font-weight:600;color:${pc}">${fmt(m.profit)}</td>
+        <td style="text-align:right;font-family:var(--mn);color:${pc}">${pct.toFixed(1)}%</td>
+        <td style="text-align:right;color:var(--t3)">${m.cnt}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+  }else if(tab==='po'){
+    const{byPO}=data;
+    if(!byPO.length){el.innerHTML='<div class="empty">Tidak ada data pada periode ini</div>';return;}
+    el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>No PO</th><th>Dapur</th><th>Tanggal</th>
+      <th style="text-align:right">Revenue</th><th style="text-align:right">Modal</th>
+      <th style="text-align:right">Ongkir</th><th style="text-align:right">Cashback</th>
+      <th style="text-align:right">Profit Bersih</th><th style="text-align:right">Margin</th>
+    </tr></thead><tbody>${byPO.sort((a,b)=>b.po.date.localeCompare(a.po.date)).map(({po,revenue,modal,ongkir,cashback,profit})=>{
+      const pct=revenue>0?(profit/revenue*100):0;const pc=profit>=0?'#16a34a':'#dc2626';
+      return`<tr>
+        <td><a href="#" onclick="showDetail('${po.id}');return false;" style="color:var(--ac);font-weight:500">${po.no}</a></td>
+        <td style="font-size:12px">${po.dapur}</td>
+        <td style="font-family:var(--mn);font-size:11px;color:var(--t3)">${po.date}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(revenue)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(modal)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(ongkir)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(cashback)}</td>
+        <td style="text-align:right;font-family:var(--mn);font-weight:600;color:${pc}">${fmt(profit)}</td>
+        <td style="text-align:right;font-family:var(--mn);color:${pc}">${pct.toFixed(1)}%</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+  }else if(tab==='vendor'){
+    const{byVendor,totalModal}=data;
+    const vendors=Object.entries(byVendor).sort((a,b)=>b[1].modal-a[1].modal);
+    if(!vendors.length){el.innerHTML='<div class="empty">Tidak ada data pada periode ini</div>';return;}
+    el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Vendor</th><th style="text-align:right">Total Modal</th><th style="text-align:right">Ongkir</th>
+      <th style="text-align:right">Cashback</th><th style="text-align:right">Net Pengeluaran</th><th style="text-align:right">% dari Modal</th>
+    </tr></thead><tbody>${vendors.map(([nama,v])=>{
+      const net=v.modal+v.ongkir-v.cashback;
+      const pct=totalModal>0?(v.modal/totalModal*100):0;
+      return`<tr>
+        <td style="font-weight:500">${nama}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(v.modal)}</td>
+        <td style="text-align:right;font-family:var(--mn)">${fmt(v.ongkir)}</td>
+        <td style="text-align:right;font-family:var(--mn);color:#06b6d4">${fmt(v.cashback)}</td>
+        <td style="text-align:right;font-family:var(--mn);font-weight:600">${fmt(net)}</td>
+        <td style="text-align:right;font-family:var(--mn);color:var(--t3)">${pct.toFixed(1)}%</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+  }else if(tab==='dapur'){
+    const{byDapur,totalRevenue}=data;
+    const dapurs=Object.entries(byDapur).sort((a,b)=>b[1].revenue-a[1].revenue);
+    if(!dapurs.length){el.innerHTML='<div class="empty">Tidak ada data pada periode ini</div>';return;}
+    el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Dapur</th><th style="text-align:right">Revenue</th><th style="text-align:right">% dari Total</th><th style="text-align:right">Invoice</th>
+    </tr></thead><tbody>${dapurs.map(([nama,v])=>{
+      const pct=totalRevenue>0?(v.revenue/totalRevenue*100):0;
+      return`<tr>
+        <td style="font-weight:500">${nama}</td>
+        <td style="text-align:right;font-family:var(--mn);font-weight:600">${fmt(v.revenue)}</td>
+        <td style="text-align:right;font-family:var(--mn);color:var(--ac)">${pct.toFixed(1)}%</td>
+        <td style="text-align:right;color:var(--t3)">${v.cnt}</td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+  }
 }
 
 // ===== PO KE VENDOR =====

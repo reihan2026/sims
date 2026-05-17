@@ -3267,7 +3267,7 @@ function saveEditInvV(){
   (inv.items||[]).forEach((item,i)=>{
     const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||item.harga_vendor||0;
     item.harga_vendor=hv;
-    item.harga_vendor_po=item.konv?hv*item.konv:hv;
+    item.harga_vendor_po=item.konv?hv/item.konv:hv;
     newTotal+=(item.qty||0)*hv;
   });
   inv.total=newTotal;inv.jatuh=document.getElementById('einvv-jatuh').value;
@@ -3276,7 +3276,9 @@ function saveEditInvV(){
   // Sync harga_vendor_po back ke PO items (consistent with saveInvV)
   const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
   if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
-  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setBatch({po:pos,invv:invs});closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  const invds=getInvD();const ptInvD=invds.find(d=>d.type==='passthrough'&&d.pt_inv_id===invId);
+  if(ptInvD)ptInvD.total=newTotal;
+  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setBatch({po:pos,invv:invs,...(ptInvD?{invd:invds}:{})});closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 
 // ===== BAYAR INVOICE VENDOR =====
@@ -3633,6 +3635,8 @@ function delInvV(id){
   const _delInvVNo=inv?.no||id;const _delInvVVendor=inv?.vendor||'';
   addLog('hapus_invv','Hapus invoice vendor','invv',id,_delInvVNo,_delInvVVendor+(inv?.total?' · '+fmtF(inv.total):''));
   setInvV(getInvV().filter(v=>v.id!==id));
+  const _ptInvD=getInvD().find(d=>d.type==='passthrough'&&d.pt_inv_id===id);
+  if(_ptInvD)setInvD(getInvD().filter(d=>d.id!==_ptInvD.id));
   if(_currentPoId)showDetail(_currentPoId);else renderInvV();
   showToast('Invoice dihapus — harga vendor direset');
 }
@@ -4889,7 +4893,7 @@ function renderRekapVendorHTML(poId,vname){
     // margin for this invoice
     (iv.items||[]).forEach(i=>{
       const poItem=findPoItem(po,i);
-      if(poItem&&i.harga_vendor>0)totalMargin+=(poItem.harga_po-i.harga_vendor)*(i.qty||0);
+      const hvPO4=i.harga_vendor_po??i.harga_vendor;if(poItem&&hvPO4>0)totalMargin+=(poItem.harga_po-hvPO4)*(poItem.qty||i.qty||0);
     });
   });
   const marginBersih=totalMargin-totalOngkir+totalCashback;
@@ -5392,7 +5396,7 @@ function downloadLaporanExcel(){
       const n=invVNet(iv);const cbTotal=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);
       (iv.items||[]).forEach((i,idx)=>{
         const poItem=findPoItem(po,i);
-        const hpo=poItem?.harga_po||0;const qtyPO=poItem?.qty||i.qty||0;const mg=hpo&&i.harga_vendor>0?(hpo-i.harga_vendor)*(qtyPO):0;
+        const hpo=poItem?.harga_po||0;const qtyPO=poItem?.qty||i.qty||0;const hvPO5=i.harga_vendor_po??i.harga_vendor;const mg=hpo&&hvPO5>0?(hpo-hvPO5)*(qtyPO):0;
         rowsVDet.push([idx===0?nama:'',idx===0?iv.no:'',idx===0?(iv.bayar_status==='lunas'?'Lunas':'Belum'):'',
           idx===0?iv.total:0,idx===0?n.paid:0,idx===0?n.sisa:0,idx===0?(n.ongkir||0):0,idx===0?cbTotal:0,
           i.nama,i.qty,i.satuan||'',hpo,i.harga_vendor||0,mg]);

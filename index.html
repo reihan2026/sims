@@ -3783,7 +3783,7 @@ function loadInvDItems(){
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
           data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}"
           checked onchange="calcInvDTotal()"></td>
-        <td style="padding:7px 8px;font-weight:500">${item.nama}${item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}</td>
+        <td style="padding:7px 8px;font-weight:500">${item.nama}${item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${item.harga_ref?fmtF(item.harga_ref):'—'}</td>
         <td style="padding:7px 8px"><input type="number" class="invd-h" id="h-${rid}" value="${item.harga||''}" min="0"
@@ -3845,7 +3845,8 @@ function saveInvD(){
       const hari=cb.dataset.hari||'';
       const deadline=cb.dataset.deadline||'';
       const invv_id=cb.dataset.invvId||'';
-      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id});
+      const catatan_item=document.getElementById('icat-'+rid)?.value.trim()||'';
+      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,catatan_item});
     });
     if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);
@@ -4586,7 +4587,7 @@ function printInvD(invId){
   const body=`<div class="w"><div class="h"><div><div class="t">INVOICE</div><div class="m">${inv.no} · ${inv.tgl}${inv.type==='passthrough'?' · Pass-through':''}</div></div><div style="text-align:right"><div style="font-weight:600;font-size:14px">SIMS</div></div></div>
   <div style="display:flex;justify-content:space-between;margin-bottom:18px;font-size:13px"><div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Kepada</div><div style="font-weight:600;font-size:15px">${inv.dapur}</div></div><div style="text-align:right">${po?`<div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Ref. PO</div><div style="font-weight:600">${po.no}</div>`:''} ${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:3px">Jatuh tempo: ${inv.jatuh}</div>`:''}</div></div>
   <table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Harga (Rp)</th><th style="text-align:right">Subtotal</th></tr></thead>
-  <tbody>${items.map(i=>`<tr><td>${i.nama}</td><td>${i.qty}</td><td>${i.satuan||''}</td><td style="text-align:right">Rp ${Math.round(i.harga_dapur||0).toLocaleString('id-ID')}</td><td style="text-align:right">Rp ${Math.round((i.qty||0)*(i.harga_dapur||0)).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table>
+  <tbody>${items.map(i=>`<tr><td>${i.nama}${i.catatan_item?`<div style="font-size:11px;color:#6B6560;font-style:italic">${i.catatan_item}</div>`:''}</td><td>${i.qty}</td><td>${i.satuan||''}</td><td style="text-align:right">Rp ${Math.round(i.harga_dapur||0).toLocaleString('id-ID')}</td><td style="text-align:right">Rp ${Math.round((i.qty||0)*(i.harga_dapur||0)).toLocaleString('id-ID')}</td></tr>`).join('')}</tbody></table>
   <div class="tot">${recv>0?`<div style="font-size:12px;color:#6B6560;margin-bottom:3px">Sudah dibayar: Rp ${Math.round(recv).toLocaleString('id-ID')}</div>`:''}<div class="tot-main">Total: Rp ${Math.round(inv.total).toLocaleString('id-ID')}</div>${inv.total-recv>0?`<div style="font-size:13px;color:#8B2020;margin-top:2px">Sisa tagihan: Rp ${Math.round(inv.total-recv).toLocaleString('id-ID')}</div>`:'<div style="font-size:12px;color:#2D5A3D;margin-top:2px">✓ Lunas</div>'}</div>
   ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}
   <div class="stamp"><div class="stamp-box">Dibuat oleh</div><div class="stamp-box">Disetujui</div><div class="stamp-box">Penerima</div></div>
@@ -5829,7 +5830,6 @@ function _lkRenderAll(){
   const{from,to}=_lkGetRange();
   _lkLastData=_lkBuildData(from,to);
   _lkRenderCards(_lkLastData);
-  _lkRenderChart(_lkLastData);
   _lkSetTab(localStorage.getItem('lk-tab')||'bulan');
 }
 
@@ -5863,26 +5863,46 @@ function _lkRenderCards(data){
   </div>`;
 }
 
-function _lkRenderChart(data){
-  const{monthly}=data;
-  const keys=Object.keys(monthly).sort();
-  const labels=keys.map(k=>_fmtBulan(k));
-  const revenues=keys.map(k=>monthly[k].revenue);
-  const profits=keys.map(k=>monthly[k].profit);
-  _lkChart=_renderChart('lk-chart',_lkChart,'bar',{
-    labels,
-    datasets:[
-      {label:'Revenue',type:'bar',data:revenues,backgroundColor:'rgba(59,130,246,0.7)',borderRadius:3,order:2},
-      {label:'Profit Bersih',type:'line',data:profits,borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',tension:0.3,fill:false,pointBackgroundColor:'#16a34a',pointRadius:4,order:1}
-    ]
-  },{
+function _lkRenderChart(data,tab){
+  tab=tab||localStorage.getItem('lk-tab')||'bulan';
+  let labels,datasets,chartType='bar';
+  if(tab==='bulan'){
+    const{monthly}=data;
+    const keys=Object.keys(monthly).sort();
+    labels=keys.map(k=>_fmtBulan(k));
+    datasets=[
+      {label:'Revenue',type:'bar',data:keys.map(k=>monthly[k].revenue),backgroundColor:'rgba(59,130,246,0.7)',borderRadius:3,order:2},
+      {label:'Profit Bersih',type:'line',data:keys.map(k=>monthly[k].profit),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,0.1)',tension:0.3,fill:false,pointBackgroundColor:'#16a34a',pointRadius:4,order:1}
+    ];
+  }else if(tab==='po'){
+    const sorted=data.byPO.slice().sort((a,b)=>b.revenue-a.revenue).slice(0,15);
+    labels=sorted.map(({po})=>po.no);
+    datasets=[
+      {label:'Revenue',data:sorted.map(d=>d.revenue),backgroundColor:'rgba(59,130,246,0.7)',borderRadius:3},
+      {label:'Profit Bersih',data:sorted.map(d=>d.profit),backgroundColor:sorted.map(d=>d.profit>=0?'rgba(22,163,74,0.75)':'rgba(220,38,38,0.7)'),borderRadius:3}
+    ];
+  }else if(tab==='vendor'){
+    const entries=Object.entries(data.byVendor).sort((a,b)=>b[1].modal-a[1].modal).slice(0,12);
+    labels=entries.map(([nama])=>nama);
+    datasets=[
+      {label:'Modal (COGS)',data:entries.map(([,v])=>v.modal),backgroundColor:'rgba(245,158,11,0.75)',borderRadius:3},
+      {label:'Cashback',data:entries.map(([,v])=>v.cashback),backgroundColor:'rgba(6,182,212,0.75)',borderRadius:3}
+    ];
+  }else if(tab==='dapur'){
+    const entries=Object.entries(data.byDapur).sort((a,b)=>b[1].revenue-a[1].revenue);
+    labels=entries.map(([nama])=>nama);
+    datasets=[
+      {label:'Revenue',data:entries.map(([,v])=>v.revenue),backgroundColor:'rgba(59,130,246,0.7)',borderRadius:3}
+    ];
+  }
+  _lkChart=_renderChart('lk-chart',_lkChart,chartType,{labels,datasets},{
     plugins:{
       legend:{display:true,position:'top',labels:{font:{size:11}}},
       tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+fmt(ctx.raw)}}
     },
     scales:{
       y:{ticks:{callback:v=>fmt(v),font:{size:10}}},
-      x:{ticks:{font:{size:10}}}
+      x:{ticks:{font:{size:10},maxRotation:45,minRotation:0}}
     }
   });
 }
@@ -5893,7 +5913,10 @@ function _lkSetTab(tab){
     const btn=document.getElementById('lk-tab-'+t);
     if(btn)btn.classList.toggle('bp',t===tab);
   });
-  if(_lkLastData)_lkRenderTable(tab,_lkLastData);
+  if(_lkLastData){
+    _lkRenderChart(_lkLastData,tab);
+    _lkRenderTable(tab,_lkLastData);
+  }
 }
 
 function _lkRenderTable(tab,data){
@@ -6309,7 +6332,7 @@ async function printInvDFormal(invId){
     <th>Qty</th><th>Sat</th>
     <th style="text-align:right">Harga (Rp)</th><th style="text-align:right">Subtotal</th>
   </tr></thead><tbody>
-    ${items.map(i=>`<tr><td>${i.nama}</td>${hasHari?`<td>${hariMap[i.nama?.toLowerCase()]||'—'}</td>`:''}
+    ${items.map(i=>`<tr><td>${i.nama}${i.catatan_item?`<div style="font-size:11px;color:#6B6560;font-style:italic">${i.catatan_item}</div>`:''}</td>${hasHari?`<td>${hariMap[i.nama?.toLowerCase()]||'—'}</td>`:''}
     <td>${i.qty}</td><td>${i.satuan||''}</td>
     <td style="text-align:right">Rp ${Math.round(i.harga_dapur||0).toLocaleString('id-ID')}</td>
     <td style="text-align:right">Rp ${Math.round((i.qty||0)*(i.harga_dapur||0)).toLocaleString('id-ID')}</td></tr>`).join('')}

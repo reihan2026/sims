@@ -3667,6 +3667,8 @@ function toggleInvDType(){
   const pt=document.querySelector('input[name="invd-type"]:checked').value==='passthrough';
   document.getElementById('invd-pt-wrap').style.display=pt?'block':'none';
   document.getElementById('invd-items-wrap').style.display=pt?'none':'block';
+  if(pt){document.getElementById('invd-total').value='';}
+  else{calcInvDTotal();}
 }
 function loadPTInv(){const invId=document.getElementById('invd-pt-inv').value;const inv=getInvV().find(v=>v.id===invId);if(inv)document.getElementById('invd-total').value=inv.total;}
 function loadInvDItems(){

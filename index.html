@@ -2376,7 +2376,7 @@ function detInvV(id,invV){
       <div class="bg">
         ${iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)?`<button class="btn bsm bp" onclick="openBayarInvV('${iv.id}')">Rekam bayar</button>`:iv.bayar_status!=='lunas'?'<span class="tag ttl" style="font-size:10px">Pass-through</span>':''}
         <button class="btn bsm bw" onclick="openEditInvV('${iv.id}')">Revisi harga</button>
-        <button class="btn bsm bw" onclick="openKonversiPT('${iv.id}')">Konversi PT</button>
+        ${!isPassthrough(iv.id)?`<button class="btn bsm bw" onclick="openKonversiPT('${iv.id}')">Konversi PT</button>`:''}
         ${(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button class="btn bsm bpu" onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
         <button class="btn bsm bw" onclick="openRetur('${iv.id}')">+ Retur</button>
         <button class="btn bsm" onclick="printInvV('${iv.id}')">🖨</button>
@@ -3390,6 +3390,7 @@ function saveRetur(){
 // ===== KONVERSI INVOICE VENDOR KE PASS-THROUGH =====
 function openKonversiPT(invVId){
   const inv=getInvV().find(v=>v.id===invVId);if(!inv)return;
+  if(isPassthrough(invVId)){showToast('Invoice vendor ini sudah punya invoice dapur pass-through.',true);return;}
   const payments=inv.payments||[];
   document.getElementById('konv-invv-id').value=invVId;
   document.getElementById('konv-alasan').value='Pembayaran langsung dari dapur ke vendor';
@@ -3598,7 +3599,7 @@ function renderInvV(){
             ${!n.ongkir?`<button onclick="openOngkir('${iv.id}')">+ Ongkos kirim</button>`:''}
             ${!isPTCB&&(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
             <button onclick="openRetur('${iv.id}')">+ Retur</button>
-            <button onclick="openKonversiPT('${iv.id}')">Konversi PT</button>
+            ${!isPassthrough(iv.id)?`<button onclick="openKonversiPT('${iv.id}')">Konversi PT</button>`:''}
             ${iv.file_key?`<button onclick="viewNota('${iv.file_key}','${iv.no}')">📎 Lihat file</button>`:`<button onclick="uploadInvVFile('${iv.id}')">📎 Upload file</button>`}
             ${po?`<button onclick="showDetail('${po.id}')">Lihat PO</button>`:''}
             <button onclick="printInvV('${iv.id}')">🖨 Cetak</button>
@@ -4376,7 +4377,7 @@ function showInvVDetail(invId){
     <div class="inv-det-actions bg" style="margin-top:14px">
       ${inv.bayar_status!=='lunas'&&!isPassthrough(inv.id)?`<button class="btn bsm bp btn-full" onclick="closeModal('modal-det-invv');openBayarInvV('${inv.id}')">Rekam bayar</button>`:inv.bayar_status!=='lunas'?'<span class="tag ttl btn-full">Pass-through</span>':''}
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openEditInvV('${inv.id}')">Revisi harga</button>
-      <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>
+      ${!isPassthrough(inv.id)?`<button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>`:''}
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openRetur('${inv.id}')">+ Retur</button>
       ${!n.ongkir?`<button class="btn bsm" onclick="closeModal('modal-det-invv');openOngkir('${inv.id}')">+ Ongkir</button>`:''}
       ${inv.file_key?`<button class="btn bsm bi" onclick="viewNota(\'${inv.file_key}\',\'${inv.no}\')">📎 Lihat file</button> <button class="btn bsm" onclick="gantiFileInvV(\'${inv.id}\')">🔄 Ganti file</button>`:`<button class="btn bsm" onclick="closeModal(\'modal-det-invv\');uploadInvVFile(\'${inv.id}\')">📎 Upload file</button>`}

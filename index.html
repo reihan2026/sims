@@ -6375,7 +6375,7 @@ async function printInvDFormal(invId){
     <div class="rek-footer-title">Informasi pembayaran</div>
     ${vs.rekening.map(r=>`<div class="rek-row"><span class="rek-bank">${r.bank}</span><span>${r.no}</span>${r.atas?`<span style="color:#6B6560">a.n. ${r.atas}</span>`:''}</div>`).join('')}
   </div>`:'';
-  const stampHtml=`<div class="stamp"><div class="stamp-box">Dibuat oleh</div><div class="stamp-box">Disetujui</div><div class="stamp-box">Penerima</div></div>`;
+  const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
   const body=`<div class="w">${hdrHtml}${infoHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}<div class="ft">Dicetak: ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`;
   const w=window.open('','_blank','width=820,height=800');
   w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);

@@ -1194,7 +1194,7 @@ auth.onAuthStateChanged(user=>{
     const name=user.email.split('@')[0];
     document.getElementById('user-display-name').textContent=user.email;
     document.getElementById('user-avatar').textContent=name.substring(0,2).toUpperCase();
-    loadAllData().then(()=>{normalizeDapurRefs();syncPassthroughInvV();syncMissingPTInvD();initUserProfile();renderDashboard();updateDL();});
+    loadAllData().then(()=>{normalizeDapurRefs();syncPassthroughInvV();syncMissingPTInvD();syncPTInvDTotals();initUserProfile();renderDashboard();updateDL();});
   } else {
     _currentUser=null;
     document.getElementById('login-screen').style.display='flex';
@@ -4703,6 +4703,23 @@ function syncMissingPTInvD(){
 
   if(created>0){setInvD(invDs);console.log(`[MBG] Created ${created} missing pass-through invoice dapur`);}
   return created;
+}
+
+// Sync pass-through invD totals to match their linked invV — runs on startup to catch any drift
+function syncPTInvDTotals(){
+  const invDs=getInvD();const invVs=getInvV();let fixed=0;
+  invDs.forEach(d=>{
+    if(d.type!=='passthrough'||!d.pt_inv_id)return;
+    const iv=invVs.find(v=>v.id===d.pt_inv_id);
+    if(!iv||d.total===iv.total)return;
+    const oldTotal=d.total;
+    d.total=iv.total;
+    // Fix auto-created payments whose amount exactly matches the wrong total
+    (d.payments||[]).forEach(p=>{if(p.jumlah===oldTotal)p.jumlah=iv.total;});
+    fixed++;
+  });
+  if(fixed>0){setInvD(invDs);console.warn('[SIMS] Auto-fixed '+fixed+' pass-through invD total(s) — drift from linked invV detected');}
+  return fixed;
 }
 
 // ===== ACTIVITY LOG =====

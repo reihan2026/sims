@@ -3653,9 +3653,10 @@ function openNewInvD(poId){
   const invdInfo=document.getElementById('invd-items-info');
   if(invdInfo)invdInfo.textContent='';
   const pos=getPOs();document.getElementById('invd-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  // PT dropdown: only unpaid invoice vendor
-  const unpaidInvV=getInvV().filter(iv=>iv.bayar_status!=='lunas');
-  document.getElementById('invd-pt-inv').innerHTML='<option value="">— Pilih invoice vendor —</option>'+unpaidInvV.map(iv=>`<option value="${iv.id}">${iv.no} — ${iv.vendor} (${fmtF(iv.total)})</option>`).join('')+(unpaidInvV.length===0?'<option disabled>Tidak ada invoice vendor yang belum dibayar</option>':'');
+  // PT dropdown: only unpaid invV that don't already have a linked pass-through invD
+  const ptUsedIds=new Set(getInvD().filter(d=>d.type==='passthrough'&&d.pt_inv_id).map(d=>d.pt_inv_id));
+  const availablePTInvV=getInvV().filter(iv=>iv.bayar_status!=='lunas'&&!ptUsedIds.has(iv.id));
+  document.getElementById('invd-pt-inv').innerHTML='<option value="">— Pilih invoice vendor —</option>'+availablePTInvV.map(iv=>`<option value="${iv.id}">${iv.no} — ${iv.vendor} (${fmtF(iv.total)})</option>`).join('')+(availablePTInvV.length===0?'<option disabled>Tidak ada invoice vendor yang tersedia</option>':'');
   // Populate vendor saya dropdown
   const vsEl=document.getElementById('invd-vendor-saya');
   if(vsEl){const vs=getVendorSaya();vsEl.innerHTML='<option value="">— Tanpa kop (internal) —</option>'+vs.map(v=>`<option value="${v.id}">${v.nama}</option>`).join('');}

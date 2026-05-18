@@ -3832,9 +3832,13 @@ function saveInvD(){
   const no=document.getElementById('invd-no').value.trim();const tgl=document.getElementById('invd-tgl').value;const dapur=document.getElementById('invd-dapur').value.trim();const poId=document.getElementById('invd-po').value;
   if(!no||!dapur){showToast('Isi no. invoice dan dapur!',true);return;}
   const isPT=document.querySelector('input[name="invd-type"]:checked').value==='passthrough';
-  let items=[];let total=parseFloat(document.getElementById('invd-total').value)||0;let ptId='';
-  if(isPT){ptId=document.getElementById('invd-pt-inv').value;}
-  else{
+  let items=[];let total=0;let ptId='';
+  if(isPT){
+    ptId=document.getElementById('invd-pt-inv').value;
+    const ptInv=getInvV().find(v=>v.id===ptId);
+    if(!ptInv){showToast('Pilih invoice vendor untuk pass-through!',true);return;}
+    total=ptInv.total;
+  }else{
     document.querySelectorAll('.invd-cb:checked').forEach(cb=>{
       const rid=cb.id.replace('cb-','');
       const nama=(cb.dataset.nama||'').trim();

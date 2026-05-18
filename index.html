@@ -3674,6 +3674,8 @@ function loadPTInv(){const invId=document.getElementById('invd-pt-inv').value;co
 function loadInvDItems(){
   const poId=document.getElementById('invd-po').value;const po=getPOs().find(p=>p.id===poId);if(!po)return;
   document.getElementById('invd-dapur').value=document.getElementById('invd-dapur').value||po.dapur;
+  const isPT=document.querySelector('input[name="invd-type"]:checked')?.value==='passthrough';
+  if(isPT){document.getElementById('invd-total').value='';document.getElementById('invd-pt-inv').value='';return;}
 
   const boxes=document.getElementById('invd-item-boxes');
   const info=document.getElementById('invd-items-info');

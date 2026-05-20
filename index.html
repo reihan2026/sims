@@ -1994,9 +1994,11 @@ function openItemEdit(poId,idx){
     const parts=[];
     if(hasInvV)parts.push('invoice vendor ('+itemInvV[idx].no+')');
     if(hasInvD)parts.push('invoice dapur ('+itemInvD[idx].no+')');
-    warnEl.textContent='⚠ Item ini sudah punya '+parts.join(' dan ')+'. Mengubah Harga PO akan mengubah angka margin di laporan, tapi tidak mengubah invoice yang sudah ada.';
+    warnEl.innerHTML='⚠ Item ini sudah punya '+parts.join(' dan ')+'. Mengubah <strong>qty di sini tidak mengubah qty di invoice</strong> — perbarui invoice secara terpisah jika qty berubah.';
+    warnEl.dataset.invvNo=hasInvV?itemInvV[idx].no:'';
     warnEl.style.display='block';
   } else {
+    warnEl.dataset.invvNo='';
     warnEl.style.display='none';
   }
   openModal('modal-item');
@@ -2018,7 +2020,11 @@ function saveItemEdit(){
     if(!po.revisions)po.revisions=[];
     po.revisions.push({tgl:today(),changes:[{nama:item.nama,qty_lama:oldQty,qty_baru:item.qty,harga_lama:oldHP,harga_baru:item.harga_po,alasan:alasan||'Edit item'}]});
   }
-  addLog('edit_item','Edit item','item',poId,po?.no,item?.nama||'');setPOs(pos);closeModal('modal-item');showToast('Item diperbarui!');showDetail(poId);
+  addLog('edit_item','Edit item','item',poId,po?.no,item?.nama||'');setPOs(pos);closeModal('modal-item');
+  const _invvNo=document.getElementById('item-edit-warn').dataset.invvNo||'';
+  if(item.qty!==oldQty&&_invvNo)showToast('Qty PO diperbarui. Jangan lupa update qty di invoice vendor '+_invvNo+' juga.',true);
+  else showToast('Item diperbarui!');
+  showDetail(poId);
 }
 function openGantiItem(poId,idx){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;
@@ -2731,14 +2737,20 @@ function openEditInvV(invId){
   document.getElementById('einvv-id').value=invId;
   document.getElementById('einvv-jatuh').value=inv.jatuh||'';
   document.getElementById('einvv-cat-rev').value='';
-  document.getElementById('einvv-items-body').innerHTML=(inv.items||[]).map((item,i)=>`<tr>
+  const _ePO=getPOs().find(p=>p.id===inv.po_id);
+  document.getElementById('einvv-items-body').innerHTML=(inv.items||[]).map((item,i)=>{
+    let poQty=null;
+    if(_ePO){const pi=(typeof item.idx==='number'&&_ePO.items[item.idx]?.nama===item.nama)?_ePO.items[item.idx]:_ePO.items.find(p=>p.nama===item.nama);if(pi!=null)poQty=pi.qty;}
+    const qtyMismatch=poQty!=null&&poQty!==item.qty;
+    const poRef=poQty!=null?`<div style="font-size:10px;margin-top:2px;color:${qtyMismatch?'var(--wt)':'var(--t3)'}">PO: ${poQty} ${item.satuan_po||item.satuan||''}${qtyMismatch?' ⚠':''}</div>`:'';
+    return `<tr>
     <td style="font-weight:500">${item.nama}</td>
     <td>${item.satuan||''}</td>
-    <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()"></td>
+    <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()">${poRef}</td>
     <td class="num">${fmtF(item.harga_vendor||0)}</td>
     <td><input type="number" id="einvv-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:110px;font-size:12px;font-family:var(--mn)" oninput="calcEditInvVTotal()"></td>
     <td class="num" id="einvv-sub-${i}">${fmtF((item.qty||0)*(item.harga_vendor||0))}</td>
-  </tr>`).join('');
+  </tr>`;}).join('');
   calcEditInvVTotal();
   openModal('modal-edit-invv');
 }

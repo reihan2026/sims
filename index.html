@@ -3186,10 +3186,9 @@ function loadInvDItems(){
   // Build set of already-covered items from ALL existing invD for this PO
   const existingInvD=getInvD().filter(d=>d.po_id===poId);
 
-  // covered: Set of lowercase nama for items already in any invD
-  // coveredKey: Set of composite keys (nama||hari||deadline) — used only when same name appears multiple times
-  const covered=new Set();
-  const coveredKey=new Set();
+  // Count how many times each key is covered by existing invD
+  // Count-based (not Set) to correctly handle multiple PO items sharing the same nama+hari+deadline
+  const coveredCount=new Map();
 
   existingInvD.forEach(d=>{
     let invItems=[];
@@ -3207,55 +3206,36 @@ function loadInvDItems(){
         return{nama,hari:i.hari||'',deadline:i.deadline||''};
       });
     }
-    invItems.forEach(i=>{
-      covered.add(i.nama.toLowerCase().trim());
-      coveredKey.add(itemKey(i));
-    });
+    invItems.forEach(i=>{const k=itemKey(i);coveredCount.set(k,(coveredCount.get(k)||0)+1);});
   });
 
-  // Build source items: from invV (harga ref), supplemented by PO items not in any invV
+  // Build source items from po.items by index — preserves ALL items including those with duplicate nama+hari+deadline
   const invVForPO=getInvV().filter(v=>v.po_id===poId);
-  let sourceItems=[];
-  const seenKey=new Set();
-  if(invVForPO.length){
-    invVForPO.forEach(iv=>(iv.items||[]).forEach(i=>{
-      const poItem=findPoItem(po,i);
-      const k=itemKey({nama:i.nama,hari:poItem?.hari||'',deadline:poItem?.deadline||''});
-      if(!seenKey.has(k)){seenKey.add(k);sourceItems.push({
-        nama:i.nama,qty:i.qty,satuan:i.satuan,
-        harga_ref:i.harga_vendor||0,harga:poItem?.harga_po||0,
-        hari:poItem?.hari||'',deadline:poItem?.deadline||'',invv_id:iv.id
-      });}
-    }));
-    po.items.forEach(item=>{
-      const k=itemKey(item);
-      if(!seenKey.has(k)){seenKey.add(k);sourceItems.push({
-        nama:item.nama,qty:item.qty,satuan:item.satuan,
-        harga_ref:item.harga_vendor||0,harga:item.harga_po||0,
-        hari:item.hari||'',deadline:item.deadline||'',_noInvV:true
-      });}
-    });
-  } else {
-    sourceItems=po.items.map(i=>({
-      nama:i.nama,qty:i.qty,satuan:i.satuan,
-      harga_ref:i.harga_vendor||0,harga:i.harga_po||0,
-      hari:i.hari||'',deadline:i.deadline||''
-    }));
-  }
+  const{itemInvV:_dItemInvV}=buildLookup(poId);
+  const sourceItems=po.items.map((item,pidx)=>{
+    const linkedInvV=_dItemInvV[pidx];
+    let invVItem=null;
+    if(linkedInvV){
+      // Match by stored idx first (exact), fallback to nama-only
+      invVItem=(linkedInvV.items||[]).find(i=>typeof i.idx==='number'&&i.idx===pidx&&i.nama===item.nama);
+      if(!invVItem)invVItem=(linkedInvV.items||[]).find(i=>i.nama===item.nama);
+    }
+    return{
+      _idx:pidx,nama:item.nama,
+      qty:invVItem?.qty||item.qty,satuan:invVItem?.satuan||item.satuan,
+      harga_ref:invVItem?.harga_vendor||item.harga_vendor||0,harga:item.harga_po||0,
+      hari:item.hari||'',deadline:item.deadline||'',
+      invv_id:linkedInvV?.id||null,_noInvV:!linkedInvV
+    };
+  });
 
-  // Count how many source items share the same nama (for duplicate-name handling)
-  const namaCount={};
-  sourceItems.forEach(i=>{const n=i.nama.toLowerCase().trim();namaCount[n]=(namaCount[n]||0)+1;});
-
-  // Filter: exclude items already in invD
-  // - If unique name: exclude if nama is in covered
-  // - If duplicate name (same nama, diff deadline): exclude only if composite key is in coveredKey
+  // Filter: count-based — each existing invD item "consumes" one slot per key; remaining slots are shown
+  const remaining=new Map(coveredCount);
   const available=sourceItems.filter(i=>{
-    const n=i.nama.toLowerCase().trim();
     const k=itemKey(i);
-    if(!covered.has(n))return true;// nama not invoiced at all → show
-    if(namaCount[n]>1)return!coveredKey.has(k);// duplicate name → check exact key
-    return false;// unique name, already invoiced → hide
+    const r=remaining.get(k)||0;
+    if(r>0){remaining.set(k,r-1);return false;}
+    return true;
   });
 
   if(!available.length){

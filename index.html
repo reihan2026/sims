@@ -4,201 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIMS — Sistem Internal Manajemen Suplai</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
-:root{
-  --bg:#F5F3EE;--sf:#FDFCFA;--s2:#F0EDE6;--bd:#D8D3C8;--b2:#C5BFB2;
-  --tx:#1A1814;--t2:#6B6560;--t3:#9E9890;
-  --ac:#2D5A3D;--abg:#E8F0EA;--at:#1E4029;--ab:#A8C8B0;
-  --dn:#8B2020;--dbg:#F5E8E8;--dt:#6B1818;--dbd:#D4A0A0;
-  --wn:#7A5B0A;--wbg:#F5EDDA;--wt:#5C4508;--wb:#D4B870;
-  --in:#1A3D6B;--ibg:#E3EBF5;--it:#122D50;--ib:#90B0D8;
-  --pu:#4A1E8A;--pbg:#EDE8F8;--pt:#36167A;--pbd:#B8A0E0;
-  --tl:#0A5C6B;--tbg:#E0F2F5;--tt:#07424D;--tbd:#80C8D4;
-  --mn:'IBM Plex Mono',monospace;--sn:'IBM Plex Sans',sans-serif;
-  --r:6px;--rl:10px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--sn);background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5;min-height:100vh}
-.shell{display:flex;min-height:100vh}
-.sidebar{width:220px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:transform .2s}
-.main{margin-left:220px;flex:1;min-height:100vh}
-.slogo{padding:14px 13px 11px;border-bottom:1px solid var(--bd)}
-.slogo-t{font-weight:600;font-size:13px;letter-spacing:.04em}
-.slogo-s{font-size:10px;color:var(--t3);font-family:var(--mn)}
-.snav{flex:1;padding:7px;overflow-y:auto}
-.nsec{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--t3);text-transform:uppercase;padding:9px 8px 3px}
-.ni{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--r);cursor:pointer;color:var(--t2);font-size:12px;font-weight:400;transition:all .1s;margin-bottom:1px;border:none;background:none;width:100%;text-align:left}
-.ni:hover{background:var(--s2);color:var(--tx)}.ni.active{background:var(--abg);color:var(--at);font-weight:500}
-.ni svg{width:13px;height:13px;flex-shrink:0}
-.sfooter{padding:8px 12px;border-top:1px solid var(--bd);font-size:10px;color:var(--t3);font-family:var(--mn)}
-.page{display:none}.page.active{display:block}
-.ph{padding:14px 20px 12px;border-bottom:1px solid var(--bd);background:var(--sf);display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px}
-.ph-t{font-size:16px;font-weight:600}.ph-s{font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:1px}
-.pc{padding:16px 20px}
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:13px 15px;margin-bottom:11px}
-.ct{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:9px}
-.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin-bottom:13px}
-.met{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:10px 12px}
-.ml{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
-.mv{font-size:19px;font-weight:600;font-family:var(--mn);line-height:1.1}
-.ms{font-size:10px;color:var(--t3);margin-top:2px;font-family:var(--mn)}
-.g{color:var(--ac)}.r{color:var(--dn)}.a{color:var(--wn)}.b{color:var(--in)}.p{color:var(--pu)}.tl{color:var(--tl)}
-.fg{margin-bottom:9px}
-.lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t2);display:block;margin-bottom:3px}
-input,select,textarea{width:100%;padding:7px 9px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--tx);font-family:var(--sn);font-size:13px;outline:none;transition:border-color .15s}
-input:focus,select:focus,textarea:focus{border-color:var(--ac)}
-input[type=number]{font-family:var(--mn)}
-input[type=file]{padding:4px;font-size:12px;background:var(--sf)}
-input[type=checkbox],input[type=radio]{width:auto}
-.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
-.r4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:9px}
-.btn{padding:7px 12px;border-radius:var(--r);border:1px solid var(--b2);background:var(--sf);color:var(--tx);font-family:var(--sn);font-size:12px;font-weight:500;cursor:pointer;transition:all .1s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
-.btn:hover{background:var(--s2)}
-.bp{background:var(--ac);color:#fff;border-color:var(--ac)}.bp:hover{background:var(--at)}
-.bd-{color:var(--dn);border-color:var(--dbd)}.bd-:hover{background:var(--dbg)}
-.bw{color:var(--wn);border-color:var(--wb)}.bw:hover{background:var(--wbg)}
-.bi{color:var(--in);border-color:var(--ib)}.bi:hover{background:var(--ibg)}
-.bt{color:var(--tl);border-color:var(--tbd)}.bt:hover{background:var(--tbg)}
-.bpu{color:var(--pu);border-color:var(--pbd)}.bpu:hover{background:var(--pbg)}
-.bsm{padding:4px 9px;font-size:11px}.bxs{padding:2px 7px;font-size:10px}
-.bgh{border-color:transparent;background:transparent;color:var(--t2)}.bgh:hover{background:var(--s2);color:var(--tx)}
-.bg{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--mn);text-transform:uppercase;letter-spacing:.03em}
-.tok{background:var(--abg);color:var(--at)}.tno{background:var(--dbg);color:var(--dt)}.twn{background:var(--wbg);color:var(--wt)}
-.tin{background:var(--ibg);color:var(--it)}.tpu{background:var(--pbg);color:var(--pt)}.ttl{background:var(--tbg);color:var(--tt)}.tgr{background:var(--s2);color:var(--t2)}
-.tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);white-space:nowrap}
-.tbl td{padding:7px 8px;border-bottom:1px solid var(--bd);vertical-align:middle}
-.tbl td.num-cell{white-space:nowrap;font-family:var(--mn);text-align:right}
-.tbl td.txt-cell{word-break:break-word;min-width:60px}
-.tbl tr:last-child td{border-bottom:none}.tbl tr:hover td{background:var(--bg)}
-.divider{height:1px;background:var(--bd);margin:11px 0}
-.empty{text-align:center;padding:22px 16px;color:var(--t3);font-size:12px}
-.invv-edit-panel{background:var(--s2);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin:4px 0 6px;font-size:12px;display:none}
-.invv-edit-panel.open{display:block}
-.invv-edit-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px}
-.invv-edit-row .fg{flex:1;min-width:80px}
-.invv-edit-row label{font-size:10px;color:var(--t3);display:block;margin-bottom:2px;font-weight:600}
-.invv-edit-row input{width:100%;font-size:12px;padding:4px 6px;font-family:var(--mn)}
-.invv-konv-info{font-size:11px;color:var(--in);margin-top:4px;min-height:16px}
-.invv-sat-warn{font-size:10px;color:var(--wt);margin-top:3px}
-.toast{position:fixed;bottom:18px;right:18px;background:var(--tx);color:#fff;padding:9px 14px;border-radius:var(--r);font-size:12px;font-weight:500;z-index:9999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;max-width:300px}
-.toast.show{opacity:1;transform:translateY(0)}
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(26,24,20,.52);z-index:200;align-items:center;justify-content:center;padding:12px}
-.modal-bg.open{display:flex}
-.modal{background:var(--sf);border-radius:var(--rl);border:1px solid var(--bd);width:100%;max-width:640px;max-height:93vh;overflow-y:auto;display:flex;flex-direction:column}
-.mw{max-width:920px}
-.mh{padding:12px 15px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
-.mht{font-weight:600;font-size:13px}
-.mb{padding:13px 15px;flex:1;overflow-y:auto}
-.mf{padding:9px 15px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0}
-.fbar{display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap;align-items:center}
-.fbar input,.fbar select{width:auto;font-size:12px;padding:5px 8px}
-.fbar input[type=text]{min-width:150px}
-.num{font-family:var(--mn)}
-.mpos{color:var(--ac);font-family:var(--mn)}.mneg{color:var(--dn);font-family:var(--mn)}.mzero{color:var(--t3);font-family:var(--mn)}
-/* Steps/tabs */
-.steps{display:flex;border-bottom:2px solid var(--bd);margin-bottom:11px}
-.step{flex:1;text-align:center;padding:7px 4px;font-size:12px;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--t3);cursor:pointer}
-.step.active{border-color:var(--ac);color:var(--at)}
-/* Drop zone */
-.dz{border:2px dashed var(--bd);border-radius:var(--rl);padding:16px;text-align:center;cursor:pointer;transition:all .15s;background:var(--bg)}
-.dz:hover,.dz.drag{border-color:var(--ac);background:var(--abg)}
-.paste-ta{width:100%;height:90px;font-family:var(--mn);font-size:11px;padding:8px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--tx);resize:vertical}
-/* Category */
-.cat-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;font-family:var(--mn)}
-.cat-Daging{background:#FCE8E8;color:#7A1515}.cat-Sayur{background:#E8F5E8;color:#1A4A1A}
-.cat-Buah{background:#FFF0E0;color:#7A4010}.cat-Bumbu{background:#FFF8E0;color:#6B5A00}
-.cat-Telur{background:#FFFBE0;color:#5A4A00}.cat-Beras{background:#F0EDE6;color:#5A5040}
-.cat-UMKM{background:#EDE8F8;color:#36167A}.cat-Others{background:#E8EEF5;color:#1A3050}
-/* Vendor block */
-.vblock{border:1px solid var(--bd);border-radius:var(--rl);margin-bottom:9px;overflow:hidden}
-.vblock-hdr{padding:9px 12px;background:var(--s2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
-/* Invoice card */
-.inv-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:11px 13px;margin-bottom:7px}
-.inv-hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px}
-.pay-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:5px}
-/* Agenda */
-.agenda{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);margin-bottom:13px;overflow:hidden}
-.agenda-hdr{padding:9px 13px;background:var(--tx);color:#fff;display:flex;align-items:center;justify-content:space-between}
-.agenda-hdr-t{font-size:12px;font-weight:600;letter-spacing:.04em}
-.kbb{position:relative;display:inline-block}
-.kbb-btn{padding:3px 8px;font-size:13px;line-height:1;cursor:pointer;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);color:var(--tx)}
-.kbb-btn:hover{background:var(--s2)}
-.kbb-menu{display:none;position:fixed;z-index:9999;min-width:160px;max-width:220px;box-shadow:0 4px 16px rgba(0,0,0,.16);padding:3px 0;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r)}
-.kbb-menu.open{display:block}
-.kbb-menu button{display:block;width:100%;text-align:left;padding:6px 12px;font-size:12px;background:none;border:none;cursor:pointer;color:var(--tx);font-family:var(--fn)}
-.kbb-menu button:hover{background:var(--s2)}
-.kbb-menu button.kd{color:var(--dn)}
-.kbb-menu .kbb-div{height:1px;background:var(--bd);margin:3px 0}
-.agenda-sec-hdr{padding:6px 13px;background:var(--bg);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);border-bottom:1px solid var(--bd);border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
-.agenda-sec-hdr:hover{background:var(--s2)}
-.agenda-sec-body{overflow:hidden;transition:max-height .2s ease}
-.agenda-sec-body.collapsed{max-height:0!important}
-.agenda-item{display:flex;align-items:center;justify-content:space-between;padding:7px 13px;border-bottom:1px solid var(--bd);flex-wrap:wrap;gap:5px}
-.agenda-item:last-child{border-bottom:none}
-.ai-urgent{background:var(--dbg)}.ai-warn{background:var(--wbg)}
-/* Next steps checklist */
-.nextstep{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:var(--r);margin-bottom:5px;font-size:12px}
-.nextstep-todo{background:var(--wbg);border:1px solid var(--wb)}
-.nextstep-done{background:var(--abg);border:1px solid var(--ab);opacity:.6}
-/* Status popup */
-.stat-btn{background:none;border:none;cursor:pointer;padding:2px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;transition:background .1s}
-.stat-btn:hover{background:var(--s2)}
-.stat-popup{position:fixed;z-index:600;background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);box-shadow:0 6px 24px rgba(0,0,0,.16);padding:12px 13px;width:300px;max-height:85vh;overflow-y:auto;display:none}
-.stat-popup.open{display:block}
-.stat-srow{padding:6px 0;border-bottom:1px solid var(--bd)}
-.stat-srow:last-child{border-bottom:none}
-.sdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;display:inline-block}
-.sdot-ok{background:var(--ac)}.sdot-warn{background:var(--wn)}.sdot-gray{background:var(--bd)}
-/* Cashflow today bar */
-.cf-today{display:flex;gap:12px;flex-wrap:wrap;padding:9px 13px;background:var(--ibg);border-radius:var(--r);margin-bottom:13px;font-size:12px;align-items:center}
-/* Global search */
-.gsearch-wrap{padding:8px 7px;border-bottom:1px solid var(--bd);position:relative}
-.gsearch-wrap input{font-size:12px;padding:6px 9px 6px 28px;background:var(--s2);border-color:var(--bd)}
-.gsearch-icon{position:absolute;left:15px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none}
-.gsearch-results{position:absolute;left:7px;right:7px;top:calc(100% - 1px);background:var(--sf);border:1px solid var(--bd);border-radius:0 0 var(--rl) var(--rl);box-shadow:0 6px 20px rgba(0,0,0,.14);z-index:300;max-height:340px;overflow-y:auto;display:none}
-.gsearch-results.open{display:block}
-.gsr-sec{padding:4px 10px 2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);background:var(--bg);border-bottom:1px solid var(--bd)}
-.gsr-item{padding:7px 10px;border-bottom:1px solid var(--bd);cursor:pointer;font-size:12px}
-.gsr-item:last-child{border-bottom:none}.gsr-item:hover{background:var(--s2)}
-/* Mobile */
-.mob-hdr{display:none;position:sticky;top:0;z-index:99;background:var(--sf);border-bottom:1px solid var(--bd);padding:9px 14px;align-items:center;gap:10px}
-.hamburger{background:none;border:1px solid var(--bd);border-radius:var(--r);padding:5px 7px;cursor:pointer}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:99}
-.overlay.show{display:block}
-@media(max-width:720px){.sidebar{transform:translateX(-220px)}.sidebar.open{transform:translateX(0)}.main{margin-left:0}.mob-hdr{display:flex}.r2,.r3,.r4{grid-template-columns:1fr}}
-@media(max-width:1100px){.col-margin{display:none!important}}
-@media(max-width:900px){.col-vendor{display:none!important}}
-
-/* Mobile styles for detail PO and invoice modals */
-@media(max-width:600px){
-  /* Detail PO - hide table, show cards */
-  .det-tbl-wrap{display:none!important}
-  .det-item-cards{display:block!important}
-  /* Action bar scrollable */
-  #det-act{display:flex;overflow-x:auto;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;padding-bottom:4px;gap:6px;scrollbar-width:none}
-  #det-act::-webkit-scrollbar{display:none}
-  #det-act .btn{flex-shrink:0;white-space:nowrap}
-  /* Metrics grid 2x2 */
-  .det-metrics-wrap .mg{grid-template-columns:1fr 1fr!important}
-  /* Modal full screen on mobile */
-  .modal-bg{padding:0!important;align-items:flex-end!important}
-  .modal{max-width:100%!important;max-height:95vh!important;border-radius:var(--rl) var(--rl) 0 0!important}
-  .mw{max-width:100%!important}
-  /* Invoice detail - stack header vertically */
-  .inv-det-header{flex-direction:column!important;gap:6px!important}
-  .inv-det-total{text-align:left!important}
-  /* Invoice detail - replace table with rows */
-  .inv-det-tbl{display:none!important}
-  .inv-det-rows{display:block!important}
-  /* Action buttons grid */
-  .inv-det-actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
-  .inv-det-actions .btn-full{grid-column:1/-1!important}
-}
-</style>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <!-- LOGIN SCREEN -->
@@ -421,6 +227,7 @@ input[type=checkbox],input[type=radio]{width:auto}
     <button class="btn bsm" id="btn-rekon" onclick="_rekonMode=!_rekonMode;renderCashflow()">Rekonsiliasi</button>
   </div>
   <div class="pc">
+    <div style="margin-bottom:6px"><select id="cf-period-filter" onchange="renderCashflow()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t1)"></select></div>
     <div class="mg" id="cf-met"></div>
     <div id="cf-rekon-bar" style="display:none;padding:8px 0 4px;display:none">
       <div class="fbar">
@@ -861,13 +668,13 @@ input[type=checkbox],input[type=radio]{width:auto}
 <div class="modal-bg" id="modal-edit-invv"><div class="modal mw">
   <div class="mh"><span class="mht">Revisi Invoice Vendor — <span id="edit-invv-no"></span></span><button class="btn bgh bsm" onclick="closeModal('modal-edit-invv')">✕</button></div>
   <div class="mb">
-    <div style="padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt);margin-bottom:10px">Revisi harga akan dicatat di histori. Perubahan mempengaruhi total tagihan.</div>
+    <div style="padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt);margin-bottom:10px">Revisi qty/harga akan dicatat di histori. Perubahan mempengaruhi total tagihan.</div>
     <div class="r2">
       <div class="fg"><label class="lbl">Jatuh tempo</label><input type="date" id="einvv-jatuh"></div>
-      <div class="fg"><label class="lbl">Catatan revisi</label><input type="text" id="einvv-cat-rev" placeholder="Alasan perubahan harga..."></div>
+      <div class="fg"><label class="lbl">Catatan revisi</label><input type="text" id="einvv-cat-rev" placeholder="Alasan perubahan qty/harga..."></div>
     </div>
-    <div class="ct" style="margin-top:4px">Item — edit harga vendor</div>
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th>Harga vendor lama</th><th>Harga vendor baru (Rp)</th><th>Subtotal baru</th></tr></thead><tbody id="einvv-items-body"></tbody></table></div>
+    <div class="ct" style="margin-top:4px">Item — edit qty &amp; harga vendor</div>
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Sat</th><th>Qty baru</th><th>Harga vendor lama</th><th>Harga vendor baru (Rp)</th><th>Subtotal baru</th></tr></thead><tbody id="einvv-items-body"></tbody></table></div>
     <div style="margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:var(--r);font-size:13px;display:flex;gap:16px;flex-wrap:wrap">
       <span>Total baru: <strong class="num" id="einvv-total-new">Rp 0</strong></span>
     </div>
@@ -1177,329 +984,9 @@ input[type=checkbox],input[type=radio]{width:auto}
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/firebase.js"></script>
+<script src="js/data.js"></script>
 <script>
-// ===== FIREBASE INIT =====
-const firebaseConfig={apiKey:"AIzaSyDVno4yTcgOdCAf9X-VaNwulIUOYSry_24",authDomain:"sims-supply.firebaseapp.com",projectId:"sims-supply",storageBucket:"sims-supply.firebasestorage.app",messagingSenderId:"358117996377",appId:"1:358117996377:web:1d5fc8b448e7d0db5e7e48"};
-firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth();
-const db=firebase.firestore();
-
-// ===== AUTH =====
-let _currentUser=null;
-auth.onAuthStateChanged(user=>{
-  if(user){
-    _currentUser=user;
-    document.getElementById('login-screen').style.display='none';
-    document.querySelector('.shell').style.display='';
-    const name=user.email.split('@')[0];
-    document.getElementById('user-display-name').textContent=user.email;
-    document.getElementById('user-avatar').textContent=name.substring(0,2).toUpperCase();
-    loadAllData().then(()=>{normalizeDapurRefs();syncPassthroughInvV();syncMissingPTInvD();syncPTInvDTotals();initUserProfile();renderDashboard();updateDL();});
-  } else {
-    _currentUser=null;
-    document.getElementById('login-screen').style.display='flex';
-    document.querySelector('.shell').style.display='none';
-  }
-});
-function doLogin(){
-  const email=document.getElementById('login-email').value.trim();
-  const pw=document.getElementById('login-pw').value;
-  const err=document.getElementById('login-err');const btn=document.getElementById('login-btn');
-  if(!email||!pw){err.style.display='block';err.textContent='Isi email dan password.';return;}
-  btn.textContent='Masuk...';btn.disabled=true;err.style.display='none';
-  auth.signInWithEmailAndPassword(email,pw).catch(e=>{
-    err.style.display='block';
-    err.textContent=e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'?'Email atau password salah.':e.code==='auth/user-not-found'?'Email tidak terdaftar.':e.message;
-    btn.textContent='Masuk';btn.disabled=false;
-  });
-}
-function doLogout(){if(!confirm('Keluar dari SIMS?'))return;if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}auth.signOut();}
-function showForgotPw(){
-  const email=document.getElementById('login-email').value.trim()||prompt('Masukkan email Anda:');
-  if(!email)return;
-  auth.sendPasswordResetEmail(email).then(()=>alert('Email reset dikirim ke '+email)).catch(e=>alert('Gagal: '+e.message));
-}
-
-// ===== DATA LAYER =====
-const _cache={po:[],invv:[],invd:[],pov:[],rek:[],vendor_saya:[],master:{dapur:[],vendor:[]},log:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0,ctr_pov:0};
-function loadAllData(){
-  return new Promise((resolve)=>{
-    // Unsubscribe any existing listener first
-    if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}
-
-    let resolved=false;
-    _snapshotUnsub=db.collection('sims').doc('data').onSnapshot(
-      {includeMetadataChanges:false},
-      snap=>{
-        // Skip snapshots triggered by our own pending write to avoid render flicker
-        if(_ignoreNextSnapshot&&snap.metadata.hasPendingWrites){return;}
-        _ignoreNextSnapshot=false;
-
-        if(snap.exists){
-          const d=snap.data();
-          // Only update keys that aren't currently dirty (avoid overwriting unsaved local edits)
-          Object.keys(_cache).forEach(k=>{
-            if(!_dirty.has(k)&&d[k]!==undefined)_cache[k]=d[k];
-          });
-          Object.keys(d).forEach(k=>{if(k.startsWith('file_'))_cache[k]=d[k];});
-        }
-
-        // Auto-fix counter from existing data
-        const fixCtr=(invArr,key,prefix)=>{
-          const maxN=(invArr||[]).reduce((mx,iv)=>{
-            const m=iv.no?.match(new RegExp(prefix+'(\\d+)'));
-            return m?Math.max(mx,parseInt(m[1])):mx;
-          },0);
-          if(maxN>(_cache[key]||0))_cache[key]=maxN;
-        };
-        fixCtr(_cache.invv,'ctr_invv','INV-V-');
-        fixCtr(_cache.invd,'ctr_invd','INV-D-');
-
-        // Auto-fix invoices stuck in 'belum' despite being fully paid
-        let statusFixed=0;
-        (_cache.invv||[]).forEach(iv=>{
-          if(iv.bayar_status!=='lunas'){
-            const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-            const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
-            const netTotal=Math.max(0,(iv.total||0)-retur);
-            if(paid>=netTotal&&netTotal>0){iv.bayar_status='lunas';statusFixed++;}
-          }
-        });
-        (_cache.invd||[]).forEach(id=>{
-          if(id.terima_status!=='lunas'){
-            const recv=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-            if(recv>=(id.total||0)&&id.total>0){id.terima_status='lunas';statusFixed++;}
-          }
-        });
-        if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
-
-        // Dedup vendor_saya by nama (keep first occurrence per name)
-        if((_cache.vendor_saya||[]).length>0){
-          const seen=new Set();const before=_cache.vendor_saya.length;
-          _cache.vendor_saya=_cache.vendor_saya.filter(v=>{if(seen.has(v.nama))return false;seen.add(v.nama);return true;});
-          if(_cache.vendor_saya.length<before){saveData(['vendor_saya']);console.log(`[SIMS] Deduped vendor_saya: ${before}→${_cache.vendor_saya.length}`);}
-        }
-
-        _rc.invalidate();
-
-        // Save to localStorage for offline fallback
-        try{localStorage.setItem('sims_cache',JSON.stringify({data:{po:_cache.po,invv:_cache.invv,invd:_cache.invd,rek:_cache.rek,master:_cache.master},saved:new Date().toISOString()}));}catch(e){}
-
-        // Detect concurrent edit from another user
-        if(!_ignoreNextSnapshot&&_dirty.size>0&&resolved){_showConcurrentWarning();}
-
-        _hideOfflineBanner();
-
-        if(!resolved){
-          // First snapshot — resolve the promise (used by initial login flow)
-          resolved=true;
-          resolve();
-        } else {
-          // Subsequent snapshots — re-render active page if not in middle of editing
-          _reRenderActivePage();
-        }
-      },
-      err=>{
-        console.error('[SIMS] onSnapshot error:',err);
-        // Try to load from localStorage as read-only fallback
-        try{
-          const cached=localStorage.getItem('sims_cache');
-          if(cached){const{data,saved}=JSON.parse(cached);Object.assign(_cache,data);_showOfflineBanner(saved);}
-        }catch(e){}
-        if(!resolved){resolved=true;resolve();}
-      }
-    );
-  });
-}
-
-function _showOfflineBanner(saved){
-  let b=document.getElementById('offline-banner');
-  if(!b){b=document.createElement('div');b.id='offline-banner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#c0392b;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px';document.body.prepend(b);}
-  const tgl=saved?new Date(saved).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'tidak diketahui';
-  b.innerHTML=`Koneksi terputus — menampilkan data offline per ${tgl}. Perubahan tidak bisa disimpan. <button onclick="this.closest('#offline-banner').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>`;
-}
-function _hideOfflineBanner(){const b=document.getElementById('offline-banner');if(b)b.remove();}
-let _concurrentWarnTimer=null;
-function _showConcurrentWarning(){
-  if(document.getElementById('concurrent-banner'))return;
-  const b=document.createElement('div');b.id='concurrent-banner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9998;background:#e67e22;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px';
-  b.innerHTML='Ada perubahan masuk dari pengguna lain. Tunggu status ✓ Tersimpan sebelum reload. <button onclick="this.closest(\'#concurrent-banner\').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>';
-  document.body.prepend(b);
-  if(_concurrentWarnTimer)clearTimeout(_concurrentWarnTimer);
-  _concurrentWarnTimer=setTimeout(()=>{const el=document.getElementById('concurrent-banner');if(el)el.remove();},8000);
-}
-
-function _reRenderActivePage(){
-  // Don't interrupt if a modal is open
-  const anyModalOpen=document.querySelector('.modal-bg[style*="flex"]')||document.querySelector('.modal-bg.open');
-  if(anyModalOpen)return;
-  // Re-render current page silently
-  try{
-    if(_currentPage==='dash')renderDashboard();
-    else if(_currentPage==='daftar-po')renderDaftar();
-    else if(_currentPage==='inv-vendor')renderInvV();
-    else if(_currentPage==='inv-dapur')renderInvD();
-    else if(_currentPage==='cashflow')renderCashflow();
-    else if(_currentPage==='rekening')renderRekening();
-    // detail PO: re-render only if not in edit state
-    if(_currentPoId&&_currentPage==='daftar-po')showDetail(_currentPoId);
-  }catch(e){console.error('[SIMS] re-render error:',e);}
-}
-
-
-// Strip undefined values — Firebase rejects them
-function stripUndefined(obj){
-  if(Array.isArray(obj))return obj.map(stripUndefined);
-  if(obj&&typeof obj==='object'){const r={};Object.keys(obj).forEach(k=>{if(obj[k]!==undefined)r[k]=stripUndefined(obj[k]);});return r;}
-  return obj;
-}
-
-function _pgBar(pgKey,pgFn,pg,pgTotal,total){
-  if(pgTotal<=1)return'';
-  const start=pg*PG_SIZE+1;const end=Math.min((pg+1)*PG_SIZE,total);
-  return`<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 0;font-size:12px;color:var(--t2)">
-    <button class="btn bsm" onclick="${pgFn}(-1)" ${pg===0?'disabled':''}>← Prev</button>
-    <span style="font-family:var(--mn)">${start}–${end} dari ${total}</span>
-    <button class="btn bsm" onclick="${pgFn}(1)" ${pg>=pgTotal-1?'disabled':''}>Next →</button>
-  </div>`;
-}
-function pgInvV(d){_pg.invv=Math.max(0,_pg.invv+d);renderInvV();}
-function pgInvD(d){_pg.invd=Math.max(0,_pg.invd+d);renderInvD();}
-function pgDaftar(d){_pg.daftar=Math.max(0,_pg.daftar+d);renderDaftar();}
-function _rekonKeys(){try{return new Set(JSON.parse(localStorage.getItem('sims_rekon')||'[]'));}catch(e){return new Set();}}
-function _rekonKey(p){return p.id||(p.dir+'|'+p.no+'|'+p.tgl+'|'+p.jumlah);}
-function toggleRekon(key){const s=_rekonKeys();if(s.has(key))s.delete(key);else s.add(key);localStorage.setItem('sims_rekon',JSON.stringify([...s]));renderCashflow();}
-
-// ===== BATCH FIREBASE WRITE =====
-// Collects all changes within 300ms window, sends as single write
-const _dirty=new Set();
-let _saveTimer=null;
-let _saving=false;
-let _pendingAfterSave=false;
-let _snapshotUnsub=null; // onSnapshot unsubscribe handle
-let _ignoreNextSnapshot=false; // skip snapshot triggered by our own save
-let _currentPage='dash'; // track active page for selective re-render
-const _pg={invv:0,invd:0,daftar:0};
-const _pgHash={invv:'',invd:'',daftar:''};
-const PG_SIZE=20;
-let _rekonMode=false;
-let _logShowAll=false;
-
-function saveData(keys){
-  if(!_currentUser)return;
-  // Mark keys as dirty
-  (keys||Object.keys(_cache)).forEach(k=>{
-    if(k.startsWith('file_'))return;// files handled separately
-    _dirty.add(k);
-  });
-  // Debounce: reset timer on each call, fire after 300ms of silence
-  if(_saveTimer)clearTimeout(_saveTimer);
-  _saveTimer=setTimeout(_flushSave,300);
-}
-
-function _setSaveStatus(msg,color){
-  const el=document.getElementById('save-status');
-  if(el){el.textContent=msg;el.style.color=color||'var(--t3)';}
-}
-
-async function _flushSave(){
-  if(!_currentUser||_dirty.size===0)return;
-  if(_saving){_pendingAfterSave=true;return;}
-  _saving=true;
-  _setSaveStatus('⟳ Menyimpan...','var(--wn)');
-  const keysToSave=[..._dirty];
-  _dirty.clear();
-  _saveTimer=null;
-  const payload={};
-  keysToSave.forEach(k=>{if(_cache[k]!==undefined)payload[k]=stripUndefined(_cache[k]);});
-  try{
-    _ignoreNextSnapshot=true; // our own write — skip the echo snapshot
-    await db.collection('sims').doc('data').set(payload,{merge:true});
-    const sizeKB=Math.round(JSON.stringify(Object.fromEntries(Object.entries(_cache).filter(([k])=>!k.startsWith('file_')))).length/1024);
-    const sizeColor=sizeKB>900?'var(--dn)':sizeKB>700?'var(--wn)':'var(--ac)';
-    _setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB / 1024 KB`,sizeColor);
-    setTimeout(()=>_setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB`,sizeKB>700?sizeColor:'var(--t3)'),2000);
-    const cb=document.getElementById('concurrent-banner');if(cb)cb.remove();
-  }catch(e){
-    console.error('Firebase save error:',e);
-    _setSaveStatus('✕ Gagal simpan','var(--dn)');
-    keysToSave.forEach(k=>_dirty.add(k));
-    if(_saveTimer)clearTimeout(_saveTimer);
-    _saveTimer=setTimeout(_flushSave,2000);
-  }finally{
-    _saving=false;
-    if(_pendingAfterSave){_pendingAfterSave=false;_flushSave();}
-  }
-}
-
-// Force immediate save — call before critical operations
-async function flushNow(){
-  if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
-  if(_dirty.size>0)await _flushSave();
-}
-const ST={g:(k,d)=>_cache[k]!==undefined?_cache[k]:d,s:(k,v)=>{_cache[k]=v;saveData([k]);}};
-const getPOs=()=>_cache.po;
-const setPOs=d=>{_cache.po=d;_rc.invalidate();saveData(['po']);};
-const getMaster=()=>_cache.master;
-const setMaster=m=>{_cache.master=m;saveData(['master']);};
-const getReks=()=>_cache.rek;
-const setReks=d=>{_cache.rek=d;saveData(['rek']);};
-const getInvV=()=>_cache.invv;
-const setInvV=d=>{_cache.invv=d;_rc.invalidate();saveData(['invv']);};
-const getInvD=()=>_cache.invd;
-const setInvD=d=>{_cache.invd=d;_rc.invalidate();saveData(['invd']);};
-const getPOVs=()=>_cache.pov||[];
-const setPOVs=d=>{_cache.pov=d;saveData(['pov']);};
-const getVendorSaya=()=>_cache.vendor_saya||[];
-const setVendorSaya=d=>{_cache.vendor_saya=d;saveData(['vendor_saya']);};
-function nextCtrPOV(){_cache.ctr_pov=(_cache.ctr_pov||0)+1;saveData(['ctr_pov']);return String(_cache.ctr_pov).padStart(3,'0');};
-
-// Batch setter — update multiple keys at once, single Firebase write
-function setBatch(updates){
-  Object.entries(updates).forEach(([k,v])=>{_cache[k]=v;});
-  // Invalidate if any key affects render cache
-  if(updates.invv||updates.invd||updates.po)_rc.invalidate();
-  saveData(Object.keys(updates));
-}
-
-function nextInvNo(type){
-  const key=type==='v'?'ctr_invv':'ctr_invd';
-  _cache[key]=(_cache[key]||0)+1;
-  saveData([key]);
-  return(type==='v'?'INV-V-':'INV-D-')+String(_cache[key]).padStart(3,'0');
-}
-// File storage — separate Firestore collection to avoid 1MB main doc limit
-const saveFile=async(key,dataUrl)=>{
-  _cache['file_'+key]=dataUrl;
-  if(_currentUser){
-    try{await db.collection('sims_files').doc(key).set({data:dataUrl});}
-    catch(e){console.error('saveFile:',e);}
-  }
-};
-const getFile=k=>_cache['file_'+k]||null;
-const loadFile=async(key)=>{
-  if(_cache['file_'+key])return _cache['file_'+key];
-  try{const s=await db.collection('sims_files').doc(key).get();if(s.exists){_cache['file_'+key]=s.data().data;return _cache['file_'+key];}}
-  catch(e){console.error('loadFile:',e);}
-  return null;
-};
-function backupData(){
-  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),vendor_saya:getVendorSaya(),master:getMaster(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'5'};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();localStorage.setItem('sims_last_backup',new Date().toISOString());showToast('Backup berhasil didownload!');
-}
-function restoreData(){
-  const input=document.createElement('input');input.type='file';input.accept='.json';
-  input.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{
-    try{const data=JSON.parse(ev.target.result);if(!data.po||!data.invv)throw new Error('Format tidak valid');
-      if(!confirm(`Restore dari backup ${data.exported?.split('T')[0]||'?'}?\n\nSEMUA DATA SAAT INI AKAN DIGANTIKAN.`))return;
-      ['po','invv','invd','pov','rek','vendor_saya','master','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
-      addLog('restore_backup','Restore backup','sistem','','',data.exported||'unknown');
-      saveData();showToast('Restore berhasil! Memuat ulang...');setTimeout(()=>location.reload(),1200);
-    }catch(err){showToast('Gagal restore: '+err.message,true);}
-  };r.readAsText(file);};input.click();
-}
-
 // ===== CONSTANTS =====
 const DEFAULT_CATS=['Daging','Sayur','Buah','Bumbu','Telur','Beras','UMKM','Others'];
 function getCats(){const m=getMaster();return(m.kategori&&m.kategori.length)?m.kategori:DEFAULT_CATS;}
@@ -2375,7 +1862,7 @@ function detInvV(id,invV){
       </div>
       <div class="bg">
         ${iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)?`<button class="btn bsm bp" onclick="openBayarInvV('${iv.id}')">Rekam bayar</button>`:iv.bayar_status!=='lunas'?'<span class="tag ttl" style="font-size:10px">Pass-through</span>':''}
-        <button class="btn bsm bw" onclick="openEditInvV('${iv.id}')">Revisi harga</button>
+        <button class="btn bsm bw" onclick="openEditInvV('${iv.id}')">Edit qty/harga</button>
         ${!isPassthrough(iv.id)?`<button class="btn bsm bw" onclick="openKonversiPT('${iv.id}')">Konversi PT</button>`:''}
         ${(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button class="btn bsm bpu" onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
         <button class="btn bsm bw" onclick="openRetur('${iv.id}')">+ Retur</button>
@@ -3034,7 +2521,7 @@ function loadInvVItems(){
   });
 
   if(!available.length){
-    wrap.innerHTML=`<div style="padding:10px 0;font-size:12px;color:var(--t3)">Semua item PO sudah masuk ke invoice vendor. Gunakan <strong>Revisi harga</strong> pada invoice yang sudah ada jika perlu mengubah harga.</div>`;
+    wrap.innerHTML=`<div style="padding:10px 0;font-size:12px;color:var(--t3)">Semua item PO sudah masuk ke invoice vendor. Gunakan <strong>Edit qty/harga</strong> pada invoice yang sudah ada jika perlu mengubah qty atau harga.</div>`;
     calcInvVTotal();return;
   }
 
@@ -3239,15 +2726,15 @@ function saveEditInvD(){
 // ===== REVISI INVOICE VENDOR =====
 function openEditInvV(invId){
   const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
-  if(inv.bayar_status==='lunas'&&!confirm(`Invoice ${inv.no} sudah LUNAS.\nRevisi harga dapat menyebabkan inkonsistensi laporan.\n\nYakin tetap revisi?`))return;
+  if(inv.bayar_status==='lunas'&&!confirm(`Invoice ${inv.no} sudah LUNAS.\nRevisi qty/harga dapat menyebabkan inkonsistensi laporan.\n\nYakin tetap revisi?`))return;
   document.getElementById('edit-invv-no').textContent=inv.no;
   document.getElementById('einvv-id').value=invId;
   document.getElementById('einvv-jatuh').value=inv.jatuh||'';
   document.getElementById('einvv-cat-rev').value='';
   document.getElementById('einvv-items-body').innerHTML=(inv.items||[]).map((item,i)=>`<tr>
     <td style="font-weight:500">${item.nama}</td>
-    <td class="num">${item.qty}</td>
     <td>${item.satuan||''}</td>
+    <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()"></td>
     <td class="num">${fmtF(item.harga_vendor||0)}</td>
     <td><input type="number" id="einvv-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:110px;font-size:12px;font-family:var(--mn)" oninput="calcEditInvVTotal()"></td>
     <td class="num" id="einvv-sub-${i}">${fmtF((item.qty||0)*(item.harga_vendor||0))}</td>
@@ -3257,7 +2744,7 @@ function openEditInvV(invId){
 }
 function calcEditInvVTotal(){
   const inv=getInvV().find(v=>v.id===document.getElementById('einvv-id').value);if(!inv)return;
-  let total=0;(inv.items||[]).forEach((item,i)=>{const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||0;const sub=(item.qty||0)*hv;total+=sub;const el=document.getElementById('einvv-sub-'+i);if(el)el.textContent=fmtF(sub);});
+  let total=0;(inv.items||[]).forEach((item,i)=>{const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||0;const qty=parseFloat(document.getElementById('einvv-qty-'+i)?.value)||0;const sub=qty*hv;total+=sub;const el=document.getElementById('einvv-sub-'+i);if(el)el.textContent=fmtF(sub);});
   document.getElementById('einvv-total-new').textContent=fmtF(total);
 }
 function saveEditInvV(){
@@ -3266,9 +2753,12 @@ function saveEditInvV(){
   const oldTotal=inv.total;let newTotal=0;
   (inv.items||[]).forEach((item,i)=>{
     const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||item.harga_vendor||0;
+    const qtyInput=document.getElementById('einvv-qty-'+i);
+    const qty=qtyInput?parseFloat(qtyInput.value)||0:item.qty||0;
     item.harga_vendor=hv;
     item.harga_vendor_po=item.konv?hv/item.konv:hv;
-    newTotal+=(item.qty||0)*hv;
+    item.qty=qty;
+    newTotal+=qty*hv;
   });
   inv.total=newTotal;inv.jatuh=document.getElementById('einvv-jatuh').value;
   if(!inv.edits)inv.edits=[];
@@ -3595,7 +3085,7 @@ function renderInvV(){
           <button class="kbb-btn" onclick="openKbb('kbb-invv-${iv.id}',event)">⋯</button>
           <div class="kbb-menu" id="kbb-invv-${iv.id}">
             <button onclick="openKirimInvV('${iv.id}')">Update kirim</button>
-            <button onclick="openEditInvV('${iv.id}')">Revisi harga</button>
+            <button onclick="openEditInvV('${iv.id}')">Edit qty/harga</button>
             ${!n.ongkir?`<button onclick="openOngkir('${iv.id}')">+ Ongkos kirim</button>`:''}
             ${!isPTCB&&(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}
             <button onclick="openRetur('${iv.id}')">+ Retur</button>
@@ -4024,15 +3514,31 @@ function delInvD(id){
 // ===== CASHFLOW =====
 function renderCashflow(){
   const invV=getInvV();const invD=getInvD();const reks=getReks();
-  let keluarL=0,masukL=0,masukB=0,totalCB=0;
-  invV.forEach(iv=>{const n=invVNet(iv);keluarL+=n.paid;totalCB+=(iv.cashbacks||[]).reduce((s,c)=>s+c.jumlah,0);});
-  invD.forEach(id=>{const p=(id.payments||[]).reduce((s,py)=>s+py.jumlah,0);masukL+=p;masukB+=id.total-p;});
-  const kas=masukL-keluarL+totalCB;
+  let sudahBayar=0,sudahTerima=0,piutang=0,utangV=0;
+  const _cfMonths=new Set();
+  invV.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.tgl)_cfMonths.add(p.tgl.slice(0,7));}));
+  invD.forEach(id=>(id.payments||[]).forEach(p=>{if(p.tgl)_cfMonths.add(p.tgl.slice(0,7));}));
+  const _cfSortedM=[..._cfMonths].sort().reverse();
+  const _cfNowYM=new Date().toISOString().slice(0,7);
+  const _cfPSel=document.getElementById('cf-period-filter');
+  if(_cfPSel){
+    const _cfPrev=_cfPSel.value;
+    _cfPSel.innerHTML='<option value="all">Semua waktu</option>'+_cfSortedM.map(m=>{const[y,mo]=m.split('-');return`<option value="${m}">${new Date(+y,+mo-1).toLocaleDateString('id-ID',{month:'long',year:'numeric'})}</option>`;}).join('');
+    _cfPSel.value=['all',..._cfSortedM].includes(_cfPrev)?_cfPrev:(_cfSortedM.includes(_cfNowYM)?_cfNowYM:'all');
+  }
+  const _cfP=_cfPSel?.value||'all';
+  const _inP=tgl=>_cfP==='all'||(tgl||'').slice(0,7)===_cfP;
+  const _cfPLabel=_cfP==='all'?'':((()=>{const[y,mo]=_cfP.split('-');return new Date(+y,+mo-1).toLocaleDateString('id-ID',{month:'long',year:'numeric'});})());
+  invV.forEach(iv=>{const n=invVNet(iv);sudahBayar+=(iv.payments||[]).filter(p=>_inP(p.tgl)).reduce((s,p)=>s+p.jumlah,0);if(iv.bayar_status!=='lunas'&&!isPassthrough(iv.id))utangV+=n.sisa;});
+  invD.forEach(id=>{const allRecv=(id.payments||[]).reduce((s,py)=>s+py.jumlah,0);sudahTerima+=(id.payments||[]).filter(p=>_inP(p.tgl)).reduce((s,py)=>s+py.jumlah,0);if(id.terima_status!=='lunas')piutang+=Math.max(0,id.total-allRecv);});
+  const net=piutang-utangV;
+  const _periodSub=_cfPLabel?`<div style="font-size:10px;color:var(--t3);margin-top:-1px;margin-bottom:2px">${_cfPLabel}</div>`:'';
   document.getElementById('cf-met').innerHTML=`
-    <div class="met"><div class="ml">Posisi kas</div><div class="mv num ${kas>=0?'g':'r'}">${fmt(kas)}</div></div>
-    <div class="met"><div class="ml">Sudah keluar ke vendor</div><div class="mv num r">${fmt(keluarL)}</div></div>
-    <div class="met"><div class="ml">Sudah masuk dari dapur</div><div class="mv num g">${fmt(masukL)}</div></div>
-    <div class="met"><div class="ml">Cashback diterima</div><div class="mv num p">${fmt(totalCB)}</div></div>`;
+    <div class="met"><div class="ml">Piutang dapur</div><div class="mv num g">${fmt(piutang)}</div></div>
+    <div class="met"><div class="ml">Utang vendor</div><div class="mv num r">${fmt(utangV)}</div></div>
+    <div class="met"><div class="ml">Net posisi</div><div class="mv num ${net>=0?'g':'r'}">${fmt(net)}</div></div>
+    <div class="met"><div class="ml">Sudah terima</div>${_periodSub}<div class="mv num g">${fmt(sudahTerima)}</div></div>
+    <div class="met"><div class="ml">Sudah bayar</div>${_periodSub}<div class="mv num r">${fmt(sudahBayar)}</div></div>`;
 
   // Build all payments
   const allPay=[];
@@ -4380,7 +3886,7 @@ function showInvVDetail(invId){
     ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:var(--t2)">Catatan: ${inv.catatan}</div>`:''}
     <div class="inv-det-actions bg" style="margin-top:14px">
       ${inv.bayar_status!=='lunas'&&!isPassthrough(inv.id)?`<button class="btn bsm bp btn-full" onclick="closeModal('modal-det-invv');openBayarInvV('${inv.id}')">Rekam bayar</button>`:inv.bayar_status!=='lunas'?'<span class="tag ttl btn-full">Pass-through</span>':''}
-      <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openEditInvV('${inv.id}')">Revisi harga</button>
+      <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openEditInvV('${inv.id}')">Edit qty/harga</button>
       ${!isPassthrough(inv.id)?`<button class="btn bsm bw" onclick="closeModal('modal-det-invv');openKonversiPT('${inv.id}')">Konversi PT</button>`:''}
       <button class="btn bsm bw" onclick="closeModal('modal-det-invv');openRetur('${inv.id}')">+ Retur</button>
       ${!n.ongkir?`<button class="btn bsm" onclick="closeModal('modal-det-invv');openOngkir('${inv.id}')">+ Ongkir</button>`:''}
@@ -4629,17 +4135,20 @@ function openKbb(id,event){
   const menu=document.getElementById(id);if(!menu)return;
   const btn=event.currentTarget;
   const r=btn.getBoundingClientRect();
-  // Position below the button
-  menu.style.top=(r.bottom+4)+'px';
-  // Default: align right edge of menu to right edge of button
   const menuW=Math.max(menu.offsetWidth||160,160);
   let left=r.right-menuW;
-  // Clamp to viewport
   if(left<8)left=8;
   if(left+menuW>window.innerWidth-8)left=window.innerWidth-8-menuW;
   menu.style.left=left+'px';
   menu.style.right='auto';
+  // Show first to measure real height, then clamp vertically
+  menu.style.top='0px';
   menu.classList.add('open');
+  const menuH=menu.offsetHeight;
+  let top=r.bottom+4;
+  if(top+menuH>window.innerHeight-8)top=r.top-menuH-4;
+  if(top<8)top=8;
+  menu.style.top=top+'px';
 }
 document.addEventListener('click',()=>document.querySelectorAll('.kbb-menu.open').forEach(m=>m.classList.remove('open')));
 

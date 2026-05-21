@@ -10,7 +10,30 @@ No build system. To run: open `index.html` in a browser, or push to GitHub and a
 
 ## Architecture
 
-Everything lives inline in `index.html`: CSS (lines ~8–1139), HTML markup (lines ~100–1139), and JavaScript (lines ~1146–6043). Sections are delimited by `// ===== SECTION NAME =====` comments.
+HTML markup lives in `index.html` (~1002 lines). CSS and JavaScript are split into separate files:
+
+```
+sims/
+├── index.html          — HTML markup + <script> tags (~1002 lines)
+├── css/
+│   └── style.css       — all CSS (~195 lines)
+└── js/
+    ├── firebase.js     — Firebase init & auth
+    ├── data.js         — _cache, loadAllData, saveData, batch write, accessors
+    ├── utils.js        — constants, utils, render cache (_rc), navigation
+    ├── master.js       — master data (dapur, vendor, kategori) + rekening
+    ├── po-form.js      — form PO baru, import Excel/paste, savePO
+    ├── po.js           — daftar PO, detail PO, edit item, status kirim, status popup, view nota
+    ├── invoice-vendor.js — invoice vendor, edit qty, auto-suggest, revisi, bayar, retur, konversi PT
+    ├── invoice-dapur.js  — invoice dapur, terima dari dapur, render invoice dapur
+    ├── cashflow.js     — cashflow + rekening page
+    ├── dashboard.js    — dashboard + agenda/metrics
+    ├── misc.js         — filter detail PO, global search, drag-drop, activity log, bulk update
+    ├── laporan.js      — laporan PO, konsumsi bahan baku, laporan keuangan
+    └── vendor.js       — PO ke vendor, vendor milik saya
+```
+
+Sections within each file are still delimited by `// ===== SECTION NAME =====` comments.
 
 **Data layer** — all data lives in a single Firestore document `sims/data`. An in-memory `_cache` object mirrors it:
 
@@ -31,21 +54,20 @@ Accessors follow the pattern `getPOs()`, `getInvV()`, `getInvD()`, `getReks()`, 
 
 `buildLookup(poId)` resolves the PO↔invV↔invD mapping using a 3-pass algorithm (exact idx+nama → composite key → nama-only fallback) to handle stale indices. Results are cached in `_lookupCache` (invalidated by `invalidatePO(poId)`).
 
-**Key sections by line:**
-- Firebase init & auth: ~1147
-- Data layer (`_cache`, `loadAllData`, `saveData`): ~1189
-- Utils & render cache: ~1473
-- PO form & import: ~1775
-- Daftar PO & detail: ~1904
-- `buildLookup` (3-pass item linking): ~2026
-- Invoice Vendor: ~2866
-- Invoice Dapur: ~3607
-- Cashflow & Rekening: ~3974
-- Dashboard: ~4095
-- Laporan PO: ~5026
-- Konsumsi Bahan Baku: ~5406
-- PO ke Vendor: ~5688
-- Vendor Milik Saya: ~5873
+**Where to find things:**
+- Firebase init & auth → `js/firebase.js`
+- Data layer (`_cache`, `loadAllData`, `saveData`) → `js/data.js`
+- Utils, render cache, navigation → `js/utils.js`
+- Master data, rekening → `js/master.js`
+- PO form & import → `js/po-form.js`
+- Daftar PO, detail PO, `buildLookup` (3-pass item linking) → `js/po.js`
+- Invoice Vendor (edit, revisi, bayar, retur, konversi PT) → `js/invoice-vendor.js`
+- Invoice Dapur → `js/invoice-dapur.js`
+- Cashflow & Rekening → `js/cashflow.js`
+- Dashboard & Agenda → `js/dashboard.js`
+- Filter, global search, drag-drop, activity log, bulk update → `js/misc.js`
+- Laporan PO, Konsumsi Bahan Baku, Laporan Keuangan → `js/laporan.js`
+- PO ke Vendor, Vendor Milik Saya → `js/vendor.js`
 
 ## Critical Constraints
 

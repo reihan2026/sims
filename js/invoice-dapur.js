@@ -178,6 +178,8 @@ function saveInvD(){
     ptId=document.getElementById('invd-pt-inv').value;
     const ptInv=getInvV().find(v=>v.id===ptId);
     if(!ptInv){showToast('Pilih invoice vendor untuk pass-through!',true);return;}
+    const existingPT=getInvD().find(d=>d.type==='passthrough'&&d.pt_inv_id===ptId);
+    if(existingPT){showToast('Invoice vendor ini sudah diklaim pass-through oleh invoice lain!',true);return;}
     total=ptInv.total;
   }else{
     document.querySelectorAll('.invd-cb:checked').forEach(cb=>{
@@ -198,7 +200,14 @@ function saveInvD(){
   }
   const vendor_saya_id=document.getElementById('invd-vendor-saya')?.value||'';
   const inv={id:uid(),no,tgl,dapur,po_id:poId,type:isPT?'passthrough':'markup',pt_inv_id:ptId,items,total,jatuh:document.getElementById('invd-jatuh').value,catatan:document.getElementById('invd-cat').value,vendor_saya_id,terima_status:'belum',payments:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};
-  const invs=getInvD();invs.push(inv);
+  const invs=getInvD();
+  // Re-check number at save time — auto-fix if another concurrent save already used this number
+  if(invs.some(id=>id.no===inv.no)){
+    const maxN=invs.reduce((mx,id)=>{const m=(id.no||'').match(/INV-D-(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},_cache.ctr_invd||0);
+    _cache.ctr_invd=maxN+1;
+    inv.no='INV-D-'+String(_cache.ctr_invd).padStart(3,'0');
+  }
+  invs.push(inv);
   // Batch write invD + counter in one round trip
   setBatch({invd:invs,ctr_invd:_cache.ctr_invd});
   if(poId)invalidatePO(poId);

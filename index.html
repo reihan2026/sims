@@ -75,7 +75,7 @@
 
 <!-- DASHBOARD -->
 <div id="page-dash" class="page active">
-  <div class="ph"><div><div class="ph-t">Dashboard</div><div class="ph-s" id="hdr-date"></div></div><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div>
+  <div class="ph"><div><div class="ph-t">Dashboard</div><div class="ph-s" id="hdr-date"></div></div><div style="display:flex;gap:6px;align-items:center"><select id="dash-dapur-filter" onchange="renderDashboard()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t1)"><option value="">Semua dapur</option></select><button class="btn bp bsm" onclick="nav('po-baru')">+ Input PO</button></div></div>
   <div class="pc">
     <div id="cf-today-bar"></div>
     <div id="backup-reminder" style="display:none;margin-bottom:10px;padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);font-size:12px;color:var(--wt)"></div>
@@ -228,7 +228,7 @@
     <button class="btn bsm" id="btn-rekon" onclick="_rekonMode=!_rekonMode;renderCashflow()">Rekonsiliasi</button>
   </div>
   <div class="pc">
-    <div style="margin-bottom:6px"><select id="cf-period-filter" onchange="renderCashflow()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t1)"></select></div>
+    <div style="margin-bottom:6px;display:flex;gap:6px;flex-wrap:wrap"><select id="cf-period-filter" onchange="renderCashflow()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t1)"></select><select id="cf-dapur-filter" onchange="renderCashflow()" style="font-size:12px;padding:4px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--t1)"><option value="">Semua dapur</option></select></div>
     <div class="mg" id="cf-met"></div>
     <div id="cf-rekon-bar" style="display:none;padding:8px 0 4px;display:none">
       <div class="fbar">

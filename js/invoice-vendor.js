@@ -252,7 +252,14 @@ function saveInvV(){
   autoMaster('',vendor?[vendor]:[]);
   const done=()=>{
     clearTimeout(failsafe);
-    const invs=getInvV();invs.push(inv);
+    const invs=getInvV();
+    // Re-check number at save time — auto-fix if another concurrent save already used this number
+    if(invs.some(iv=>iv.no===inv.no)){
+      const maxN=invs.reduce((mx,iv)=>{const m=(iv.no||'').match(/INV-V-(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},_cache.ctr_invv||0);
+      _cache.ctr_invv=maxN+1;
+      inv.no='INV-V-'+String(_cache.ctr_invv).padStart(3,'0');
+    }
+    invs.push(inv);
     // Single batch write: PO + invV + counter in one Firebase round trip
     setBatch({po:getPOs(),invv:invs,ctr_invv:_cache.ctr_invv});
     if(poId)invalidatePO(poId);
@@ -570,7 +577,13 @@ function saveKonversiPT(){
       payments:[{id:uid(),jumlah:iv.total,tgl,rek_id:'',catatan:`Pass-through: ${alasan}`}],
       created:new Date().toISOString()
     };
-    const invDs=getInvD();invDs.push(invD);setInvD(invDs);
+    const invDs=getInvD();
+    if(invDs.some(d=>d.no===invD.no)){
+      const maxN=invDs.reduce((mx,d)=>{const m=(d.no||'').match(/INV-D-(\d+)/);return m?Math.max(mx,parseInt(m[1])):mx;},_cache.ctr_invd||0);
+      _cache.ctr_invd=maxN+1;
+      invD.no='INV-D-'+String(_cache.ctr_invd).padStart(3,'0');
+    }
+    invDs.push(invD);setInvD(invDs);
     if(dapur)autoMaster(dapur,[]);
   }
 
@@ -728,17 +741,30 @@ function renderInvV(){
 function delInvV(id){
   const _chkInvV=getInvV().find(v=>v.id===id);
   if(_chkInvV?.bayar_status==='lunas'&&!confirm(`Invoice ${_chkInvV.no} sudah LUNAS.\nMenghapus invoice lunas dapat menyebabkan inkonsistensi cashflow.\n\nYakin tetap hapus?`))return;
-  if(!confirm('Hapus invoice vendor? Harga vendor pada item PO terkait akan direset.'))return;
+  if(!confirm('Hapus invoice vendor? Harga vendor pada item PO terkait akan direset (kecuali jika masih dicakup invoice lain).'))return;
   const inv=getInvV().find(v=>v.id===id);
   if(inv){
-    // Reset harga_vendor & vendor on PO items that were set by this invoice
     const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
     if(po){
+      // Only reset item if no other invV for this PO covers the same item
+      const remainingInvV=getInvV().filter(v=>v.id!==id&&v.po_id===inv.po_id);
       (inv.items||[]).forEach(i=>{
         const poItem=(typeof i.idx==='number'&&po.items[i.idx]?.nama===i.nama)
           ?po.items[i.idx]
           :po.items.find(pi=>pi.nama===i.nama);
-        if(poItem&&poItem.status_kirim!=='diterima'){poItem.harga_vendor=0;poItem.vendor='';}
+        if(!poItem||poItem.status_kirim==='diterima')return;
+        const coveringIv=remainingInvV.find(ov=>(ov.items||[]).some(oi=>oi.nama===poItem.nama));
+        if(coveringIv){
+          // Update with the covering invV's data instead of resetting
+          const oi=(coveringIv.items||[]).find(x=>x.nama===poItem.nama);
+          if(oi&&oi.harga_vendor>0){
+            poItem.harga_vendor=oi.harga_vendor_po!=null?oi.harga_vendor_po:oi.harga_vendor;
+            poItem.vendor=coveringIv.vendor;
+          }
+        } else {
+          poItem.harga_vendor=0;poItem.vendor='';
+          if(poItem.satuan_konv)delete poItem.satuan_konv;
+        }
       });
       setPOs(pos);
     }

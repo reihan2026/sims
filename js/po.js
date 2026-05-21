@@ -144,14 +144,14 @@ function buildLookup(poId){
         if(!(pidx in itemInvV)&&itemKey(pi)===iKey)itemInvV[pidx]=iv;
       });
     }));
-    // Pass 3: nama-only fallback for items with no hari/deadline that weren't assigned in Pass 1
+    // Pass 3: nama-only fallback — only when unambiguous (exactly one unlinked candidate)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
       const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
       if(!i.hari&&!i.deadline&&!(idxFresh&&itemInvV[directIdx]===iv)){
-        po.items.forEach((pi,pidx)=>{
-          if(!(pidx in itemInvV)&&pi.nama===i.nama)itemInvV[pidx]=iv;
-        });
+        const cands=po.items.reduce((a,pi,pidx)=>{if(!(pidx in itemInvV)&&pi.nama===i.nama)a.push(pidx);return a;},[]);
+        if(cands.length===1)itemInvV[cands[0]]=iv;
+        // if cands.length > 1: ambiguous, leave unlinked — safer than wrong link
       }
     }));
   }

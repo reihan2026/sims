@@ -1,6 +1,17 @@
 // ===== CASHFLOW =====
 function renderCashflow(){
-  const invV=getInvV();const invD=getInvD();const reks=getReks();
+  const _cfDEl=document.getElementById('cf-dapur-filter');
+  if(_cfDEl){
+    const dapurs=[...new Set([...getInvD().map(d=>d.dapur),...getPOs().map(p=>p.dapur)].filter(Boolean))].sort();
+    const prev=_cfDEl.value;
+    _cfDEl.innerHTML='<option value="">Semua dapur</option>'+dapurs.map(d=>`<option value="${d}">${d}</option>`).join('');
+    if(dapurs.includes(prev))_cfDEl.value=prev;
+  }
+  const _cfDapur=_cfDEl?.value||'';
+  const _poMap=_cfDapur?new Map(getPOs().map(p=>[p.id,p])):null;
+  const invV=_cfDapur?getInvV().filter(iv=>_poMap.get(iv.po_id)?.dapur===_cfDapur):getInvV();
+  const invD=_cfDapur?getInvD().filter(id=>id.dapur===_cfDapur):getInvD();
+  const reks=getReks();
   let sudahBayar=0,sudahTerima=0,piutang=0,utangV=0;
   const _cfMonths=new Set();
   invV.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.tgl)_cfMonths.add(p.tgl.slice(0,7));}));

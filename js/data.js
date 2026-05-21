@@ -242,9 +242,12 @@ function setBatch(updates){
 
 function nextInvNo(type){
   const key=type==='v'?'ctr_invv':'ctr_invd';
-  _cache[key]=(_cache[key]||0)+1;
+  const prefix=type==='v'?'INV-V-':'INV-D-';
+  const arr=type==='v'?getInvV():getInvD();
+  const maxN=arr.reduce((mx,iv)=>{const m=(iv.no||'').match(new RegExp(prefix+'(\\d+)'));return m?Math.max(mx,parseInt(m[1])):mx;},_cache[key]||0);
+  _cache[key]=maxN+1;
   saveData([key]);
-  return(type==='v'?'INV-V-':'INV-D-')+String(_cache[key]).padStart(3,'0');
+  return prefix+String(_cache[key]).padStart(3,'0');
 }
 // File storage — separate Firestore collection to avoid 1MB main doc limit
 const saveFile=async(key,dataUrl)=>{

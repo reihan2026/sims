@@ -1,7 +1,19 @@
 // ===== DASHBOARD =====
 function renderDashboard(){
   const el=document.getElementById('hdr-date');if(el)el.textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  const pos=getPOs();const invV=getInvV();const invD=getInvD();
+  // Dapur filter
+  const _ddEl=document.getElementById('dash-dapur-filter');
+  if(_ddEl){
+    const dapurs=[...new Set(getPOs().map(p=>p.dapur).filter(Boolean))].sort();
+    const prev=_ddEl.value;
+    _ddEl.innerHTML='<option value="">Semua dapur</option>'+dapurs.map(d=>`<option value="${d}">${d}</option>`).join('');
+    if(dapurs.includes(prev))_ddEl.value=prev;
+  }
+  const _fDapur=_ddEl?.value||'';
+  const pos=_fDapur?getPOs().filter(p=>p.dapur===_fDapur):getPOs();
+  const _poIds=_fDapur?new Set(pos.map(p=>p.id)):null;
+  const invV=_fDapur?getInvV().filter(iv=>_poIds.has(iv.po_id)):getInvV();
+  const invD=_fDapur?getInvD().filter(id=>id.dapur===_fDapur):getInvD();
 
   // Cashflow today bar
   const today2=today();

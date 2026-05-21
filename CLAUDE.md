@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Context
+
+This is the SIMS project. Confirm you are working in the SIMS codebase (not MBG Kitchen) before editing any files.
+
+## Deployment
+
+ALWAYS commit and push changes to GitHub after completing edits, since the app deploys via GitHub Pages — code is not visible until pushed.
+
+## Verification
+
+After implementing any UI feature, verify the change is actually visible/rendered (not just present in code) before claiming it works — confirm trigger buttons, modal fields, and labels appear.
+
+## Security
+
+NEVER ask the user to paste secrets, tokens, or credentials into the chat. Use git credential helpers, SSH keys, or environment variables instead.
+
 ## Project
 
 SIMS (Sistem Internal Manajemen Suplai) — supply chain management system for MBG kitchen operations. Single `index.html` file (~6000 lines), hosted on GitHub Pages, backend is Firebase Firestore.
@@ -78,6 +94,11 @@ Accessors follow the pattern `getPOs()`, `getInvV()`, `getInvD()`, `getReks()`, 
 **Single file** — all changes are inline in `index.html`. No imports, no modules, no bundler. CDN scripts (Firebase 10.12.0, SheetJS 0.18.5, Chart.js 4.4.0) are loaded via `<script src>` tags.
 
 **Concurrent edits** — if a snapshot arrives while local dirty keys exist, a banner warns the user. Don't add `await` calls inside the snapshot handler body; it must stay synchronous past the dirty-check.
+
+## Financial Logic / Domain Rules
+
+- Cashback lives in the `v.cashbacks` array (not `v.cashback`).
+- Tax is deducted from gross revenue, not from the post-fee remainder.
 
 ## Data Integrity Rules
 

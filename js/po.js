@@ -391,21 +391,48 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
   return html;
 }
 
-function detVendorSummary(id,po,invV){
+function detVendorSummary(id,po,invV,invD){
+  // Build invDItemMap to resolve harga_dapur per item (same logic as buildLaporanData)
+  const invDItemMap={};
+  const passThroughInvVIds=new Set();
+  const _cleanNama=n=>(n||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
+  (invD||[]).forEach(d=>{
+    if(d.type==='passthrough'){if(d.pt_inv_id)passThroughInvVIds.add(d.pt_inv_id);return;}
+    (d.items||[]).forEach(i=>{
+      const iNama=_cleanNama(i.nama);
+      const key=`${iNama}||${i.hari||''}`;
+      if(!(key in invDItemMap))invDItemMap[key]=i.harga_dapur;
+      const fallback=`${iNama}||__any__`;
+      if(!(fallback in invDItemMap))invDItemMap[fallback]=i.harga_dapur;
+    });
+  });
+
   const byVendor={};po.items.forEach((item,idx)=>{const v=item.vendor||'(Belum)';if(!byVendor[v])byVendor[v]=[];byVendor[v].push({...item,_idx:idx});});
   let html='';
   Object.entries(byVendor).forEach(([vname,vitems])=>{
     const vInvV=invV.filter(iv=>iv.vendor===vname);
     const totalV=vitems.reduce((s,i)=>s+(i.qty||0)*(i.harga_vendor||0),0);
-    const totalPO=vitems.reduce((s,i)=>s+(i.qty||0)*(i.harga_po||0),0);
-    const margin=totalPO-totalV;const vObj=getVendorObj(vname);
+    // Compute margin: use harga_dapur (actual) where available, harga_po (estimasi) otherwise
+    let totalRevenue=0;let hasEstimate=false;
+    vitems.forEach(i=>{
+      const nm=(i.nama||'').trim();
+      const diKey=`${nm}||${i.hari||''}`;
+      const bestIv=vInvV.find(iv=>(iv.items||[]).some(ii=>(ii.nama||'').trim()===nm&&(ii.hari||'')===(i.hari||'')));
+      let hd=null;
+      if(invDItemMap[diKey]!=null)hd=invDItemMap[diKey];
+      else if(invDItemMap[`${nm}||__any__`]!=null)hd=invDItemMap[`${nm}||__any__`];
+      else if(passThroughInvVIds.has(bestIv?.id))hd=i.harga_vendor;
+      if(hd!=null){totalRevenue+=(i.qty||0)*hd;}
+      else{totalRevenue+=(i.qty||0)*(i.harga_po||0);if(i.harga_vendor>0)hasEstimate=true;}
+    });
+    const margin=totalRevenue-totalV;const vObj=getVendorObj(vname);
     const allBayar=vInvV.length>0&&vInvV.every(iv=>iv.bayar_status==='lunas');
     html+=`<div class="vblock"><div class="vblock-hdr">
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
         <span style="font-weight:600;font-size:13px">${vname}</span>
         ${vObj?.cashback?'<span class="tag tpu">Cashback</span>':''}
         ${vObj?.hp?`<span style="font-size:11px;font-family:var(--mn);color:var(--t3)">${vObj.hp}</span>`:''}
-        ${totalV>0?`<span class="num" style="font-size:12px;color:var(--t2)">Modal: ${fmtF(totalV)}</span><span class="num" style="font-size:12px;${margin>=0?'color:var(--ac)':'color:var(--dn)'}">Margin: ${fmtF(margin)}</span>`:'<span style="font-size:11px;color:var(--t3)">Harga belum diisi</span>'}
+        ${totalV>0?`<span class="num" style="font-size:12px;color:var(--t2)">Modal: ${fmtF(totalV)}</span><span class="num" style="font-size:12px;${margin>=0?'color:var(--ac)':'color:var(--dn)'}">Margin: ${fmtF(margin)}${hasEstimate?'<span style="font-size:10px;color:var(--t3);font-weight:400"> estimasi</span>':''}</span>`:'<span style="font-size:11px;color:var(--t3)">Harga belum diisi</span>'}
       </div>
       <div class="bg">
         ${vInvV.map(iv=>`<span class="tag ${iv.bayar_status==='lunas'?'tok':'tno'}">${iv.no} ${iv.bayar_status==='lunas'?'✓':'Blm bayar'}</span>`).join('')}
@@ -527,7 +554,7 @@ function showDetail(id){
     detMetrics(po,t,invV,invD)+
     detNextSteps(id,po,invV,invD)+
     filterBar+
-    detVendorSummary(id,po,invV)+
+    detVendorSummary(id,po,invV,invD)+
     detInvV(id,invV)+
     detInvD(id,invD)+
     detRevisions(po);

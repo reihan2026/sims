@@ -272,16 +272,35 @@ function showInvDDetail(invId){
     const invVAll=getInvV();
     const {itemInvV}=buildLookup(inv.po_id);
     const vendorMap={};
-    inv.items.forEach(di=>{
-      const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
-      // Prefer explicit invv_id stored on the item; fallback to buildLookup position match
-      let ivMatch=di.invv_id?invVAll.find(iv=>iv.id===di.invv_id):null;
+    const _resolveInvV=(diNama,hari,deadline,invv_id)=>{
+      let ivMatch=invv_id?invVAll.find(iv=>iv.id===invv_id):null;
       if(!ivMatch){
-        const diKey=`${diNama.toLowerCase()}||${di.hari||''}||${di.deadline||''}`;
+        const diKey=`${diNama.toLowerCase()}||${hari||''}||${deadline||''}`;
         let pidx=po.items.findIndex(pi=>`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`===diKey);
         if(pidx<0)pidx=po.items.findIndex(pi=>pi.nama.toLowerCase().trim()===diNama.toLowerCase());
         if(pidx>=0)ivMatch=itemInvV[pidx];
       }
+      return ivMatch;
+    };
+    inv.items.forEach(di=>{
+      const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
+      // Merged item: expand each source to its own vendor entry
+      if(di._src_items&&di._src_items.length){
+        di._src_items.forEach(si=>{
+          const ivMatch=_resolveInvV(diNama,si.hari||'',si.deadline||'',si.invv_id||'');
+          if(!ivMatch)return;
+          if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
+          const ivItem=(ivMatch.items||[]).find(i=>{
+            const nm=(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama);
+            return nm&&si.hari&&(i.hari||'')===(si.hari||'');
+          })||(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
+          const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
+          vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
+        });
+        return;
+      }
+      // Normal (non-merged) item
+      const ivMatch=_resolveInvV(diNama,di.hari||'',di.deadline||'',di.invv_id||'');
       if(!ivMatch)return;
       if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
       const ivItemByHari=(ivMatch.items||[]).find(i=>{

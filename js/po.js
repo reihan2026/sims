@@ -169,6 +169,25 @@ function buildLookup(poId){
         // Normal markup invoice: match by item nama/hari/deadline
         (id2.items||[]).forEach(i=>{
           const storedNama=(i.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
+          // Merged item: match each _src_item to its own PO slot
+          if(i._src_items&&i._src_items.length){
+            i._src_items.forEach(si=>{
+              const siKey=`${storedNama.toLowerCase().trim()}||${si.hari||''}||${si.deadline||''}`;
+              let matched=false;
+              po.items.forEach((pi,pidx)=>{
+                if(matched)return;
+                const piKey=`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`;
+                if(!(pidx in itemInvD)&&piKey===siKey){itemInvD[pidx]=id2;matched=true;}
+              });
+              if(!matched){
+                po.items.forEach((pi,pidx)=>{
+                  if(matched)return;
+                  if(!(pidx in itemInvD)&&pi.nama.toLowerCase()===storedNama.toLowerCase()){itemInvD[pidx]=id2;matched=true;}
+                });
+              }
+            });
+            return;
+          }
           const iKey=`${storedNama.toLowerCase().trim()}||${i.hari||''}||${i.deadline||''}`;
           let matched=false;
           // Pass 1: composite key match (nama+hari+deadline)

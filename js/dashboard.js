@@ -284,16 +284,21 @@ function showInvDDetail(invId){
     };
     inv.items.forEach(di=>{
       const diNama=(di.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
-      // Merged item: expand each source to its own vendor entry
+      // Merged item: find all linked invV, deduplicated
       if(di._src_items&&di._src_items.length){
-        di._src_items.forEach(si=>{
-          const ivMatch=_resolveInvV(diNama,si.hari||'',si.deadline||'',si.invv_id||'');
-          if(!ivMatch)return;
+        const hasInvvId=di._src_items.some(si=>si.invv_id);
+        let linkedInvVs;
+        if(hasInvvId){
+          // New format: resolve per-source via stored invv_id, deduplicate
+          const seen=new Set();
+          linkedInvVs=di._src_items.map(si=>si.invv_id?invVAll.find(iv=>iv.id===si.invv_id):_resolveInvV(diNama,si.hari,si.deadline,'')).filter(iv=>iv&&!seen.has(iv.id)&&seen.add(iv.id));
+        } else {
+          // Old format (no invv_id stored): find all invV for this PO containing this item name
+          linkedInvVs=invVAll.filter(iv=>iv.po_id===inv.po_id&&(iv.items||[]).some(i=>(i.nama||'').trim()===diNama));
+        }
+        linkedInvVs.forEach(ivMatch=>{
           if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
-          const ivItem=(ivMatch.items||[]).find(i=>{
-            const nm=(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama);
-            return nm&&si.hari&&(i.hari||'')===(si.hari||'');
-          })||(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
+          const ivItem=(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
           const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
           vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
         });

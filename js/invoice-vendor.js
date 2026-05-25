@@ -148,13 +148,11 @@ function loadInvVItems(){
     if(Object.keys(byHari).length>1)html+=`<tr><td colspan="5" style="padding:3px 8px;background:var(--bg);font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">${hari}</td></tr>`;
     items.forEach(item=>{
       const hv=item.harga_vendor||0;
-      const defaultHarga=hv||item.harga_po||0;// default to harga_po if no harga_vendor yet
       const shouldCheck=false; // default unchecked — user harus pilih manual
-      // Auto-suggest: get most recent harga_vendor from invoice history
+      const useHarga=hv||item.harga_po||0;
+      // History shown as reference only — does not affect default value
       const _histH=getHistoriHargaVendor(item.nama,vendor);
-      const suggestHarga=_histH&&!hv?_histH.harga:null;
-      const useHarga=hv||(suggestHarga||item.harga_po||0);
-      const suggestBadge=suggestHarga?`<div title="Histori: ${fmtF(suggestHarga)} (${_histH.no} - ${_histH.vendor})" style="font-size:9px;color:var(--in);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${suggestHarga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">💡 Histori: ${fmtF(suggestHarga)}</div>`:'';
+      const suggestBadge=_histH?`<div title="Pakai harga histori" style="font-size:9px;color:var(--t3);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${_histH.harga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">Histori: ${fmtF(_histH.harga)} — ${_histH.vendor}</div>`:'';
       html+=`<tr id="invv-tr-${item._idx}" data-kat="${item.kat||''}">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
         <td style="padding:7px 8px" colspan="2">

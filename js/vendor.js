@@ -289,10 +289,7 @@ async function printInvDFormal(invId){
   // Load kop image
   let kopSrc=getFile('kop_'+vs.id);
   if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
-  // Build hari map from PO items
-  const hariMap={};
-  if(po){(po.items||[]).forEach(pi=>{if(pi.nama&&pi.hari)hariMap[pi.nama.toLowerCase()]=pi.hari;});}
-  const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total,hari:''}]:inv.items;
+  const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
   const css=PRINT_CSS+`
     .kop-img{max-width:55%;max-height:130px;object-fit:contain;object-position:left top;display:block;margin-bottom:8px}
     .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1A1814}
@@ -321,13 +318,12 @@ async function printInvDFormal(invId){
     </div>
   </div>`;
   // Table
-  const hasHari=items.some(i=>hariMap[i.nama?.toLowerCase()]);
   const tableHtml=`<table class="tbl"><thead><tr>
-    <th>Nama item</th>${hasHari?'<th>Hari kirim</th>':''}
+    <th>Nama item</th>
     <th>Qty</th><th>Sat</th>
     <th style="text-align:right">Harga (Rp)</th><th style="text-align:right">Subtotal</th>
   </tr></thead><tbody>
-    ${items.map(i=>`<tr><td>${i.nama}${i.catatan_item?`<div style="font-size:11px;color:#6B6560;font-style:italic">${i.catatan_item}</div>`:''}</td>${hasHari?`<td>${hariMap[i.nama?.toLowerCase()]||'—'}</td>`:''}
+    ${items.map(i=>`<tr><td>${i.nama}${i.catatan_item?`<div style="font-size:11px;color:#6B6560;font-style:italic">${i.catatan_item}</div>`:''}</td>
     <td>${i.qty}</td><td>${i.satuan||''}</td>
     <td style="text-align:right">Rp ${Math.round(i.harga_dapur||0).toLocaleString('id-ID')}</td>
     <td style="text-align:right">Rp ${Math.round((i.qty||0)*(i.harga_dapur||0)).toLocaleString('id-ID')}</td></tr>`).join('')}

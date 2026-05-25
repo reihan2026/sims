@@ -10,6 +10,7 @@ function openNewInvVForVendor(poId,vendor){
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Simpan invoice';}
   document.getElementById('invv-item-boxes').innerHTML='';document.getElementById('invv-items-info').textContent='Pilih PO dan vendor dulu';
   const sb=document.getElementById('srch-invv-item');if(sb){sb.style.display='none';sb.value='';}
+  const katF=document.getElementById('kat-invv-filter');if(katF){katF.style.display='none';katF.value='';}
   const pos=getPOs();document.getElementById('invv-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   updateDL();if(poId)loadInvVItems();openModal('modal-invv');
 }
@@ -154,7 +155,7 @@ function loadInvVItems(){
       const suggestHarga=_histH&&!hv?_histH.harga:null;
       const useHarga=hv||(suggestHarga||item.harga_po||0);
       const suggestBadge=suggestHarga?`<div title="Histori: ${fmtF(suggestHarga)} (${_histH.no} - ${_histH.vendor})" style="font-size:9px;color:var(--in);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${suggestHarga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">💡 Histori: ${fmtF(suggestHarga)}</div>`:'';
-      html+=`<tr id="invv-tr-${item._idx}">
+      html+=`<tr id="invv-tr-${item._idx}" data-kat="${item.kat||''}">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
         <td style="padding:7px 8px" colspan="2">
           <div style="font-weight:500">${item.nama}</div>
@@ -179,18 +180,25 @@ function loadInvVItems(){
   html+='</tbody></table></div>';wrap.innerHTML=html;
   const srchBar=document.getElementById('srch-invv-item');
   if(srchBar){srchBar.style.display='';srchBar.value='';}
+  const katFilter=document.getElementById('kat-invv-filter');
+  if(katFilter){
+    const kats=[...new Set(available.map(i=>i.kat).filter(Boolean))].sort();
+    katFilter.innerHTML='<option value="">Semua kategori</option>'+kats.map(k=>`<option value="${k}">${k}</option>`).join('');
+    katFilter.style.display=kats.length>1?'':'none';
+    katFilter.value='';
+  }
   calcInvVTotal();
 }
 
 function filterInvVItems(){
   const q=(document.getElementById('srch-invv-item')?.value||'').toLowerCase().trim();
+  const kat=document.getElementById('kat-invv-filter')?.value||'';
   document.querySelectorAll('#invv-item-boxes tbody tr').forEach(tr=>{
-    // Skip group header rows (colspan)
     if(tr.children[0]?.colSpan>1){return;}
     const nama=tr.querySelector('td:nth-child(2)')?.textContent.toLowerCase()||'';
-    tr.style.display=!q||nama.includes(q)?'':'none';
+    const trKat=tr.dataset.kat||'';
+    tr.style.display=(!q||nama.includes(q))&&(!kat||trKat===kat)?'':'none';
   });
-  // Hide hari group headers if all sibling rows hidden
   document.querySelectorAll('#invv-item-boxes tbody tr').forEach(tr=>{
     if(!(tr.children[0]?.colSpan>1))return;
     let next=tr.nextElementSibling;let anyVisible=false;
@@ -198,7 +206,7 @@ function filterInvVItems(){
       if(next.style.display!=='none')anyVisible=true;
       next=next.nextElementSibling;
     }
-    tr.style.display=anyVisible||!q?'':'none';
+    tr.style.display=anyVisible||(!q&&!kat)?'':'none';
   });
 }
 function updateInvVHarga(input,idx){

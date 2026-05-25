@@ -9,6 +9,8 @@ function openNewInvD(poId){
   if(invdBoxes)invdBoxes.innerHTML='';
   const invdInfo=document.getElementById('invd-items-info');
   if(invdInfo)invdInfo.textContent='';
+  const katF=document.getElementById('kat-invd-filter');if(katF){katF.style.display='none';katF.value='';}
+  const srchI=document.getElementById('srch-invd-item');if(srchI){srchI.style.display='none';srchI.value='';}
   const pos=getPOs();document.getElementById('invd-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   // PT dropdown: only unpaid invV that don't already have a linked pass-through invD
   const ptUsedIds=new Set(getInvD().filter(d=>d.type==='passthrough'&&d.pt_inv_id).map(d=>d.pt_inv_id));
@@ -74,7 +76,7 @@ function loadInvDItems(){
       if(!invVItem)invVItem=(linkedInvV.items||[]).find(i=>i.nama===item.nama);
     }
     return{
-      _idx:pidx,nama:item.nama,
+      _idx:pidx,nama:item.nama,kat:item.kat||'',
       qty:invVItem?.qty||item.qty,satuan:invVItem?.satuan||item.satuan,
       harga_ref:invVItem?.harga_vendor||item.harga_vendor||0,harga:item.harga_po||0,
       hari:item.hari||'',deadline:item.deadline||'',
@@ -118,7 +120,7 @@ function loadInvDItems(){
       const rid='invd-'+Date.now()+'-'+ri+'-'+hari.replace(/[^a-z0-9]/gi,'_');
       const pct=item.harga_ref>0&&item.harga>item.harga_ref?(((item.harga-item.harga_ref)/item.harga_ref)*100).toFixed(1):null;
       const sub=(item.qty||0)*(item.harga||0);
-      html+=`<tr style="border-bottom:1px solid var(--bd)">
+      html+=`<tr style="border-bottom:1px solid var(--bd)" data-kat="${item.kat||''}">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invd-cb" id="cb-${rid}"
           data-nama="${(item.nama||'').replace(/"/g,'&quot;')}"
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
@@ -137,7 +139,36 @@ function loadInvDItems(){
   });
   html+='</tbody></table>';
   if(boxes)boxes.innerHTML=html;
+  const katFilter=document.getElementById('kat-invd-filter');
+  const srchBar=document.getElementById('srch-invd-item');
+  if(katFilter){
+    const kats=[...new Set(available.map(i=>i.kat).filter(Boolean))].sort();
+    katFilter.innerHTML='<option value="">Semua kategori</option>'+kats.map(k=>`<option value="${k}">${k}</option>`).join('');
+    katFilter.style.display=kats.length>1?'':'none';
+    katFilter.value='';
+  }
+  if(srchBar){srchBar.style.display='';srchBar.value='';}
   calcInvDTotal();
+}
+
+function filterInvDItems(){
+  const q=(document.getElementById('srch-invd-item')?.value||'').toLowerCase().trim();
+  const kat=document.getElementById('kat-invd-filter')?.value||'';
+  document.querySelectorAll('#invd-item-boxes tbody tr').forEach(tr=>{
+    if(tr.children[0]?.colSpan>1){return;}
+    const nama=tr.querySelector('td:nth-child(2)')?.textContent.toLowerCase()||'';
+    const trKat=tr.dataset.kat||'';
+    tr.style.display=(!q||nama.includes(q))&&(!kat||trKat===kat)?'':'none';
+  });
+  document.querySelectorAll('#invd-item-boxes tbody tr').forEach(tr=>{
+    if(!(tr.children[0]?.colSpan>1))return;
+    let next=tr.nextElementSibling;let anyVisible=false;
+    while(next&&!(next.children[0]?.colSpan>1)){
+      if(next.style.display!=='none')anyVisible=true;
+      next=next.nextElementSibling;
+    }
+    tr.style.display=anyVisible||(!q&&!kat)?'':'none';
+  });
 }
 
 function updateInvDHarga(input){

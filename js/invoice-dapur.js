@@ -1,5 +1,6 @@
 // ===== INVOICE DAPUR =====
 let invDRows=0;
+let _invDMergeMode=false;
 function openNewInvD(poId){
   document.getElementById('invd-no').value=nextInvNo('d');
   document.getElementById('invd-tgl').value=today();document.getElementById('invd-dapur').value='';document.getElementById('invd-jatuh').value='';document.getElementById('invd-cat').value='';document.getElementById('invd-total').value='';
@@ -11,6 +12,7 @@ function openNewInvD(poId){
   if(invdInfo)invdInfo.textContent='';
   const katF=document.getElementById('kat-invd-filter');if(katF){katF.style.display='none';katF.value='';}
   const srchI=document.getElementById('srch-invd-item');if(srchI){srchI.style.display='none';srchI.value='';}
+  _invDMergeMode=false;const mergeBtn=document.getElementById('invd-merge-btn');if(mergeBtn)mergeBtn.style.display='none';
   const pos=getPOs();document.getElementById('invd-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   // PT dropdown: only unpaid invV that don't already have a linked pass-through invD
   const ptUsedIds=new Set(getInvD().filter(d=>d.type==='passthrough'&&d.pt_inv_id).map(d=>d.pt_inv_id));
@@ -57,9 +59,10 @@ function loadInvDItems(){
         return{nama:i.nama,hari:poItem?.hari||'',deadline:poItem?.deadline||''};
       });
     } else {
-      invItems=(d.items||[]).map(i=>{
+      invItems=(d.items||[]).flatMap(i=>{
         const nama=(i.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
-        return{nama,hari:i.hari||'',deadline:i.deadline||''};
+        if(i._src_items&&i._src_items.length)return i._src_items.map(s=>({nama,hari:s.hari||'',deadline:s.deadline||''}));
+        return[{nama,hari:i.hari||'',deadline:i.deadline||''}];
       });
     }
     invItems.forEach(i=>{const k=itemKey(i);coveredCount.set(k,(coveredCount.get(k)||0)+1);});
@@ -98,10 +101,37 @@ function loadInvDItems(){
     calcInvDTotal();return;
   }
 
-  // Group by hari
-  const byHari={};available.forEach(i=>{const k=i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
+  // Merge mode: group same nama+satuan into one row with summed qty
+  const _nameGroups={};
+  available.forEach(i=>{const k=i.nama+'||'+i.satuan;if(!_nameGroups[k])_nameGroups[k]=[];_nameGroups[k].push(i);});
+  const hasMergeable=Object.values(_nameGroups).some(g=>g.length>1);
+  const mergeBtn=document.getElementById('invd-merge-btn');
+  if(mergeBtn){
+    mergeBtn.style.display=hasMergeable?'':'none';
+    if(hasMergeable){
+      mergeBtn.textContent=_invDMergeMode?'Tampilkan terpisah':'Gabung serupa';
+      mergeBtn.style.background=_invDMergeMode?'var(--ac)':'var(--bg)';
+      mergeBtn.style.color=_invDMergeMode?'#fff':'var(--t2)';
+      mergeBtn.style.borderColor=_invDMergeMode?'var(--ac)':'var(--bd)';
+    } else {
+      _invDMergeMode=false;
+    }
+  }
+  let displayItems=available;
+  if(_invDMergeMode){
+    displayItems=Object.values(_nameGroups).map(grp=>{
+      if(grp.length===1)return grp[0];
+      const refs=grp.map(i=>i.harga_ref).filter(Boolean);
+      const refMin=refs.length?Math.min(...refs):0;const refMax=refs.length?Math.max(...refs):0;
+      return{...grp[0],qty:grp.reduce((s,i)=>s+(i.qty||0),0),harga_ref:refMax,
+        _refRange:refMin!==refMax,_refMin:refMin,_merged:true,_srcItems:grp,_noInvV:grp.some(i=>i._noInvV)};
+    });
+  }
 
-  const noInvVCount=available.filter(i=>i._noInvV).length;
+  // Group by hari
+  const byHari={};displayItems.forEach(i=>{const k=_invDMergeMode&&i._merged?'—':i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
+
+  const noInvVCount=displayItems.filter(i=>i._noInvV).length;
   let html=noInvVCount?`<div style="margin-bottom:8px;padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt)">⚠ ${noInvVCount} item belum memiliki invoice vendor — pastikan sudah diinput sebelum menagih ke dapur.</div>`:'';
   html+='<table style="width:100%;border-collapse:collapse;font-size:12px">';
   html+=`<thead><tr style="background:var(--s2)">
@@ -120,15 +150,17 @@ function loadInvDItems(){
       const rid='invd-'+Date.now()+'-'+ri+'-'+hari.replace(/[^a-z0-9]/gi,'_');
       const pct=item.harga_ref>0&&item.harga>item.harga_ref?(((item.harga-item.harga_ref)/item.harga_ref)*100).toFixed(1):null;
       const sub=(item.qty||0)*(item.harga||0);
+      const mergedIdxsAttr=item._merged?`data-merged-idxs="${item._srcItems.map(s=>s._idx).join(',')}"`:'';
+      const refDisplay=item._merged&&item._refRange?`${fmtF(item._refMin)}–${fmtF(item.harga_ref)}`:(item.harga_ref?fmtF(item.harga_ref):'—');
       html+=`<tr style="border-bottom:1px solid var(--bd)" data-kat="${item.kat||''}">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invd-cb" id="cb-${rid}"
           data-nama="${(item.nama||'').replace(/"/g,'&quot;')}"
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
           data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}"
-          checked onchange="calcInvDTotal()"></td>
-        <td style="padding:7px 8px;font-weight:500">${item.nama}${item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
+          ${mergedIdxsAttr} checked onchange="calcInvDTotal()"></td>
+        <td style="padding:7px 8px;font-weight:500">${item.nama}${!item._merged&&item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._merged?`<div style="font-size:10px;color:var(--t3);margin-top:1px">Gabungan ${item._srcItems.length} item</div>`:''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
-        <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${item.harga_ref?fmtF(item.harga_ref):'—'}</td>
+        <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${refDisplay}</td>
         <td style="padding:7px 8px"><input type="number" class="invd-h" id="h-${rid}" value="${item.harga||''}" min="0"
           style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px"
           data-rid="${rid}" oninput="updateInvDHarga(this)"></td>
@@ -170,6 +202,7 @@ function filterInvDItems(){
     tr.style.display=anyVisible||(!q&&!kat)?'':'none';
   });
 }
+function toggleInvDMerge(){_invDMergeMode=!_invDMergeMode;loadInvDItems();}
 
 function updateInvDHarga(input){
   const rid=input.dataset.rid;
@@ -224,7 +257,10 @@ function saveInvD(){
       const deadline=cb.dataset.deadline||'';
       const invv_id=cb.dataset.invvId||'';
       const catatan_item=document.getElementById('icat-'+rid)?.value.trim()||'';
-      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,catatan_item});
+      const mergedIdxs=cb.dataset.mergedIdxs;
+      let srcItems=null;
+      if(mergedIdxs&&poId){const po=getPOs().find(p=>p.id===poId);if(po)srcItems=mergedIdxs.split(',').map(Number).map(idx=>po.items[idx]).filter(Boolean).map(pi=>({hari:pi.hari||'',deadline:pi.deadline||''}));}
+      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,catatan_item,...(srcItems?{_src_items:srcItems}:{})});
     });
     if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);

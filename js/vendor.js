@@ -320,7 +320,7 @@ async function printInvDFormal(invId){
   // Table
   const tableHtml=`<table class="tbl"><thead><tr>
     <th>Nama item</th>
-    <th>Qty</th><th>Sat</th>
+    <th>Qty</th><th>Satuan</th>
     <th style="text-align:right">Harga (Rp)</th><th style="text-align:right">Subtotal</th>
   </tr></thead><tbody>
     ${items.map(i=>`<tr><td>${i.nama}${i.catatan_item?`<div style="font-size:11px;color:#6B6560;font-style:italic">${i.catatan_item}</div>`:''}</td>
@@ -340,7 +340,7 @@ async function printInvDFormal(invId){
     ${vs.rekening.map(r=>`<div class="rek-row"><span class="rek-bank">${r.bank}</span><span>${r.no}</span>${r.atas?`<span style="color:#6B6560">a.n. ${r.atas}</span>`:''}</div>`).join('')}
   </div>`:'';
   const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
-  const body=`<div class="w">${hdrHtml}${infoHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}<div class="ft">Dicetak: ${new Date().toLocaleDateString('id-ID',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`;
+  const body=`<div class="w">${hdrHtml}${infoHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   const w=window.open('','_blank','width=820,height=800');
   w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
   w.document.close();

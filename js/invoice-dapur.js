@@ -1,6 +1,6 @@
 // ===== INVOICE DAPUR =====
 let invDRows=0;
-let _invDMergeMode=false;
+let _invDMergedKeys=new Set();let _invDNameGroups={};
 function openNewInvD(poId){
   document.getElementById('invd-no').value=nextInvNo('d');
   document.getElementById('invd-tgl').value=today();document.getElementById('invd-dapur').value='';document.getElementById('invd-jatuh').value='';document.getElementById('invd-cat').value='';document.getElementById('invd-total').value='';
@@ -12,7 +12,7 @@ function openNewInvD(poId){
   if(invdInfo)invdInfo.textContent='';
   const katF=document.getElementById('kat-invd-filter');if(katF){katF.style.display='none';katF.value='';}
   const srchI=document.getElementById('srch-invd-item');if(srchI){srchI.style.display='none';srchI.value='';}
-  _invDMergeMode=false;const mergeBtn=document.getElementById('invd-merge-btn');if(mergeBtn)mergeBtn.style.display='none';
+  _invDMergedKeys=new Set();_invDNameGroups={};const mergeBtn=document.getElementById('invd-merge-btn');if(mergeBtn)mergeBtn.style.display='none';
   const pos=getPOs();document.getElementById('invd-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
   // PT dropdown: only unpaid invV that don't already have a linked pass-through invD
   const ptUsedIds=new Set(getInvD().filter(d=>d.type==='passthrough'&&d.pt_inv_id).map(d=>d.pt_inv_id));
@@ -101,35 +101,39 @@ function loadInvDItems(){
     calcInvDTotal();return;
   }
 
-  // Merge mode: group same nama+satuan into one row with summed qty
-  const _nameGroups={};
-  available.forEach(i=>{const k=i.nama+'||'+i.satuan;if(!_nameGroups[k])_nameGroups[k]=[];_nameGroups[k].push(i);});
-  const hasMergeable=Object.values(_nameGroups).some(g=>g.length>1);
+  // Merge mode: group same nama+satuan — each key can be independently merged
+  _invDNameGroups={};
+  available.forEach(i=>{const k=i.nama+'||'+i.satuan;if(!_invDNameGroups[k])_invDNameGroups[k]=[];_invDNameGroups[k].push(i);});
+  // Remove merged keys that are no longer mergeable
+  [..._invDMergedKeys].forEach(k=>{if(!_invDNameGroups[k]||_invDNameGroups[k].length<2)_invDMergedKeys.delete(k);});
+  const mergeableKeys=Object.keys(_invDNameGroups).filter(k=>_invDNameGroups[k].length>1);
+  const hasMergeable=mergeableKeys.length>0;
+  const anyMerged=mergeableKeys.some(k=>_invDMergedKeys.has(k));
+  const allMerged=hasMergeable&&mergeableKeys.every(k=>_invDMergedKeys.has(k));
   const mergeBtn=document.getElementById('invd-merge-btn');
   if(mergeBtn){
     mergeBtn.style.display=hasMergeable?'':'none';
     if(hasMergeable){
-      mergeBtn.textContent=_invDMergeMode?'Tampilkan terpisah':'Gabung serupa';
-      mergeBtn.style.background=_invDMergeMode?'var(--ac)':'var(--bg)';
-      mergeBtn.style.color=_invDMergeMode?'#fff':'var(--t2)';
-      mergeBtn.style.borderColor=_invDMergeMode?'var(--ac)':'var(--bd)';
-    } else {
-      _invDMergeMode=false;
+      mergeBtn.textContent=allMerged?'Pisah semua':'Gabung semua';
+      mergeBtn.style.background=anyMerged?'var(--ac)':'var(--bg)';
+      mergeBtn.style.color=anyMerged?'#fff':'var(--t2)';
+      mergeBtn.style.borderColor=anyMerged?'var(--ac)':'var(--bd)';
     }
   }
-  let displayItems=available;
-  if(_invDMergeMode){
-    displayItems=Object.values(_nameGroups).map(grp=>{
-      if(grp.length===1)return grp[0];
+  const displayItems=[];
+  Object.entries(_invDNameGroups).forEach(([k,grp])=>{
+    if(_invDMergedKeys.has(k)&&grp.length>1){
       const refs=grp.map(i=>i.harga_ref).filter(Boolean);
       const refMin=refs.length?Math.min(...refs):0;const refMax=refs.length?Math.max(...refs):0;
-      return{...grp[0],qty:grp.reduce((s,i)=>s+(i.qty||0),0),harga_ref:refMax,
-        _refRange:refMin!==refMax,_refMin:refMin,_merged:true,_srcItems:grp,_noInvV:grp.some(i=>i._noInvV)};
-    });
-  }
+      displayItems.push({...grp[0],qty:grp.reduce((s,i)=>s+(i.qty||0),0),harga_ref:refMax,
+        _refRange:refMin!==refMax,_refMin:refMin,_merged:true,_srcItems:grp,_noInvV:grp.some(i=>i._noInvV),_mergeKey:k});
+    } else {
+      grp.forEach((item,gi)=>{displayItems.push({...item,_dupFirst:gi===0,_dupKey:grp.length>1?k:null,_dupCount:grp.length});});
+    }
+  });
 
   // Group by hari
-  const byHari={};displayItems.forEach(i=>{const k=_invDMergeMode&&i._merged?'—':i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
+  const byHari={};displayItems.forEach(i=>{const k=i._merged?'—':i.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push(i);});
 
   const noInvVCount=displayItems.filter(i=>i._noInvV).length;
   let html=noInvVCount?`<div style="margin-bottom:8px;padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt)">⚠ ${noInvVCount} item belum memiliki invoice vendor — pastikan sudah diinput sebelum menagih ke dapur.</div>`:'';
@@ -159,7 +163,7 @@ function loadInvDItems(){
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
           data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}"
           ${mergedIdxsAttr} ${mergedInvvidsAttr} checked onchange="calcInvDTotal()"></td>
-        <td style="padding:7px 8px;font-weight:500">${item.nama}${!item._merged&&item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._merged?`<div style="font-size:10px;color:var(--t3);margin-top:1px">Gabungan ${item._srcItems.length} item</div>`:''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
+        <td style="padding:7px 8px;font-weight:500">${item.nama}${!item._merged&&item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._merged?`<div style="font-size:10px;color:var(--t3);margin-top:1px">Gabungan ${item._srcItems.length} item · <button type="button" onclick="toggleInvDMergeKey('${(item._mergeKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t2);cursor:pointer;line-height:1.6">Pisah</button></div>`:''}${item._dupFirst&&item._dupKey?`<div style="margin-top:2px"><button type="button" onclick="toggleInvDMergeKey('${(item._dupKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--ac);border-radius:var(--r);background:var(--bg);color:var(--ac);cursor:pointer;line-height:1.6">Gabung ${item._dupCount}×</button></div>`:''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${refDisplay}</td>
         <td style="padding:7px 8px"><input type="number" class="invd-h" id="h-${rid}" value="${item.harga||''}" min="0"
@@ -203,7 +207,16 @@ function filterInvDItems(){
     tr.style.display=anyVisible||(!q&&!kat)?'':'none';
   });
 }
-function toggleInvDMerge(){_invDMergeMode=!_invDMergeMode;loadInvDItems();}
+function toggleInvDMerge(){
+  const mergeableKeys=Object.keys(_invDNameGroups).filter(k=>_invDNameGroups[k].length>1);
+  const allMerged=mergeableKeys.length>0&&mergeableKeys.every(k=>_invDMergedKeys.has(k));
+  if(allMerged){_invDMergedKeys.clear();}else{mergeableKeys.forEach(k=>_invDMergedKeys.add(k));}
+  loadInvDItems();
+}
+function toggleInvDMergeKey(k){
+  if(_invDMergedKeys.has(k))_invDMergedKeys.delete(k);else _invDMergedKeys.add(k);
+  loadInvDItems();
+}
 
 function updateInvDHarga(input){
   const rid=input.dataset.rid;

@@ -46,23 +46,35 @@ function buildLaporanData(poId){
   // Items by hari — search directly across all invVs by hari+nama to avoid stale-idx issues
   const {itemInvV}=buildLookup(poId);
   const byHari={};
+  const claimedInvVItems=new Set(); // prevent two PO items with same nama from claiming the same invV item
   po.items.forEach((item,idx)=>{
     const h=item.hari||'—';
     if(!byHari[h])byHari[h]=[];
     const nm=item.nama.trim();
-    // Pass A: search all invVs for item matching hari+nama (bypasses stale idx)
+    // Pass A: search all invVs for item matching hari+nama (bypasses stale idx), skip already-claimed
     let bestIv=null,bestIvItem=null;
     if(item.hari){
-      for(const iv of invVs){
-        const m=(iv.items||[]).find(i=>(i.nama||'').trim()===nm&&(i.hari||'')===(item.hari||''));
-        if(m){bestIv=iv;bestIvItem=m;break;}
+      passA:for(const iv of invVs){
+        const iItems=iv.items||[];
+        for(let j=0;j<iItems.length;j++){
+          const claimKey=`${iv.id}||${j}`;
+          if(claimedInvVItems.has(claimKey))continue;
+          if((iItems[j].nama||'').trim()===nm&&(iItems[j].hari||'')===(item.hari||'')){
+            bestIv=iv;bestIvItem=iItems[j];claimedInvVItems.add(claimKey);break passA;
+          }
+        }
       }
     }
-    // Pass B: fallback to buildLookup position match + name-only
+    // Pass B: fallback to buildLookup position match + name-only, skip already-claimed
     if(!bestIvItem){
       const ivObj=itemInvV[idx];
-      bestIvItem=(ivObj?.items||[]).find(i=>(i.nama||'').trim()===nm);
-      bestIv=ivObj||null;
+      const iItems=ivObj?.items||[];
+      for(let j=0;j<iItems.length;j++){
+        const claimKey=`${ivObj.id}||${j}`;
+        if(claimedInvVItems.has(claimKey))continue;
+        if((iItems[j].nama||'').trim()===nm){bestIv=ivObj;bestIvItem=iItems[j];claimedInvVItems.add(claimKey);break;}
+      }
+      if(!bestIv)bestIv=ivObj||null;
     }
     const hvRaw=bestIvItem?(bestIvItem.konv?(bestIvItem.harga_vendor_po!=null?bestIvItem.harga_vendor_po:bestIvItem.harga_vendor):bestIvItem.harga_vendor||bestIvItem.harga_vendor_po||0):0;
     const hv=hvRaw||item.harga_vendor||0;

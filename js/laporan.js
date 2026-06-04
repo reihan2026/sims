@@ -225,28 +225,39 @@ function renderLaporanHTML(d){
   }
 
 
-  // Margin by item
+  // Margin by item — grouped by nama+satuan
+  const itemGroupMap=new Map();
+  allItems.forEach(item=>{
+    const key=(item.nama||'').trim()+'||'+(item.satuan||'');
+    if(!itemGroupMap.has(key))itemGroupMap.set(key,{nama:item.nama,kat:item.kat,satuan:item.satuan||'',totalQty:0,totalMargin:0,allNull:true,hd_set:new Set(),hv_set:new Set()});
+    const g=itemGroupMap.get(key);
+    g.totalQty+=(item.qty||0);
+    if(item.margin!==null){g.totalMargin+=item.margin;g.allNull=false;}
+    if(item.harga_dapur!=null)g.hd_set.add(item.harga_dapur);
+    if(item.harga_vendor)g.hv_set.add(item.harga_vendor);
+  });
   let itemMarginHtml=`<table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="background:#f5f5f5">
       <th style="padding:5px 8px;text-align:left">Item</th>
-      <th style="padding:5px 8px;text-align:left">Hari</th>
-      <th style="padding:5px 8px;text-align:right">Qty</th>
+      <th style="padding:5px 8px;text-align:right">Total Qty</th>
       <th style="padding:5px 8px;text-align:right">Hrg dapur</th>
       <th style="padding:5px 8px;text-align:right">Hrg vendor</th>
-      <th style="padding:5px 8px;text-align:right">Margin</th>
+      <th style="padding:5px 8px;text-align:right">Total Margin</th>
     </tr></thead><tbody>`;
-  allItems.forEach(item=>{
+  itemGroupMap.forEach(g=>{
+    const hd=g.hd_set.size===1?[...g.hd_set][0]:null;
+    const hv=g.hv_set.size===1?[...g.hv_set][0]:null;
+    const marginDisplay=g.allNull?null:g.totalMargin;
     itemMarginHtml+=`<tr style="border-bottom:1px solid #f0f0f0">
-      <td style="padding:5px 8px;font-weight:500">${item.nama}${item.kat?` <span style="font-size:10px;color:#888">${item.kat}</span>`:''}</td>
-      <td style="padding:5px 8px;color:#666;font-size:11px">${item.hari||'—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.qty} ${item.satuan}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.harga_dapur!=null?fmtF(item.harga_dapur):'—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${item.harga_vendor?fmtF(item.harga_vendor):'—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${item.margin===null?'#ccc':item.margin>=0?'#16a34a':'#dc2626'}">${item.margin===null?'—':fmtF(item.margin)}</td>
+      <td style="padding:5px 8px;font-weight:500">${g.nama}${g.kat?` <span style="font-size:10px;color:#888">${g.kat}</span>`:''}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${g.totalQty} ${g.satuan}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${hd!=null?fmtF(hd):'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${hv!=null?fmtF(hv):'—'}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:600;color:${marginDisplay===null?'#ccc':marginDisplay>=0?'#16a34a':'#dc2626'}">${marginDisplay===null?'—':fmtF(marginDisplay)}</td>
     </tr>`;
   });
   itemMarginHtml+=`<tr style="border-top:2px solid #222;font-weight:600">
-    <td colspan="5" style="padding:6px 8px;text-align:right">Total margin</td>
+    <td colspan="4" style="padding:6px 8px;text-align:right">Total margin</td>
     <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${totalItemMargin>=0?'#16a34a':'#dc2626'}">${fmtF(totalItemMargin)}</td>
   </tr></tbody></table>`;
   html+=sec('Margin per Item',itemMarginHtml);

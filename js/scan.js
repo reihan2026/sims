@@ -62,6 +62,8 @@ async function _doScan(file) {
   try {
     const result = await _callClaudeAPI(file);
     if (!result.items || !result.items.length) { showToast('Tidak ada item terdeteksi — coba foto yang lebih jelas', true); return; }
+    // Auto-attach scanned file to the invoice file input
+    try { const dt = new DataTransfer(); dt.items.add(file); document.getElementById('invv-file').files = dt.files; } catch(e) {}
     _showScanPreview(result);
   } catch(e) {
     showToast('Gagal scan: ' + e.message, true);

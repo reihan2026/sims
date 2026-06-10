@@ -231,6 +231,10 @@ function applyScanToForm() {
     if (tglField && !tglField.value) tglField.value = tglPreview;
   }
 
+  // Uncheck all first so we start from a clean state
+  document.querySelectorAll('.invv-cb').forEach(cb => { cb.checked = false; });
+
+  const claimedIdxs = new Set();
   let applied = 0, skipped = 0;
   for (let i = 0; i < _scanItems.length; i++) {
     if (!document.getElementById('scan-chk-' + i)?.checked) continue;
@@ -239,19 +243,22 @@ function applyScanToForm() {
     if (!nama) continue;
 
     let matched = false;
-    document.querySelectorAll('.invv-cb').forEach(cb => {
+    for (const cb of document.querySelectorAll('.invv-cb')) {
+      const idx = cb.dataset.idx;
+      if (claimedIdxs.has(idx)) continue; // already claimed by another scan item
       const cbNama = (cb.dataset.nama || '').trim().toLowerCase();
       if (cbNama === nama || cbNama.includes(nama) || nama.includes(cbNama)) {
         cb.checked = true;
-        const idx = cb.dataset.idx;
+        claimedIdxs.add(idx);
         if (hv > 0) {
           const hvInput = document.querySelector(`.invv-hv[data-idx="${idx}"]`);
           if (hvInput) { hvInput.value = hv; updateInvVHarga(hvInput, parseInt(idx)); }
         }
         matched = true;
         applied++;
+        break; // satu scan item → satu PO item, stop setelah match pertama
       }
-    });
+    }
     if (!matched) skipped++;
   }
 

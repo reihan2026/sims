@@ -139,7 +139,7 @@ function _showScanPreview(result) {
   // Fill vendor/tgl header fields in preview
   const vendorEl = document.getElementById('scan-vendor');
   const tglEl = document.getElementById('scan-tgl');
-  if (vendorEl) vendorEl.value = _scanMeta.vendor || '';
+  if (vendorEl) vendorEl.value = _matchVendor(_scanMeta.vendor);
   if (tglEl) tglEl.value = _scanMeta.tgl || '';
 
   const tbody = document.getElementById('scan-preview-body');
@@ -153,6 +153,38 @@ function _showScanPreview(result) {
   </tr>`).join('');
   _recalcScanTotal();
   openModal('modal-scan-preview');
+}
+
+function _matchVendor(rawName) {
+  if (!rawName) return '';
+  const vendors = (getMaster()?.vendor || []).map(v => v.nama).filter(Boolean);
+  if (!vendors.length) return '';
+
+  const normalize = s => s.toLowerCase()
+    .replace(/\b(cv|pt|ud|tb|toko)\.?\s*/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const normRaw = normalize(rawName);
+  const rawWords = normRaw.split(' ').filter(w => w.length > 1);
+  let best = '', bestScore = 0;
+
+  vendors.forEach(v => {
+    const normV = normalize(v);
+    const vWords = normV.split(' ').filter(w => w.length > 1);
+    let matches = 0;
+    rawWords.forEach(rw => {
+      if (vWords.includes(rw)) { matches++; return; }
+      // Partial: one word contains the other (handles "tmkaya" ↔ "tm"+"kaya")
+      if (vWords.some(vw => vw.includes(rw) || rw.includes(vw))) matches += 0.6;
+    });
+    const union = new Set([...rawWords, ...vWords]).size;
+    const score = union > 0 ? matches / union : 0;
+    if (score > bestScore) { bestScore = score; best = v; }
+  });
+
+  return bestScore >= 0.35 ? best : '';
 }
 
 function _recalcScanTotal() {

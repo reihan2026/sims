@@ -661,9 +661,43 @@
         <input type="number" id="invv-ongkir" min="0" placeholder="0" oninput="calcInvVTotal()"></div>
       <div class="fg"><label class="lbl">Catatan</label><input type="text" id="invv-cat"></div>
     </div>
-    <div class="fg"><label class="lbl">Upload file invoice vendor</label><input type="file" id="invv-file" accept="image/*,.pdf"></div>
+    <div class="fg"><label class="lbl">Upload file invoice vendor <span style="font-weight:400;color:var(--t3);font-size:10px">— atau scan otomatis dengan AI</span></label>
+      <div style="display:flex;align-items:center;gap:8px"><input type="file" id="invv-file" accept="image/*,.pdf" style="flex:1"><button type="button" class="btn bsm bp" id="scan-ai-btn" onclick="triggerScanInvoice()" title="Upload foto/PDF invoice → AI baca item & harga otomatis">Scan AI</button></div>
+    </div>
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-invv')">Batal</button><button class="btn bp" id="invv-save-btn" onclick="saveInvV()">Simpan invoice</button></div>
+</div></div>
+
+<!-- Modal Scan Preview -->
+<div class="modal-bg" id="modal-scan-preview"><div class="modal mw">
+  <div class="mh"><span class="mht">Hasil Scan Invoice</span><button class="btn bgh bsm" onclick="closeModal('modal-scan-preview')">✕</button></div>
+  <div class="mb">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px">Cek dan koreksi hasil scan. Centang item yang ingin diisi ke form, lalu klik Apply.</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:var(--s2)">
+        <th style="padding:5px 8px;width:30px"></th>
+        <th style="padding:5px 8px;text-align:left">Nama item</th>
+        <th style="padding:5px 8px;text-align:right">Qty</th>
+        <th style="padding:5px 8px;text-align:left">Satuan</th>
+        <th style="padding:5px 8px;text-align:right">Harga vendor (Rp)</th>
+      </tr></thead>
+      <tbody id="scan-preview-body"></tbody>
+    </table></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--t3)">Item dicocokkan ke PO berdasarkan nama. Jika tidak cocok, nama item akan diabaikan.</div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-scan-preview')">Batal</button><button class="btn bp" onclick="applyScanToForm()">Apply ke form</button></div>
+</div></div>
+
+<!-- Modal API Key Scan -->
+<div class="modal-bg" id="modal-scan-key"><div class="modal" style="max-width:440px">
+  <div class="mh"><span class="mht">Pengaturan API Key AI</span><button class="btn bgh bsm" onclick="closeModal('modal-scan-key')">✕</button></div>
+  <div class="mb">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">Fitur Scan AI membutuhkan Anthropic API key. Key disimpan di Firestore — tidak ada di kode atau GitHub.</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:12px;padding:8px 10px;background:var(--s2);border-radius:var(--r)">Daftar &amp; dapatkan key: <strong>console.anthropic.com</strong> → API Keys → Create Key</div>
+    <div class="fg"><label class="lbl">Anthropic API Key</label><input type="password" id="scan-key-input" placeholder="sk-ant-api03-..." style="width:100%;font-family:var(--mn);font-size:12px"></div>
+    <div style="font-size:10px;color:var(--t3);margin-top:8px">Biaya ~Rp15–50 per scan (Claude Haiku). Terpotong dari kredit API kamu, bukan dari langganan Claude Code.</div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-scan-key')">Batal</button><button class="btn bp" id="scan-key-save-btn" onclick="saveScanKey()">Simpan</button></div>
 </div></div>
 
 <!-- Edit Invoice Vendor (revisi harga) -->
@@ -1004,5 +1038,6 @@
 <script src="js/misc.js"></script>
 <script src="js/laporan.js"></script>
 <script src="js/vendor.js"></script>
+<script src="js/scan.js"></script>
 </body>
 </html>

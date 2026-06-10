@@ -60,9 +60,9 @@ async function _doScan(file) {
   const btn = document.getElementById('scan-ai-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Scanning...'; }
   try {
-    const items = await _callClaudeAPI(file);
-    if (!items || !items.length) { showToast('Tidak ada item terdeteksi — coba foto yang lebih jelas', true); return; }
-    _showScanPreview(items);
+    const result = await _callClaudeAPI(file);
+    if (!result.items || !result.items.length) { showToast('Tidak ada item terdeteksi — coba foto yang lebih jelas', true); return; }
+    _showScanPreview(result);
   } catch(e) {
     showToast('Gagal scan: ' + e.message, true);
     if (e.message.includes('API key')) { _anthropicKey = null; openScanKeyModal(() => triggerScanInvoice()); }
@@ -96,7 +96,7 @@ async function _callClaudeAPI(file) {
         role: 'user',
         content: [
           contentItem,
-          { type: 'text', text: 'Ekstrak semua item dari invoice/nota pembelian ini. Kembalikan JSON array saja tanpa markdown dan tanpa penjelasan, format:\n[{"nama":"nama item","qty":angka,"satuan":"kg","harga_vendor":angka}]\nAturan: qty dan harga_vendor adalah angka murni tanpa titik/koma ribuan. Jika satuan tidak ada gunakan "pcs". Jika harga tidak terbaca gunakan 0. Abaikan baris total, subtotal, ongkir, diskon, pajak, dan header tabel.' }
+          { type: 'text', text: 'Ekstrak data dari invoice/nota pembelian ini. Kembalikan JSON object saja tanpa markdown dan tanpa penjelasan, format:\n{"vendor":"nama toko/vendor","tgl":"YYYY-MM-DD","items":[{"nama":"nama item","qty":angka,"satuan":"kg","harga_vendor":angka}]}\nAturan: qty dan harga_vendor adalah angka murni tanpa titik/koma ribuan. tgl harus format YYYY-MM-DD, jika tidak ada gunakan null. vendor adalah nama toko/supplier, jika tidak ada gunakan null. Jika satuan tidak ada gunakan "pcs". Jika harga tidak terbaca gunakan 0. Abaikan baris total, subtotal, ongkir, diskon, pajak, dan header tabel.' }
         ]
       }]
     })
@@ -111,7 +111,10 @@ async function _callClaudeAPI(file) {
   const data = await res.json();
   const text = (data.content[0].text || '').trim().replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    // Support both old array format and new object format
+    if (Array.isArray(parsed)) return { vendor: null, tgl: null, items: parsed };
+    return parsed;
   } catch(e) {
     throw new Error('Format respons tidak terbaca — coba foto lebih jelas');
   }
@@ -127,12 +130,21 @@ function _fileToBase64(file) {
 }
 
 let _scanItems = [];
+let _scanMeta = { vendor: null, tgl: null };
 
-function _showScanPreview(items) {
-  _scanItems = items;
+function _showScanPreview(result) {
+  _scanItems = result.items || [];
+  _scanMeta = { vendor: result.vendor || null, tgl: result.tgl || null };
+
+  // Fill vendor/tgl header fields in preview
+  const vendorEl = document.getElementById('scan-vendor');
+  const tglEl = document.getElementById('scan-tgl');
+  if (vendorEl) vendorEl.value = _scanMeta.vendor || '';
+  if (tglEl) tglEl.value = _scanMeta.tgl || '';
+
   const tbody = document.getElementById('scan-preview-body');
   if (!tbody) return;
-  tbody.innerHTML = items.map((item, i) => `<tr>
+  tbody.innerHTML = _scanItems.map((item, i) => `<tr>
     <td style="padding:5px 8px;text-align:center"><input type="checkbox" id="scan-chk-${i}" checked></td>
     <td style="padding:5px 8px"><input type="text" id="scan-nama-${i}" value="${(item.nama||'').replace(/"/g,'&quot;')}" style="width:100%;font-size:12px;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
     <td style="padding:5px 8px"><input type="number" id="scan-qty-${i}" value="${item.qty||''}" min="0" step="any" style="width:65px;font-size:12px;font-family:var(--mn);text-align:right;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
@@ -145,6 +157,23 @@ function _showScanPreview(items) {
 function applyScanToForm() {
   const hasPOItems = !!document.querySelector('.invv-cb');
   if (!hasPOItems) { showToast('Pilih PO dan vendor dulu agar item bisa diisi', true); return; }
+
+  // Fill vendor name if field is empty
+  const vendorPreview = document.getElementById('scan-vendor')?.value.trim();
+  if (vendorPreview) {
+    const vendorField = document.getElementById('invv-vendor');
+    if (vendorField && !vendorField.value.trim()) {
+      vendorField.value = vendorPreview;
+      loadInvVItems();
+    }
+  }
+
+  // Fill invoice date if field is empty
+  const tglPreview = document.getElementById('scan-tgl')?.value.trim();
+  if (tglPreview) {
+    const tglField = document.getElementById('invv-tgl');
+    if (tglField && !tglField.value) tglField.value = tglPreview;
+  }
 
   let applied = 0, skipped = 0;
   for (let i = 0; i < _scanItems.length; i++) {

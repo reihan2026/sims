@@ -96,7 +96,7 @@ async function _callClaudeAPI(file) {
         role: 'user',
         content: [
           contentItem,
-          { type: 'text', text: 'Ekstrak data dari invoice/nota pembelian ini. Kembalikan JSON object saja tanpa markdown dan tanpa penjelasan, format:\n{"vendor":"nama toko/vendor","tgl":"YYYY-MM-DD","items":[{"nama":"nama item","qty":angka,"satuan":"kg","harga_vendor":angka}]}\nAturan: qty dan harga_vendor adalah angka murni tanpa titik/koma ribuan. tgl harus format YYYY-MM-DD, jika tidak ada gunakan null. vendor adalah nama toko/supplier, jika tidak ada gunakan null. Jika satuan tidak ada gunakan "pcs". Jika harga tidak terbaca gunakan 0. Abaikan baris total, subtotal, ongkir, diskon, pajak, dan header tabel.' }
+          { type: 'text', text: 'Ekstrak data dari invoice/nota pembelian ini. Kembalikan JSON object saja tanpa markdown dan tanpa penjelasan, format:\n{"vendor":"nama toko/vendor","tgl":"YYYY-MM-DD","total":angka,"items":[{"nama":"nama item","qty":angka,"satuan":"kg","harga_vendor":angka}]}\nAturan: qty, harga_vendor, dan total adalah angka murni tanpa titik/koma ribuan. tgl harus format YYYY-MM-DD, jika tidak ada gunakan null. vendor adalah nama toko/supplier, jika tidak ada gunakan null. total adalah grand total/jumlah akhir yang tertera di invoice (sebelum ongkir jika terpisah), jika tidak ada gunakan null. Jika satuan tidak ada gunakan "pcs". Jika harga item tidak terbaca gunakan 0. Abaikan baris subtotal per kategori, ongkir, diskon, pajak, dan header tabel — hanya ekstrak baris item.' }
         ]
       }]
     })
@@ -130,11 +130,11 @@ function _fileToBase64(file) {
 }
 
 let _scanItems = [];
-let _scanMeta = { vendor: null, tgl: null };
+let _scanMeta = { vendor: null, tgl: null, total: null };
 
 function _showScanPreview(result) {
   _scanItems = result.items || [];
-  _scanMeta = { vendor: result.vendor || null, tgl: result.tgl || null };
+  _scanMeta = { vendor: result.vendor || null, tgl: result.tgl || null, total: result.total || null };
 
   // Fill vendor/tgl header fields in preview
   const vendorEl = document.getElementById('scan-vendor');
@@ -145,13 +145,37 @@ function _showScanPreview(result) {
   const tbody = document.getElementById('scan-preview-body');
   if (!tbody) return;
   tbody.innerHTML = _scanItems.map((item, i) => `<tr>
-    <td style="padding:5px 8px;text-align:center"><input type="checkbox" id="scan-chk-${i}" checked></td>
+    <td style="padding:5px 8px;text-align:center"><input type="checkbox" id="scan-chk-${i}" checked onchange="_recalcScanTotal()"></td>
     <td style="padding:5px 8px"><input type="text" id="scan-nama-${i}" value="${(item.nama||'').replace(/"/g,'&quot;')}" style="width:100%;font-size:12px;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
-    <td style="padding:5px 8px"><input type="number" id="scan-qty-${i}" value="${item.qty||''}" min="0" step="any" style="width:65px;font-size:12px;font-family:var(--mn);text-align:right;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
+    <td style="padding:5px 8px"><input type="number" id="scan-qty-${i}" value="${item.qty||''}" min="0" step="any" style="width:65px;font-size:12px;font-family:var(--mn);text-align:right;padding:3px 5px;border:1px solid var(--bd);border-radius:3px" oninput="_recalcScanTotal()"></td>
     <td style="padding:5px 8px"><input type="text" id="scan-sat-${i}" value="${item.satuan||'pcs'}" style="width:55px;font-size:12px;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
-    <td style="padding:5px 8px"><input type="number" id="scan-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:120px;font-size:12px;font-family:var(--mn);text-align:right;padding:3px 5px;border:1px solid var(--bd);border-radius:3px"></td>
+    <td style="padding:5px 8px"><input type="number" id="scan-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:120px;font-size:12px;font-family:var(--mn);text-align:right;padding:3px 5px;border:1px solid var(--bd);border-radius:3px" oninput="_recalcScanTotal()"></td>
   </tr>`).join('');
+  _recalcScanTotal();
   openModal('modal-scan-preview');
+}
+
+function _recalcScanTotal() {
+  let calc = 0;
+  for (let i = 0; i < _scanItems.length; i++) {
+    if (!document.getElementById('scan-chk-' + i)?.checked) continue;
+    const qty = parseFloat(document.getElementById('scan-qty-' + i)?.value) || 0;
+    const hv = parseFloat(document.getElementById('scan-hv-' + i)?.value) || 0;
+    calc += qty * hv;
+  }
+  const invoiceTotal = _scanMeta.total;
+  const calcEl = document.getElementById('scan-total-calc');
+  const invoiceEl = document.getElementById('scan-total-invoice');
+  const diffEl = document.getElementById('scan-total-diff');
+  if (calcEl) calcEl.textContent = fmtF(calc);
+  if (invoiceEl) invoiceEl.textContent = invoiceTotal != null ? fmtF(invoiceTotal) : '—';
+  if (diffEl) {
+    if (invoiceTotal == null) { diffEl.textContent = ''; return; }
+    const diff = calc - invoiceTotal;
+    const ok = Math.abs(diff) < 1;
+    diffEl.textContent = ok ? '✓ Cocok' : (diff > 0 ? '+' : '') + fmtF(diff);
+    diffEl.style.color = ok ? 'var(--ac)' : 'var(--dn)';
+  }
 }
 
 function applyScanToForm() {

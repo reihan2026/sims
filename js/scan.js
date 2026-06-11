@@ -157,6 +157,20 @@ function _showScanPreview(result) {
   openModal('modal-scan-preview');
 }
 
+function _itemNameScore(a, b) {
+  if (a === b) return 1;
+  const words = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim().split(' ').filter(w => w.length > 1);
+  const wa = words(a), wb = words(b);
+  if (!wa.length || !wb.length) return 0;
+  let matches = 0;
+  wa.forEach(w => {
+    if (wb.includes(w)) { matches++; return; }
+    if (wb.some(v => v.includes(w) || w.includes(v))) matches += 0.6;
+  });
+  const union = new Set([...wa, ...wb]).size;
+  return union > 0 ? matches / union : 0;
+}
+
 function _matchVendor(rawName) {
   if (!rawName) return '';
   const vendors = (getMaster()?.vendor || []).map(v => v.nama).filter(Boolean);
@@ -245,21 +259,25 @@ function applyScanToForm() {
     if (!nama) continue;
 
     let matched = false;
+    // Find best-scoring unclaimed PO item for this scan item
+    let bestCb = null, bestCbScore = 0;
     for (const cb of document.querySelectorAll('.invv-cb')) {
       const idx = cb.dataset.idx;
-      if (claimedIdxs.has(idx)) continue; // already claimed by another scan item
+      if (claimedIdxs.has(idx)) continue;
       const cbNama = (cb.dataset.nama || '').trim().toLowerCase();
-      if (cbNama === nama || cbNama.includes(nama) || nama.includes(cbNama)) {
-        cb.checked = true;
-        claimedIdxs.add(idx);
-        if (hv > 0) {
-          const hvInput = document.querySelector(`.invv-hv[data-idx="${idx}"]`);
-          if (hvInput) { hvInput.value = hv; updateInvVHarga(hvInput, parseInt(idx)); }
-        }
-        matched = true;
-        applied++;
-        break; // satu scan item → satu PO item, stop setelah match pertama
+      const score = _itemNameScore(nama, cbNama);
+      if (score > bestCbScore) { bestCbScore = score; bestCb = cb; }
+    }
+    if (bestCb && bestCbScore >= 0.4) {
+      const idx = bestCb.dataset.idx;
+      bestCb.checked = true;
+      claimedIdxs.add(idx);
+      if (hv > 0) {
+        const hvInput = document.querySelector(`.invv-hv[data-idx="${idx}"]`);
+        if (hvInput) { hvInput.value = hv; updateInvVHarga(hvInput, parseInt(idx)); }
       }
+      matched = true;
+      applied++;
     }
     if (!matched) skipped++;
   }

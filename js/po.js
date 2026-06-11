@@ -305,7 +305,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       </span>
       <div style="display:flex;align-items:center;gap:10px">
         ${dl?`<span style="font-size:11px;font-family:var(--mn)" class="${dlCls}">Deadline: ${dl}${diff!==null?' ('+(diff===0?'Hari ini':diff<0?Math.abs(diff)+'h lalu':diff+'h lagi')+')':''}</span>`:''}
-        ${hariDone?'<span class="tag tok" style="font-size:10px">Selesai</span>':''}
+        ${hariDone?'<span class="tag tok" style="font-size:10px">Selesai</span>':`<span style="font-size:11px;color:var(--t3)">${items.filter(i=>i.status_kirim!=='diterima').length} item belum selesai</span>`}
         <span id="${hariId}-arrow" style="font-size:11px;color:var(--t3)">▲</span>
       </div>
     </div>

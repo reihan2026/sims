@@ -298,10 +298,14 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     const dls=items.filter(i=>i.deadline).map(i=>i.deadline).sort();
     const dl=dls[0]||'';const diff=dl?diffDays(dl):null;
     const dlCls=diff===null?'':diff<0?'r':diff===0?'r':diff<=1?'a':'g';
-    html+=`<div style="background:var(--s2);padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
-      <span style="font-size:12px;font-weight:600;color:var(--t2)">${hari}</span>
+    const hariDone=items.every(i=>i.status_kirim==='diterima');
+    html+=`<div style="background:${hariDone?'var(--gbg, #f0fdf4)':'var(--s2)'};padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
+      <span style="font-size:12px;font-weight:600;color:${hariDone?'var(--ac)':'var(--t2)'}">
+        ${hariDone?'✓ ':''}${hari}
+      </span>
       <div style="display:flex;align-items:center;gap:10px">
         ${dl?`<span style="font-size:11px;font-family:var(--mn)" class="${dlCls}">Deadline: ${dl}${diff!==null?' ('+(diff===0?'Hari ini':diff<0?Math.abs(diff)+'h lalu':diff+'h lagi')+')':''}</span>`:''}
+        ${hariDone?'<span class="tag tok" style="font-size:10px">Selesai</span>':''}
         <span id="${hariId}-arrow" style="font-size:11px;color:var(--t3)">▲</span>
       </div>
     </div>

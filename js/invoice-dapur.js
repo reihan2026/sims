@@ -439,6 +439,82 @@ function renderInvD(){
     </div>`;
   }).join('')+_pgBar('invd','pgInvD',_dIPg,_dIPgTotal,filtered.length);
 }
+// ===== MERGE INVOICE DAPUR =====
+function openMergeInvD(){
+  const invds=getInvD().filter(d=>d.type!=='passthrough');
+  const poCount={};
+  invds.forEach(d=>{poCount[d.po_id]=(poCount[d.po_id]||0)+1;});
+  const eligiblePOs=getPOs().filter(p=>(poCount[p.id]||0)>=2);
+  const poSel=document.getElementById('merge-invd-po');
+  poSel.innerHTML='<option value="">— Pilih PO —</option>'+eligiblePOs.map(p=>`<option value="${p.id}">${p.no} — ${p.dapur}</option>`).join('');
+  document.getElementById('merge-invd-list').innerHTML='';
+  document.getElementById('merge-invd-summary').innerHTML='';
+  openModal('modal-merge-invd');
+}
+
+function loadMergeInvDList(){
+  const poId=document.getElementById('merge-invd-po').value;
+  const listEl=document.getElementById('merge-invd-list');
+  if(!poId){listEl.innerHTML='';return;}
+  const invds=getInvD()
+    .filter(d=>d.po_id===poId&&d.type!=='passthrough')
+    .sort((a,b)=>(a.tgl||'').localeCompare(b.tgl||'')||(a.created||'').localeCompare(b.created||''));
+  if(invds.length<2){listEl.innerHTML='<div style="font-size:12px;color:var(--t3);padding:8px 0">Tidak ada cukup invoice untuk di-merge (min. 2).</div>';document.getElementById('merge-invd-summary').innerHTML='';return;}
+  listEl.innerHTML=invds.map((iv,i)=>{
+    const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;
+    return`<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" class="merge-invd-cb" data-id="${iv.id}" data-total="${iv.total}" data-tgl="${iv.tgl||''}" data-created="${iv.created||''}" data-no="${iv.no}" onchange="_recalcMergeSummary()" ${i<2?'checked':''} style="margin-top:3px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${iv.no}</div>
+        <div style="font-size:11px;color:var(--t3)">${iv.tgl} · ${iv.dapur}</div>
+        <div style="font-size:12px;display:flex;gap:12px;flex-wrap:wrap;margin-top:2px">
+          <span>Total: <strong>${fmtF(iv.total)}</strong></span>
+          ${recv>0?`<span style="color:var(--ac)">Dibayar: ${fmtF(recv)}</span>`:''}
+          <span class="${sisa>0?'a':'g'}">Sisa: ${fmtF(sisa)}</span>
+        </div>
+        ${(iv.payments||[]).length?`<div style="font-size:10px;color:var(--t3);margin-top:2px">${iv.payments.length} pembayaran akan dipindahkan</div>`:''}
+      </div>
+    </label>`;
+  }).join('');
+  _recalcMergeSummary();
+}
+
+function _recalcMergeSummary(){
+  const checked=[...document.querySelectorAll('.merge-invd-cb:checked')];
+  const el=document.getElementById('merge-invd-summary');
+  if(checked.length<2){el.innerHTML='<span style="color:var(--dn);font-size:12px">Pilih minimal 2 invoice</span>';return;}
+  const total=checked.reduce((s,cb)=>s+(parseFloat(cb.dataset.total)||0),0);
+  // oldest selected = base
+  const sorted=[...checked].sort((a,b)=>(a.dataset.tgl||'').localeCompare(b.dataset.tgl||'')||(a.dataset.created||'').localeCompare(b.dataset.created||''));
+  const baseNo=sorted[0].dataset.no;
+  el.innerHTML=`${checked.length} invoice · Total gabungan: <strong style="font-family:var(--mn)">${fmtF(total)}</strong> · Nomor hasil merge: <strong>${baseNo}</strong>`;
+}
+
+function execMergeInvD(){
+  const checked=[...document.querySelectorAll('.merge-invd-cb:checked')];
+  if(checked.length<2){showToast('Pilih minimal 2 invoice!',true);return;}
+  const selectedIds=checked.map(cb=>cb.dataset.id);
+  const invds=getInvD();
+  const selected=selectedIds.map(id=>invds.find(d=>d.id===id)).filter(Boolean);
+  // Sort oldest first → base
+  selected.sort((a,b)=>(a.tgl||'').localeCompare(b.tgl||'')||(a.created||'').localeCompare(b.created||''));
+  const base=selected[0];const rest=selected.slice(1);
+  const mergedItems=selected.flatMap(d=>d.items||[]);
+  const mergedPayments=selected.flatMap(d=>d.payments||[]);
+  const mergedTotal=selected.reduce((s,d)=>s+(d.total||0),0);
+  const mergedCatatan=selected.map(d=>d.catatan).filter(Boolean).join(' | ');
+  const totalRecv=mergedPayments.reduce((s,p)=>s+p.jumlah,0);
+  const updatedBase={...base,items:mergedItems,payments:mergedPayments,total:mergedTotal,catatan:mergedCatatan||'',terima_status:totalRecv>=mergedTotal&&mergedTotal>0?'lunas':'belum',merged_from:rest.map(d=>d.no),merged_at:new Date().toISOString()};
+  const restIds=new Set(rest.map(d=>d.id));
+  const newInvds=invds.filter(d=>!restIds.has(d.id)).map(d=>d.id===base.id?updatedBase:d);
+  const mergedNos=selected.map(d=>d.no).join(', ');
+  addLog('merge_invd','Merge invoice dapur','invd',base.id,base.no,mergedNos+' → '+base.no);
+  setInvD(newInvds);
+  closeModal('modal-merge-invd');
+  showToast(`${selected.length} invoice berhasil di-merge → ${base.no}`);
+  if(_currentPoId)showDetail(_currentPoId);else renderInvD();
+}
+
 function delInvD(id){
   const _delInvD=getInvD().find(d=>d.id===id);
   if(_delInvD?.terima_status==='lunas'&&!confirm(`Invoice ${_delInvD.no} sudah LUNAS.\nMenghapus invoice lunas dapat menyebabkan inkonsistensi laporan.\n\nYakin tetap hapus?`))return;

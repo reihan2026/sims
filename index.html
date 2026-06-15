@@ -209,7 +209,7 @@
 
 <!-- INVOICE DAPUR -->
 <div id="page-inv-dapur" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice ke Dapur</div><div class="ph-s">Invoice yang kamu kirim ke dapur MBG</div></div><button class="btn bp bsm" onclick="openNewInvD('')">+ Buat Invoice Dapur</button></div>
+  <div class="ph"><div><div class="ph-t">Invoice ke Dapur</div><div class="ph-s">Invoice yang kamu kirim ke dapur MBG</div></div><div style="display:flex;gap:6px"><button class="btn bsm" onclick="openMergeInvD()">Merge Invoice</button><button class="btn bp bsm" onclick="openNewInvD('')">+ Buat Invoice Dapur</button></div></div>
   <div class="pc"><div class="mg" id="invd-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / dapur / item..." id="srch-invd" oninput="renderInvD()">
@@ -747,6 +747,19 @@
     <input type="hidden" id="einvd-id">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-edit-invd')">Batal</button><button class="btn bw" onclick="saveEditInvD()">Simpan</button></div>
+</div></div>
+
+<!-- Merge Invoice Dapur -->
+<div class="modal-bg" id="modal-merge-invd"><div class="modal mw">
+  <div class="mh"><span class="mht">Merge Invoice Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-merge-invd')">✕</button></div>
+  <div class="mb">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:12px">Gabungkan beberapa invoice dapur dari PO yang sama menjadi satu. Semua item dan pembayaran yang sudah ada akan dipindahkan ke invoice hasil merge. Invoice pass-through tidak bisa di-merge.</div>
+    <div class="fg" style="margin-bottom:12px"><label class="lbl">Pilih PO</label><select id="merge-invd-po" onchange="loadMergeInvDList()" style="width:100%"><option value="">— Pilih PO —</option></select></div>
+    <div id="merge-invd-list"></div>
+    <div id="merge-invd-summary" style="margin-top:10px;font-size:13px;min-height:20px;padding:8px 10px;background:var(--s2);border-radius:var(--r)"></div>
+    <div style="margin-top:6px;font-size:11px;color:var(--t3)">Invoice dengan tanggal terlama dari yang dipilih akan menjadi nomor invoice hasil merge.</div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-merge-invd')">Batal</button><button class="btn bp" onclick="execMergeInvD()">Merge Invoice</button></div>
 </div></div>
 
 <!-- Bayar Invoice Vendor -->

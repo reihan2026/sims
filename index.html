@@ -47,6 +47,7 @@
     <div class="nsec">Invoice</div>
     <button class="ni" onclick="nav('inv-vendor')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Invoice Vendor</button>
     <button class="ni" onclick="nav('inv-dapur')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="8" y1="9" x2="10" y2="9"/></svg>Invoice ke Dapur</button>
+    <button class="ni" onclick="nav('arsip-nota')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>Arsip Nota</button>
     <div class="nsec">Keuangan</div>
     <button class="ni" onclick="nav('cashflow')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>Cashflow</button>
     <button class="ni" onclick="nav('rekening')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Rekening &amp; Dana</button>
@@ -219,6 +220,17 @@
       <select id="f-invd-vs" onchange="renderInvD()"><option value="">Semua vendor mitra</option></select>
     </div>
     <div id="invd-list"></div>
+  </div>
+</div>
+
+<!-- ARSIP NOTA -->
+<div id="page-arsip-nota" class="page">
+  <div class="ph"><div><div class="ph-t">Arsip Nota</div><div class="ph-s" id="arsip-count">Nota yang sudah diupload</div></div></div>
+  <div class="pc">
+    <div class="fbar" style="margin-bottom:12px">
+      <input type="text" id="srch-arsip" placeholder="Cari PO, vendor, no. invoice..." oninput="renderArsipNota()" style="flex:1">
+    </div>
+    <div id="arsip-list"></div>
   </div>
 </div>
 
@@ -1061,5 +1073,6 @@
 <script src="js/laporan.js"></script>
 <script src="js/vendor.js"></script>
 <script src="js/scan.js"></script>
+<script src="js/arsip.js"></script>
 </body>
 </html>

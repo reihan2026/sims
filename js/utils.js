@@ -134,18 +134,19 @@ function inlineAddRek(targetSelId){
 }
 
 // ===== NAVIGATION =====
-const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','cashflow','rekening','konsumsi','laporan-keu','master'];
+const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','arsip-nota','cashflow','rekening','konsumsi','laporan-keu','master'];
 function nav(name){
   _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,cashflow:6,rekening:7,konsumsi:8,'laporan-keu':9,master:10};
+  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,'arsip-nota':6,cashflow:7,rekening:8,konsumsi:9,'laporan-keu':10,master:11};
   const i=MAP[name];if(i!==undefined)document.querySelectorAll('.ni')[i]?.classList.add('active');
   closeSidebar();closeStatPopup();
   if(name==='dash')renderDashboard();
   if(name==='daftar-po')renderDaftar();
   if(name==='inv-vendor')renderInvV();
   if(name==='inv-dapur')renderInvD();
+  if(name==='arsip-nota')renderArsipNota();
   if(name==='cashflow')renderCashflow();
   if(name==='rekening')renderRekening();
   if(name==='pov')renderPOV();

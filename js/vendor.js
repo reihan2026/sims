@@ -279,6 +279,21 @@ function delVendorSaya(id){
   renderVendorSaya();
   showToast('Vendor dihapus');
 }
+function _resizeImageForPrint(dataUrl,maxW,maxH){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const scale=Math.min(1,maxW/img.width,maxH/img.height);
+      const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg',0.85));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
 async function printInvDFormal(invId){
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
@@ -289,6 +304,7 @@ async function printInvDFormal(invId){
   // Load kop image
   let kopSrc=getFile('kop_'+vs.id);
   if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
+  if(kopSrc)kopSrc=await _resizeImageForPrint(kopSrc,800,160);
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
   const css=PRINT_CSS+`
     .kop-img{max-width:55%;max-height:130px;object-fit:contain;object-position:left top;display:block;margin-bottom:8px}
@@ -312,7 +328,7 @@ async function printInvDFormal(invId){
     <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${dapurInfo.nama||inv.dapur}</div>${dapurInfo.alamat?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${dapurInfo.alamat.replace(/\n/g,'<br>')}</div>`:''}${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560">${dapurInfo.tlp}</div>`:''}</div>
     <div style="text-align:right">
       <div style="font-size:20px;font-weight:700">INVOICE</div>
-      <div style="font-size:11px;color:#6B6560;font-family:'IBM Plex Mono',monospace">${inv.no} · ${inv.tgl}</div>
+      <div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>
       ${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}
       ${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}
     </div>

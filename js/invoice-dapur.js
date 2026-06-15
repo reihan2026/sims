@@ -462,11 +462,12 @@ function loadMergeInvDList(){
   if(invds.length<2){listEl.innerHTML='<div style="font-size:12px;color:var(--t3);padding:8px 0">Tidak ada cukup invoice untuk di-merge (min. 2).</div>';document.getElementById('merge-invd-summary').innerHTML='';return;}
   listEl.innerHTML=invds.map((iv,i)=>{
     const recv=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);const sisa=iv.total-recv;
+    const vs=iv.vendor_saya_id?getVendorSaya().find(v=>v.id===iv.vendor_saya_id):null;
     return`<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid var(--bd);border-radius:var(--r);margin-bottom:6px;cursor:pointer">
-      <input type="checkbox" class="merge-invd-cb" data-id="${iv.id}" data-total="${iv.total}" data-tgl="${iv.tgl||''}" data-created="${iv.created||''}" data-no="${iv.no}" onchange="_recalcMergeSummary()" ${i<2?'checked':''} style="margin-top:3px;flex-shrink:0">
+      <input type="checkbox" class="merge-invd-cb" data-id="${iv.id}" data-total="${iv.total}" data-tgl="${iv.tgl||''}" data-created="${iv.created||''}" data-no="${iv.no}" data-vsid="${iv.vendor_saya_id||''}" data-vsname="${vs?vs.nama:''}" onchange="_recalcMergeSummary()" ${i<2?'checked':''} style="margin-top:3px;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${iv.no}</div>
-        <div style="font-size:11px;color:var(--t3)">${iv.tgl} · ${iv.dapur}</div>
+        <div style="font-size:11px;color:var(--t3)">${iv.tgl} · ${iv.dapur}${vs?` · <span style="color:var(--ac)">${vs.nama}</span>`:' · <span style="color:var(--t3)">(tanpa vendor mitra)</span>'}</div>
         <div style="font-size:12px;display:flex;gap:12px;flex-wrap:wrap;margin-top:2px">
           <span>Total: <strong>${fmtF(iv.total)}</strong></span>
           ${recv>0?`<span style="color:var(--ac)">Dibayar: ${fmtF(recv)}</span>`:''}
@@ -487,7 +488,11 @@ function _recalcMergeSummary(){
   // oldest selected = base
   const sorted=[...checked].sort((a,b)=>(a.dataset.tgl||'').localeCompare(b.dataset.tgl||'')||(a.dataset.created||'').localeCompare(b.dataset.created||''));
   const baseNo=sorted[0].dataset.no;
-  el.innerHTML=`${checked.length} invoice · Total gabungan: <strong style="font-family:var(--mn)">${fmtF(total)}</strong> · Nomor hasil merge: <strong>${baseNo}</strong>`;
+  const vsIds=new Set(checked.map(cb=>cb.dataset.vsid));
+  const vendorOk=vsIds.size===1;
+  const vsNames=[...new Set(checked.map(cb=>cb.dataset.vsname).filter(Boolean))];
+  el.innerHTML=`${checked.length} invoice · Total gabungan: <strong style="font-family:var(--mn)">${fmtF(total)}</strong> · Nomor hasil merge: <strong>${baseNo}</strong>`
+    +(!vendorOk?`<div style="color:var(--dn);font-size:11px;margin-top:4px">⚠ Invoice yang dipilih berasal dari vendor berbeda (${vsNames.join(', ')||'ada yang tanpa vendor'}) — harus dari vendor yang sama</div>`:'');
 }
 
 function execMergeInvD(){
@@ -496,6 +501,9 @@ function execMergeInvD(){
   const selectedIds=checked.map(cb=>cb.dataset.id);
   const invds=getInvD();
   const selected=selectedIds.map(id=>invds.find(d=>d.id===id)).filter(Boolean);
+  // Validasi vendor sama
+  const vsIds=new Set(selected.map(d=>d.vendor_saya_id||''));
+  if(vsIds.size>1){showToast('Invoice yang dipilih harus dari vendor mitra yang sama!',true);return;}
   // Sort oldest first → base
   selected.sort((a,b)=>(a.tgl||'').localeCompare(b.tgl||'')||(a.created||'').localeCompare(b.created||''));
   const base=selected[0];const rest=selected.slice(1);

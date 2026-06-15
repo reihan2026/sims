@@ -287,7 +287,7 @@ function _resizeImageForPrint(dataUrl,maxW,maxH){
       const w=Math.round(img.width*scale),h=Math.round(img.height*scale);
       const c=document.createElement('canvas');c.width=w;c.height=h;
       c.getContext('2d').drawImage(img,0,0,w,h);
-      resolve(c.toDataURL('image/jpeg',0.85));
+      resolve(c.toDataURL('image/png'));
     };
     img.onerror=()=>resolve(dataUrl);
     img.src=dataUrl;

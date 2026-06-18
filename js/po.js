@@ -298,14 +298,16 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     const dls=items.filter(i=>i.deadline).map(i=>i.deadline).sort();
     const dl=dls[0]||'';const diff=dl?diffDays(dl):null;
     const dlCls=diff===null?'':diff<0?'r':diff===0?'r':diff<=1?'a':'g';
-    const hariDone=items.every(i=>i.status_kirim==='diterima');
+    const _isItemDone=i=>{const idx=i._idx;const ivObj=itemInvV[idx];const idObj=itemInvD[idx];const isPT=itemPassthrough.has(idx);const s3=i.status_kirim==='diterima';return isPT?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3):(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');};
+    const hariDone=items.every(_isItemDone);
+    const hariBelum=hariDone?0:items.filter(i=>!_isItemDone(i)).length;
     html+=`<div style="background:${hariDone?'var(--gbg, #f0fdf4)':'var(--s2)'};padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
       <span style="font-size:12px;font-weight:600;color:${hariDone?'var(--ac)':'var(--t2)'}">
         ${hariDone?'✓ ':''}${hari}
       </span>
       <div style="display:flex;align-items:center;gap:10px">
         ${dl?`<span style="font-size:11px;font-family:var(--mn)" class="${dlCls}">Deadline: ${dl}${diff!==null?' ('+(diff===0?'Hari ini':diff<0?Math.abs(diff)+'h lalu':diff+'h lagi')+')':''}</span>`:''}
-        ${hariDone?'<span class="tag tok" style="font-size:10px">Selesai</span>':`<span style="font-size:11px;color:var(--t3)">${items.filter(i=>i.status_kirim!=='diterima').length} item belum selesai</span>`}
+        ${hariDone?'<span class="tag tok" style="font-size:10px">Selesai</span>':`<span style="font-size:11px;color:var(--t3)">${hariBelum} item belum selesai</span>`}
         <span id="${hariId}-arrow" style="font-size:11px;color:var(--t3)">▲</span>
       </div>
     </div>

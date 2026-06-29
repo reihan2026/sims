@@ -471,25 +471,60 @@ function openOngkir(invId){
   if(_currentPoId)showDetail(_currentPoId);else renderInvV();
 }
 
-function openCashback(invId){
+function openCashback(invId,fromDetail){
   const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
   document.getElementById('cb-invv-id').value=invId;
+  document.getElementById('cb-edit-id').value='';
+  document.getElementById('cb-from-detail').value=fromDetail?'1':'';
+  document.getElementById('cb-modal-title').textContent='Catat Cashback dari Vendor';
   document.getElementById('cb-tgl').value=today();document.getElementById('cb-cat').value='';
   const vObj=getVendorObj(inv.vendor);
   const estInfo=inv.is_pt_cashback&&inv.pt_cashback_est
     ?` · Est. cashback: ${fmtF(inv.pt_cashback_est)}${inv.pt_cashback_pct?' (~'+inv.pt_cashback_pct+'%)':''}`:'';
   document.getElementById('cb-info').textContent=inv.no+' — '+inv.vendor+estInfo+(vObj?.cashback_pct&&!inv.is_pt_cashback?' (patokan ~'+vObj.cashback_pct+'%)':'');
-  // Pre-fill with estimate
   document.getElementById('cb-jml').value=inv.is_pt_cashback&&inv.pt_cashback_est?inv.pt_cashback_est:'';
   populateRek('cb-rek');openModal('modal-cashback');
 }
+function editCashback(invId,cbId){
+  const inv=getInvV().find(v=>v.id===invId);if(!inv)return;
+  const cb=(inv.cashbacks||[]).find(c=>c.id===cbId);if(!cb)return;
+  document.getElementById('cb-invv-id').value=invId;
+  document.getElementById('cb-edit-id').value=cbId;
+  document.getElementById('cb-from-detail').value='1';
+  document.getElementById('cb-modal-title').textContent='Edit Cashback';
+  document.getElementById('cb-info').textContent=inv.no+' — '+inv.vendor;
+  document.getElementById('cb-jml').value=cb.jumlah;
+  document.getElementById('cb-tgl').value=cb.tgl;
+  document.getElementById('cb-cat').value=cb.catatan||'';
+  populateRek('cb-rek');
+  document.getElementById('cb-rek').value=cb.rek_id||'';
+  openModal('modal-cashback');
+}
+function delCashback(invId,cbId){
+  if(!confirm('Hapus cashback ini?'))return;
+  const invs=getInvV();const inv=invs.find(v=>v.id===invId);if(!inv)return;
+  inv.cashbacks=(inv.cashbacks||[]).filter(c=>c.id!==cbId);
+  addLog('hapus_cashback','Hapus cashback','invv',inv.id,inv.no,'');
+  setInvV(invs);showToast('Cashback dihapus');showInvVDetail(invId);
+}
 function saveCashback(){
-  const invId=document.getElementById('cb-invv-id').value;const jml=parseFloat(document.getElementById('cb-jml').value)||0;
+  const invId=document.getElementById('cb-invv-id').value;
+  const cbId=document.getElementById('cb-edit-id').value;
+  const fromDetail=document.getElementById('cb-from-detail').value==='1';
+  const jml=parseFloat(document.getElementById('cb-jml').value)||0;
   if(!jml){showToast('Isi jumlah!',true);return;}
   const invs=getInvV();const inv=invs.find(v=>v.id===invId);if(!inv)return;
   if(!inv.cashbacks)inv.cashbacks=[];
-  inv.cashbacks.push({id:uid(),jumlah:jml,tgl:document.getElementById('cb-tgl').value,rek_id:document.getElementById('cb-rek').value,catatan:document.getElementById('cb-cat').value});
-  addLog('catat_cashback','Catat cashback','invv',inv.id,inv.no,fmtF(jml)+' dari '+inv.vendor);setInvV(invs);closeModal('modal-cashback');showToast('Cashback dicatat!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  if(cbId){
+    const cb=inv.cashbacks.find(c=>c.id===cbId);
+    if(cb){cb.jumlah=jml;cb.tgl=document.getElementById('cb-tgl').value;cb.rek_id=document.getElementById('cb-rek').value;cb.catatan=document.getElementById('cb-cat').value;}
+    addLog('edit_cashback','Edit cashback','invv',inv.id,inv.no,fmtF(jml)+' dari '+inv.vendor);
+  } else {
+    inv.cashbacks.push({id:uid(),jumlah:jml,tgl:document.getElementById('cb-tgl').value,rek_id:document.getElementById('cb-rek').value,catatan:document.getElementById('cb-cat').value});
+    addLog('catat_cashback','Catat cashback','invv',inv.id,inv.no,fmtF(jml)+' dari '+inv.vendor);
+  }
+  setInvV(invs);closeModal('modal-cashback');showToast(cbId?'Cashback diperbarui!':'Cashback dicatat!');
+  if(fromDetail){showInvVDetail(invId);}else if(_currentPoId){showDetail(_currentPoId);}else{showDetail(inv.po_id);}
 }
 
 // ===== RETUR =====

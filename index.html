@@ -838,7 +838,7 @@
 
 <!-- Cashback terpisah -->
 <div class="modal-bg" id="modal-cashback"><div class="modal">
-  <div class="mh"><span class="mht">Catat Cashback dari Vendor</span><button class="btn bgh bsm" onclick="closeModal('modal-cashback')">✕</button></div>
+  <div class="mh"><span class="mht" id="cb-modal-title">Catat Cashback dari Vendor</span><button class="btn bgh bsm" onclick="closeModal('modal-cashback')">✕</button></div>
   <div class="mb">
     <div id="cb-info" style="padding:8px 10px;background:var(--pbg);border-radius:var(--r);font-size:13px;margin-bottom:10px"></div>
     <div class="r2">
@@ -848,6 +848,8 @@
     <div class="fg"><label class="lbl">Rekening penerima</label><select id="cb-rek"><option value="">— Pilih rekening —</option></select></div>
     <div class="fg"><label class="lbl">Catatan</label><input type="text" id="cb-cat"></div>
     <input type="hidden" id="cb-invv-id">
+    <input type="hidden" id="cb-edit-id">
+    <input type="hidden" id="cb-from-detail">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-cashback')">Batal</button><button class="btn bp" onclick="saveCashback()">Simpan</button></div>
 </div></div>

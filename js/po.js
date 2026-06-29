@@ -49,7 +49,7 @@ function renderDaftar(){
           <span style="margin-left:7px;color:var(--t2);font-size:12px">${fmtDapurKode(po.dapur)}</span>
           <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin:2px 0 5px">${po.date} · ${t.total} item · harga vendor ${pct}% terisi · kirim ${kirimOk}/${t.total}</div>
         </div>
-        <div class="bg"><button class="btn bsm" onclick="showDetail('${po.id}')">Detail</button><button class="btn bsm bt" onclick="clonePO('${po.id}')">Clone</button><button class="btn bsm bd-" onclick="delPO('${po.id}')">Hapus</button></div>
+        <div class="bg"><button class="btn bsm" onclick="showDetail('${po.id}')">Detail</button><button class="btn bsm" onclick="openLaporanPO('${po.id}')">Laporan</button><button class="btn bsm bt" onclick="clonePO('${po.id}')">Clone</button><button class="btn bsm bd-" onclick="delPO('${po.id}')">Hapus</button></div>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;font-family:var(--mn);padding-top:5px;border-top:1px solid var(--bd)">
         <span>PO: <strong>${fmtF(t.tp)}</strong></span>

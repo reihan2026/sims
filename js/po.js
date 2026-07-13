@@ -97,7 +97,28 @@ function delPO(id){
     if(linkedInvD.length)parts.push('Invoice Dapur: '+linkedInvD.map(d=>d.no).join(', '));
     showToast('Tidak bisa hapus — PO masih punya:\n'+parts.join('\n'),true);return;
   }
-  const _delPO=getPOs().find(p=>p.id===id);if(!confirm('Yakin hapus PO ini?'))return;addLog('hapus_po','Hapus PO','po',id,_delPO?.no,'');setPOs(getPOs().filter(p=>p.id!==id));renderDaftar();showToast('PO dihapus');
+  const _delPO=getPOs().find(p=>p.id===id);if(!confirm('Yakin hapus PO ini?'))return;addLog('hapus_po','Hapus PO','po',id,_delPO?.no,'');setPOs(getPOs().filter(p=>p.id!==id));if(getLastPO()===id)clearLastPO();renderPOShortcut();renderDaftar();showToast('PO dihapus');
+}
+
+// ===== PINTASAN PO TERAKHIR DIBUKA =====
+const LAST_PO_KEY='sims_last_po';
+function setLastPO(id){try{localStorage.setItem(LAST_PO_KEY,id);}catch(e){}}
+function getLastPO(){try{return localStorage.getItem(LAST_PO_KEY)||'';}catch(e){return '';}}
+function clearLastPO(){try{localStorage.removeItem(LAST_PO_KEY);}catch(e){}}
+
+function renderPOShortcut(){
+  const el=document.getElementById('po-shortcut');
+  if(!el)return;
+  const id=getLastPO();
+  const po=id?getPOs().find(p=>p.id===id):null;
+  // PO hilang (dihapus di sini atau oleh user lain) — buang pintasannya
+  if(!po){if(id)clearLastPO();el.innerHTML='';return;}
+  const isOpen=_currentPage==='detail-po'&&_currentPoId===po.id;
+  el.innerHTML=`<div class="nsec">Terakhir dibuka</div>
+    <button class="posc${isOpen?' active':''}" onclick="showDetail('${po.id}')" title="Buka detail ${po.no}">
+      <div class="posc-no"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 10-12h-8z"/></svg>${po.no}</div>
+      <div class="posc-sub">${fmtDapurKode(po.dapur)}</div>
+    </button>`;
 }
 
 // Helper: unique key for a PO item — handles duplicate names across different days
@@ -540,6 +561,7 @@ function detRevisions(po){
 function showDetail(id){
   _currentPoId=id;
   const po=getPOs().find(p=>p.id===id);if(!po)return;
+  setLastPO(id); // pintasan sidebar — nav() di akhir fungsi ini yang merender ulang
   const t=poTotals(po);
   const {invV,invD,itemInvV,itemInvD,itemPassthrough}=buildLookup(id);
 

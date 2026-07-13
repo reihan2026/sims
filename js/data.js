@@ -120,7 +120,8 @@ function _reRenderActivePage(){
     else if(_currentPage==='cashflow')renderCashflow();
     else if(_currentPage==='rekening')renderRekening();
     // detail PO: re-render only if not in edit state
-    if(_currentPoId&&_currentPage==='daftar-po')showDetail(_currentPoId);
+    else if(_currentPage==='detail-po'&&_currentPoId)showDetail(_currentPoId);
+    renderPOShortcut();
   }catch(e){console.error('[SIMS] re-render error:',e);}
 }
 

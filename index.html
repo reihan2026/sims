@@ -196,7 +196,7 @@
 
 <!-- INVOICE VENDOR -->
 <div id="page-inv-vendor" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
+  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm" id="invv-pilih-btn" onclick="toggleInvVSelMode()">☑ Pilih</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor / item..." id="srch-invv" oninput="renderInvV()">
@@ -206,6 +206,13 @@
       <select id="f-invv-po" onchange="renderInvV()"><option value="">Semua PO</option></select>
     </div>
     <div id="invv-list"></div>
+  </div>
+  <div id="invv-sel-bar" class="selbar" style="display:none">
+    <span id="invv-sel-count" style="font-weight:600;font-size:13px">0 dipilih</span>
+    <span style="flex:1"></span>
+    <button class="btn bsm bp" onclick="openBulkBayarInvV()">Rekam bayar</button>
+    <button class="btn bsm bt" onclick="openBulkKirimInvV()">Update kirim</button>
+    <button class="btn bsm" onclick="toggleInvVSelMode()">Batal</button>
   </div>
 </div>
 
@@ -802,6 +809,35 @@
     <input type="hidden" id="bayar-invv-id">
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-bayar-invv')">Batal</button><button class="btn bp" onclick="saveBayarInvV()">Rekam pembayaran</button></div>
+</div></div>
+
+<!-- Bulk rekam bayar beberapa invoice vendor -->
+<div class="modal-bg" id="modal-bulk-bayar-invv"><div class="modal">
+  <div class="mh"><span class="mht">Rekam Bayar Beberapa Invoice</span><button class="btn bgh bsm" onclick="closeModal('modal-bulk-bayar-invv')">✕</button></div>
+  <div class="mb">
+    <div class="r2">
+      <div class="fg"><label class="lbl">Sumber rekening / dana</label>
+        <select id="bulk-bayar-invv-rek"><option value="">— Pilih rekening —</option></select>
+        <div id="bulk-bayar-invv-rek-empty" style="display:none;margin-top:6px;padding:7px 9px;background:var(--wbg);border-radius:var(--r);font-size:12px;color:var(--wt)">Belum ada rekening. <button class="btn bxs bw" onclick="inlineAddRek('bulk-bayar-invv-rek')">+ Tambah sekarang</button></div>
+      </div>
+      <div class="fg"><label class="lbl">Tanggal bayar</label><input type="date" id="bulk-bayar-invv-tgl"></div>
+    </div>
+    <div id="bulk-bayar-invv-info" style="font-size:12px"></div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-bulk-bayar-invv')">Batal</button><button class="btn bp" id="bulk-bayar-invv-save" onclick="saveBulkBayarInvV()">Rekam bayar</button></div>
+</div></div>
+
+<!-- Bulk update status kirim beberapa invoice vendor -->
+<div class="modal-bg" id="modal-bulk-kirim-invv"><div class="modal">
+  <div class="mh"><span class="mht">Update Kirim Beberapa Invoice</span><button class="btn bgh bsm" onclick="closeModal('modal-bulk-kirim-invv')">✕</button></div>
+  <div class="mb">
+    <div class="r2">
+      <div class="fg"><label class="lbl">Status kirim</label><select id="bulk-kirim-invv-stat"><option value="belum">Belum dikirim</option><option value="dikirim">Dikirim</option><option value="diterima">Diterima</option></select></div>
+      <div class="fg"><label class="lbl">Tanggal</label><input type="date" id="bulk-kirim-invv-tgl"></div>
+    </div>
+    <div id="bulk-kirim-invv-info" style="font-size:12px"></div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-bulk-kirim-invv')">Batal</button><button class="btn bp" id="bulk-kirim-invv-save" onclick="saveBulkKirimInvV()">Terapkan ke semua</button></div>
 </div></div>
 
 <!-- Bulk update status kirim -->

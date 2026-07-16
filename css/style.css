@@ -118,6 +118,12 @@ input[type=checkbox],input[type=radio]{width:auto}
 .vblock-hdr{padding:9px 12px;background:var(--s2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 /* Invoice card */
 .inv-card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rl);padding:11px 13px;margin-bottom:7px}
+.inv-card.selmode{display:flex;align-items:flex-start;gap:11px}
+.inv-card.selmode.selon{border-color:var(--ac);background:var(--abg)}
+.invv-cbody{flex:1;min-width:0}
+.invv-sel-cb{margin-top:2px;width:17px;height:17px;flex-shrink:0;cursor:pointer;accent-color:var(--ac)}
+.invv-selall{display:flex;align-items:center;gap:8px;padding:7px 4px;margin-bottom:7px;font-size:12px;color:var(--t2);cursor:pointer}
+.selbar{position:sticky;bottom:12px;z-index:50;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 12px 0;padding:9px 13px;background:var(--sf);border:1px solid var(--ac);border-radius:var(--rl);box-shadow:0 4px 18px rgba(0,0,0,.14)}
 .inv-hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .pay-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:5px}
 /* Agenda */

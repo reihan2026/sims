@@ -689,7 +689,7 @@ function renderInvV(){
   const _me=document.getElementById('invv-met');if(_me)_me.innerHTML=`<div class="met"><div class="ml">Total tagihan vendor</div><div class="mv num">${fmt(_tt)}</div></div><div class="met"><div class="ml">Belum dibayar</div><div class="mv num r">${fmt(_bB)}</div></div><div class="met"><div class="ml">Sudah lunas</div><div class="mv num g">${fmt(_ln)}</div></div><div class="met"><div class="ml">Jumlah invoice</div><div class="mv">${filtered.length}</div></div>`;}
 
   const el=document.getElementById('invv-list');
-  if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';return;}
+  if(!filtered.length){el.innerHTML='<div class="empty">Tidak ada invoice vendor</div>';_invvSelPageIds=[];updateInvVSelBar();return;}
   const _vHash=[srch,fS,fK,fB,fP].join('|');if(_vHash!==_pgHash.invv){_pg.invv=0;_pgHash.invv=_vHash;}
   const _vPg=_pg.invv;const _vPgTotal=Math.ceil(filtered.length/PG_SIZE);
   const pagedInvV=filtered.slice(_vPg*PG_SIZE,(_vPg+1)*PG_SIZE);
@@ -730,7 +730,8 @@ function renderInvV(){
     const ptCBDone=isPTCB&&cbTotal>0;
     const ptCBReady=isPTCB&&!ptCBDone&&iv.bayar_status==='lunas'&&ks==='semua';// selesai semua → bisa catat cashback
 
-    return`<div class="inv-card"><div class="inv-hdr">
+    const _sel=_invvSel.has(iv.id);
+    return`<div class="inv-card${_invvSelMode?' selmode'+(_sel?' selon':''):''}">${_invvSelMode?`<input type="checkbox" class="invv-sel-cb" data-id="${iv.id}" ${_sel?'checked':''} onclick="toggleInvVSel('${iv.id}',this)">`:''}<div class="invv-cbody"><div class="inv-hdr">
       <div>
         <span style="font-weight:600;font-size:13px">${iv.no}</span>
         <span class="tag ${iv.bayar_status==='lunas'?'tok':'tno'}" style="margin-left:4px">${iv.bayar_status==='lunas'?'Lunas':'Belum dibayar'}</span>
@@ -775,9 +776,135 @@ function renderInvV(){
     </div>
     ${(iv.edits||[]).length?`<div style="margin-top:4px;padding:4px 8px;background:var(--wbg);border-radius:var(--r);font-size:10px;color:var(--wt)">Revisi: ${iv.edits.map(e=>`${e.tgl} — ${e.catatan}`).join(' · ')}</div>`:''}
     ${(iv.payments||[]).length?`<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">${iv.payments.map(p=>`<div class="pay-row"><span>${p.tgl} · <strong>${getRekNama(p.rek_id)}</strong></span><span class="num r">-${fmtF(p.jumlah)}</span></div>`).join('')}</div>`:''}
-    </div>`;
+    </div></div>`;
     }catch(e){console.error('renderInvV card error:',iv?.id,e);return`<div class="inv-card" style="color:var(--dn);font-size:12px;padding:10px">⚠ Error render invoice ${iv?.no||iv?.id||'?'} — coba hapus dan buat ulang</div>`;}
   }).join('')+_pgBar('invv','pgInvV',_vPg,_vPgTotal,filtered.length);
+
+  // Mode pilih: baris "pilih semua" (halaman ini) di atas daftar + segarkan bar aksi
+  if(_invvSelMode){
+    const pageIds=pagedInvV.map(iv=>iv.id);
+    const allChecked=pageIds.length>0&&pageIds.every(id=>_invvSel.has(id));
+    el.insertAdjacentHTML('afterbegin',`<label class="invv-selall"><input type="checkbox" class="invv-sel-cb" ${allChecked?'checked':''} onclick="invVSelAllPage(this)" style="width:16px;height:16px"> Pilih semua di halaman ini (${pageIds.length})</label>`);
+    _invvSelPageIds=pageIds;
+  }
+  updateInvVSelBar();
+}
+
+// ===== MODE PILIH / BULK ACTIONS INVOICE VENDOR =====
+let _invvSelMode=false;
+const _invvSel=new Set();
+let _invvSelPageIds=[];
+
+function toggleInvVSelMode(){
+  _invvSelMode=!_invvSelMode;
+  if(!_invvSelMode)_invvSel.clear();
+  const btn=document.getElementById('invv-pilih-btn');
+  if(btn){btn.classList.toggle('bp',_invvSelMode);btn.textContent=_invvSelMode?'✕ Batal pilih':'☑ Pilih';}
+  renderInvV();
+}
+function toggleInvVSel(id,cb){
+  if(cb.checked)_invvSel.add(id);else _invvSel.delete(id);
+  cb.closest('.inv-card')?.classList.toggle('selon',cb.checked);
+  updateInvVSelBar();
+}
+function invVSelAllPage(cb){
+  _invvSelPageIds.forEach(id=>{if(cb.checked)_invvSel.add(id);else _invvSel.delete(id);});
+  renderInvV();
+}
+function updateInvVSelBar(){
+  const bar=document.getElementById('invv-sel-bar');if(!bar)return;
+  bar.style.display=_invvSelMode?'flex':'none';
+  const c=document.getElementById('invv-sel-count');
+  if(c)c.textContent=_invvSel.size+' dipilih';
+}
+function _selectedInvV(){return getInvV().filter(iv=>_invvSel.has(iv.id));}
+
+// ----- Bulk rekam bayar -----
+function openBulkBayarInvV(){
+  const sel=_selectedInvV();
+  if(!sel.length){showToast('Belum ada invoice dipilih',true);return;}
+  // Hanya invoice yang belum lunas & bukan pass-through yang bisa dibayar
+  const payable=sel.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id));
+  const skipLunas=sel.filter(iv=>iv.bayar_status==='lunas').length;
+  const skipPT=sel.filter(iv=>iv.bayar_status!=='lunas'&&isPassthrough(iv.id)).length;
+  if(!payable.length){showToast('Tidak ada invoice yang bisa dibayar (semua sudah lunas / pass-through)',true);return;}
+  populateRek('bulk-bayar-invv-rek','bulk-bayar-invv-rek-empty');
+  document.getElementById('bulk-bayar-invv-tgl').value=today();
+  let total=0;
+  const rows=payable.map(iv=>{const n=invVNet(iv);total+=Math.max(0,n.sisa);return`<div class="pay-row"><span>${iv.no} · ${iv.vendor}</span><span class="num r">${fmtF(Math.max(0,n.sisa))}</span></div>`;}).join('');
+  const skips=[];if(skipLunas)skips.push(skipLunas+' sudah lunas');if(skipPT)skips.push(skipPT+' pass-through');
+  document.getElementById('bulk-bayar-invv-info').innerHTML=
+    `<div style="margin-bottom:4px;color:var(--t2)">Akan dicatat lunas (${payable.length} invoice):</div>`+
+    `<div style="max-height:180px;overflow-y:auto;padding:2px 0;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)">${rows}</div>`+
+    `<div class="pay-row" style="font-weight:600;margin-top:5px"><span>Total</span><span class="num r">${fmtF(total)}</span></div>`+
+    (skips.length?`<div style="margin-top:6px;font-size:11px;color:var(--t3)">${skips.join(' · ')} dilewati.</div>`:'');
+  document.getElementById('bulk-bayar-invv-save').dataset.ids=payable.map(iv=>iv.id).join(',');
+  openModal('modal-bulk-bayar-invv');
+}
+function saveBulkBayarInvV(){
+  const rekId=document.getElementById('bulk-bayar-invv-rek').value;
+  if(!rekId){showToast('Pilih rekening!',true);return;}
+  const tgl=document.getElementById('bulk-bayar-invv-tgl').value||today();
+  const ids=(document.getElementById('bulk-bayar-invv-save').dataset.ids||'').split(',').filter(Boolean);
+  const invs=getInvV();let n=0,sum=0;
+  ids.forEach(id=>{
+    const inv=invs.find(v=>v.id===id);if(!inv)return;
+    if(inv.bayar_status==='lunas'||isPassthrough(inv.id))return;
+    const net=invVNet(inv);const sisa=Math.max(0,net.sisa);if(sisa<=0){inv.bayar_status='lunas';return;}
+    if(!inv.payments)inv.payments=[];
+    inv.payments.push({id:uid(),jumlah:sisa,tgl,rek_id:rekId,catatan:'Bulk rekam bayar'});
+    const paid=inv.payments.reduce((s,p)=>s+p.jumlah,0);
+    const retur=(inv.returs||[]).reduce((s,r)=>s+r.val,0);
+    if(paid>=Math.max(0,inv.total-retur))inv.bayar_status='lunas';
+    n++;sum+=sisa;
+  });
+  addLog('bayar_invv','Bulk bayar vendor','invv','','',n+' invoice · '+fmtF(sum));
+  setInvV(invs);closeModal('modal-bulk-bayar-invv');
+  showToast(n+' invoice dicatat lunas ('+fmtF(sum)+')');
+  toggleInvVSelMode();
+}
+
+// ----- Bulk update status kirim -----
+function openBulkKirimInvV(){
+  const sel=_selectedInvV();
+  if(!sel.length){showToast('Belum ada invoice dipilih',true);return;}
+  document.getElementById('bulk-kirim-invv-stat').value='diterima';
+  document.getElementById('bulk-kirim-invv-tgl').value=today();
+  const pos=getPOs();
+  let totalItem=0;
+  const rows=sel.map(iv=>{
+    const po=pos.find(p=>p.id===iv.po_id);
+    const cnt=po?(iv.items||[]).map(i=>findPoItem(po,i)).filter(Boolean).length:0;
+    totalItem+=cnt;
+    return`<div class="pay-row"><span>${iv.no} · ${iv.vendor}</span><span style="color:var(--t3)">${cnt} item</span></div>`;
+  }).join('');
+  document.getElementById('bulk-kirim-invv-info').innerHTML=
+    `<div style="margin-bottom:4px;color:var(--t2)">Status kirim akan diubah untuk ${totalItem} item PO di ${sel.length} invoice:</div>`+
+    `<div style="max-height:180px;overflow-y:auto;padding:2px 0;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)">${rows}</div>`;
+  document.getElementById('bulk-kirim-invv-save').dataset.ids=sel.map(iv=>iv.id).join(',');
+  openModal('modal-bulk-kirim-invv');
+}
+function saveBulkKirimInvV(){
+  const stat=document.getElementById('bulk-kirim-invv-stat').value;
+  const tgl=document.getElementById('bulk-kirim-invv-tgl').value||today();
+  const ids=(document.getElementById('bulk-kirim-invv-save').dataset.ids||'').split(',').filter(Boolean);
+  const pos=getPOs();const invs=getInvV();
+  const touched=new Set();let nItem=0;
+  ids.forEach(id=>{
+    const inv=invs.find(v=>v.id===id);if(!inv)return;
+    const po=pos.find(p=>p.id===inv.po_id);if(!po)return;
+    (inv.items||[]).forEach(i=>{
+      const item=findPoItem(po,i);if(!item||touched.has(item))return;
+      touched.add(item);
+      item.status_kirim=stat;item.tgl_kirim=tgl;
+      if(stat==='diterima'&&!item.tgl_diterima)item.tgl_diterima=tgl;
+      nItem++;
+    });
+  });
+  addLog('update_kirim','Bulk update kirim','invv','','',stat+' · '+nItem+' item · '+ids.length+' invoice');
+  setPOs(pos);closeModal('modal-bulk-kirim-invv');
+  showToast(nItem+' item diperbarui ke "'+stat+'"');
+  toggleInvVSelMode();
 }
 function delInvV(id){
   const _chkInvV=getInvV().find(v=>v.id===id);

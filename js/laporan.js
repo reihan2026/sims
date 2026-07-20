@@ -116,6 +116,19 @@ function renderLaporanHTML(d){
     vMarginMap[v]=(vMarginMap[v]||0)+item.margin;
   });
 
+  // Deviasi: harga tagih ke dapur (harga_dapur, sudah termasuk harga vendor utk passthrough)
+  // vs harga rencana PO (harga_po). DEV_MIN menyaring beda pembulatan receh.
+  const DEV_MIN=1000;
+  const devItems=[];
+  allItems.forEach(item=>{
+    if(item.harga_dapur==null)return;
+    const hp=item.harga_po||0;
+    const delta=(item.harga_dapur-hp)*(item.qty||0);
+    if(Math.abs(delta)>=DEV_MIN)devItems.push({nama:item.nama,hari:item.hari,qty:item.qty||0,satuan:item.satuan||'',harga_po:hp,harga_dapur:item.harga_dapur,delta});
+  });
+  devItems.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  const devTotal=devItems.reduce((s,x)=>s+x.delta,0);
+
   // Overall margin: actual invD revenue - vendor cost (accrual basis)
   const marginBersih=totalInvD>0?totalInvD-totalModalVendor-totalOngkir+totalCashback:null;
   const pct=marginBersih!=null&&totalInvD>0?(marginBersih/totalInvD*100).toFixed(1):null;
@@ -147,6 +160,14 @@ function renderLaporanHTML(d){
       </div>
     </div>`;
 
+  // Banner alert deviasi harga tagih dapur vs PO
+  if(devItems.length){
+    html+=`<div style="margin-bottom:20px;padding:11px 14px;background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:8px">
+      <div style="font-weight:700;font-size:13px;color:#b45309">⚠ ${devItems.length} item ditagih ke dapur berbeda dari harga PO</div>
+      <div style="font-size:12px;color:#92400e;margin-top:3px">Total selisih: <strong style="font-family:monospace">${devTotal>=0?'+':''}${fmtF(devTotal)}</strong> dari nilai PO. Ini bisa wajar (mis. harga passthrough mengikuti nota vendor) — rincian ada di bawah.</div>
+    </div>`;
+  }
+
   // Ringkasan finansial
   html+=sec('Ringkasan Finansial',`
     ${metRow('Total invoice ke dapur (pendapatan)',totalInvD>0?fmtF(totalInvD):'—')}
@@ -162,6 +183,33 @@ function renderLaporanHTML(d){
       <span style="font-family:monospace;color:${totalTerima>=totalInvD&&totalInvD>0?'#16a34a':'#888'}">${fmtF(totalTerima)}${totalInvD>0?' / '+fmtF(totalInvD):''}</span>
     </div>
     ${metRow('Nilai PO (referensi)',fmtF(t.tp),'','#aaa')}`);
+
+  // Selisih harga tagih dapur vs PO
+  if(devItems.length){
+    const th='padding:5px 12px;color:#666;font-weight:600;border-bottom:1px solid #e8e8e8;font-size:11px';
+    const rows=devItems.map(x=>`<tr style="border-bottom:1px solid #f0f0f0">
+      <td style="padding:5px 12px;font-weight:500">${x.nama}</td>
+      <td style="padding:5px 12px;color:#888">${x.hari?String(x.hari).split(',')[0]:'—'}</td>
+      <td style="padding:5px 12px;text-align:right;font-family:monospace;color:#555">${x.qty} ${x.satuan}</td>
+      <td style="padding:5px 12px;text-align:right;font-family:monospace;color:#555">${fmtF(x.harga_po)}</td>
+      <td style="padding:5px 12px;text-align:right;font-family:monospace;color:#b45309;font-weight:600">${fmtF(x.harga_dapur)}</td>
+      <td style="padding:5px 12px;text-align:right;font-family:monospace;font-weight:700;color:${x.delta>=0?'#dc2626':'#16a34a'}">${x.delta>=0?'+':''}${fmtF(x.delta)}</td>
+    </tr>`).join('');
+    html+=sec('Selisih Harga — Tagihan Dapur vs PO',`
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#fafafa">
+          <th style="${th};text-align:left">Item</th>
+          <th style="${th};text-align:left">Hari</th>
+          <th style="${th};text-align:right">Qty</th>
+          <th style="${th};text-align:right">Harga PO</th>
+          <th style="${th};text-align:right">Tagih dapur</th>
+          <th style="${th};text-align:right">Selisih</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="border-top:2px solid #222"><td colspan="5" style="padding:7px 12px;font-weight:700;text-align:right">Total selisih</td><td style="padding:7px 12px;text-align:right;font-family:monospace;font-weight:700;color:${devTotal>=0?'#dc2626':'#16a34a'}">${devTotal>=0?'+':''}${fmtF(devTotal)}</td></tr></tfoot>
+      </table>
+      <div style="font-size:11px;color:#999;margin-top:6px">Selisih di bawah ${fmtF(DEV_MIN)} per baris tidak ditampilkan (dianggap pembulatan).</div>`);
+  }
 
   // Per vendor
   const vendorEntries=Object.entries(vendorMap);
@@ -200,10 +248,13 @@ function renderLaporanHTML(d){
               const diKey=`${(i.nama||'').trim()}||${i.hari||''}`;
               const hd=passThroughInvVIds.has(i.iv?.id)?i.harga_vendor:(invDItemMap[diKey]??invDItemMap[`${(i.nama||'').trim()}||__any__`]??null);
               const marginTotal=hd!=null&&i.harga_vendor>0?(hd-i.harga_vendor)*qtyPO:null;
+              const hpItem=findPoItem(po,i)?.harga_po||0;
+              const devLine=hd!=null&&hpItem?(hd-hpItem)*qtyPO:0;
+              const isDev=Math.abs(devLine)>=DEV_MIN;
               return`<tr style="border-bottom:1px solid #f0f0f0">
                 <td style="padding:5px 14px;font-weight:500">${i.nama}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${i.qty} ${i.satuan||''}</td>
-                <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${hd!=null?fmtF(hd):'—'}</td>
+                <td style="padding:5px 14px;text-align:right;font-family:monospace;color:${isDev?'#b45309':'#555'};font-weight:${isDev?'700':'400'}">${hd!=null?fmtF(hd):'—'}${isDev?` <span title="Harga PO: ${fmtF(hpItem)} · selisih ${devLine>=0?'+':''}${fmtF(devLine)}">⚠</span>`:''}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;color:#555">${fmtF(i.harga_vendor||0)}</td>
                 <td style="padding:5px 14px;text-align:right;font-family:monospace;font-weight:600;color:${marginTotal===null?'#ccc':marginTotal>=0?'#16a34a':'#dc2626'}">${marginTotal===null?'—':fmtF(marginTotal)}</td>
               </tr>`;

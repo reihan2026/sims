@@ -280,7 +280,7 @@ function saveInvV(){
   const file=document.getElementById('invv-file').files[0];
   if(file){
     const nk='invv_'+inv.id;const r=new FileReader();
-    r.onload=async e=>{try{await saveFile(nk,e.target.result);inv.file_key=nk;}catch(e2){console.error('file save error:',e2);}done();};
+    r.onload=async e=>{try{const data=await compressImageForStore(e.target.result);await saveFile(nk,data);inv.file_key=nk;}catch(e2){console.error('file save error:',e2);showToast('Invoice tersimpan, tapi lampiran gagal: '+e2.message,true);}done();};
     r.onerror=()=>{console.error('FileReader error');done();};
     r.readAsDataURL(file);
   }else done();
@@ -307,7 +307,8 @@ function gantiFileInvV(invId){
     r.onload=async ev=>{
       try{
         const nk='invv_'+invId;
-        await saveFile(nk,ev.target.result);
+        const data=await compressImageForStore(ev.target.result);
+        await saveFile(nk,data);
         const invs=getInvV();const iv=invs.find(v=>v.id===invId);
         if(iv){iv.file_key=nk;setInvV(invs);}
         addLog('ganti_file','Ganti file invoice','invv',invId,'','');
@@ -440,11 +441,13 @@ function uploadInvVFile(invId){
   input.type='file';input.accept='image/*,.pdf';
   input.onchange=e=>{
     const file=e.target.files[0];if(!file)return;
+    showToast('Mengunggah file...');
     const r=new FileReader();
-    r.onload=ev=>{
+    r.onload=async ev=>{
       try{
         const nk='invv_'+invId;
-        saveFile(nk,ev.target.result);
+        const data=await compressImageForStore(ev.target.result);
+        await saveFile(nk,data);
         const invs=getInvV();const iv=invs.find(v=>v.id===invId);
         if(iv){iv.file_key=nk;setInvV(invs);}
         showToast('File berhasil diupload!');

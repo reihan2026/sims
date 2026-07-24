@@ -250,13 +250,43 @@ function nextInvNo(type){
   saveData([key]);
   return prefix+String(_cache[key]).padStart(3,'0');
 }
-// File storage — separate Firestore collection to avoid 1MB main doc limit
+// Kompres gambar agar muat di 1 dokumen Firestore (<1MB). PDF & non-gambar dibiarkan apa adanya.
+// Tidak dipakai untuk logo (kop) yang perlu tetap PNG — hanya untuk lampiran nota.
+function compressImageForStore(dataUrl){
+  return new Promise(resolve=>{
+    if(typeof dataUrl!=='string'||!dataUrl.startsWith('data:image')){resolve(dataUrl);return;}
+    const TARGET=950*1024; // sisakan ruang dari batas ~1MB Firestore
+    if(dataUrl.length<=TARGET){resolve(dataUrl);return;}
+    const img=new Image();
+    img.onload=()=>{
+      let maxDim=1600;
+      const steps=[0.8,0.7,0.6,0.5,0.4];
+      for(let a=0;a<steps.length;a++){
+        const scale=Math.min(1,maxDim/Math.max(img.width,img.height));
+        const w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale));
+        const c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        const out=c.toDataURL('image/jpeg',steps[a]);
+        if(out.length<=TARGET||a===steps.length-1){resolve(out);return;}
+        maxDim=Math.round(maxDim*0.8);
+      }
+      resolve(dataUrl);
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+// File storage — separate Firestore collection to avoid 1MB main doc limit.
+// Melempar error kalau gagal simpan (mis. file > batas Firestore) — pemanggil WAJIB await + tangani,
+// dan jangan set file_key sebelum ini sukses. Cache diisi hanya setelah tersimpan.
 const saveFile=async(key,dataUrl)=>{
-  _cache['file_'+key]=dataUrl;
   if(_currentUser){
-    try{await db.collection('sims_files').doc(key).set({data:dataUrl});}
-    catch(e){console.error('saveFile:',e);}
+    if(typeof dataUrl==='string'&&dataUrl.length>1000*1024)
+      throw new Error('File terlalu besar ('+Math.round(dataUrl.length/1024)+' KB, maksimal ~1 MB). Coba foto/scan dengan resolusi lebih kecil.');
+    await db.collection('sims_files').doc(key).set({data:dataUrl});
   }
+  _cache['file_'+key]=dataUrl;
 };
 const getFile=k=>_cache['file_'+k]||null;
 const loadFile=async(key)=>{

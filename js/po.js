@@ -1027,15 +1027,34 @@ document.addEventListener('click',e=>{
 });
 
 // ===== VIEW NOTA =====
+// Ubah data URL (base64) → Blob. Browser memblokir navigasi ke URL data:,
+// jadi PDF harus dibuka lewat blob URL, bukan href="data:...".
+function dataUrlToBlob(dataUrl){
+  const c=dataUrl.indexOf(',');
+  const head=dataUrl.slice(0,c),b64=dataUrl.slice(c+1);
+  const mime=(head.match(/data:([^;]+)/)||[])[1]||'application/octet-stream';
+  const bin=atob(b64);const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+let _notaBlobUrl=null;
+function _revokeNotaBlob(){if(_notaBlobUrl){URL.revokeObjectURL(_notaBlobUrl);_notaBlobUrl=null;}}
+
 async function viewNota(key,nama){
   document.getElementById('nota-title').textContent='Nota: '+nama;
   const b=document.getElementById('nota-body');
   b.innerHTML=`<div style="padding:20px;text-align:center;color:var(--t3)">Memuat file...</div>`;
   openModal('modal-nota');
+  _revokeNotaBlob();
   let data=getFile(key);
   if(!data)data=await loadFile(key);
   if(!data){b.innerHTML=`<p style="color:var(--dn);padding:10px">File tidak ditemukan.</p>`;return;}
-  if(data.startsWith('data:image'))b.innerHTML=`<img src="${data}" style="max-width:100%;max-height:340px;border-radius:var(--r);display:block;margin:0 auto">`;
-  else b.innerHTML=`<p style="font-size:13px;color:var(--t2);margin-bottom:9px">File PDF.</p><a href="${data}" target="_blank" class="btn bp bsm">Buka PDF</a>`;
+  if(data.startsWith('data:image')){b.innerHTML=`<img src="${data}" style="max-width:100%;max-height:340px;border-radius:var(--r);display:block;margin:0 auto">`;return;}
+  // PDF / lainnya: buka via blob URL (href="data:" diblokir browser)
+  try{
+    _notaBlobUrl=URL.createObjectURL(dataUrlToBlob(data));
+    b.innerHTML=`<iframe src="${_notaBlobUrl}" style="width:100%;height:70vh;border:1px solid var(--bd);border-radius:var(--r);background:#fff"></iframe>
+      <div style="margin-top:8px;text-align:center"><a href="${_notaBlobUrl}" target="_blank" rel="noopener" class="btn bp bsm">Buka di tab baru</a></div>`;
+  }catch(e){b.innerHTML=`<p style="color:var(--dn);padding:10px">Gagal memuat file: ${e.message}</p>`;}
 }
 

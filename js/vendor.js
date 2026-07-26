@@ -194,6 +194,10 @@ function openModalVendorSaya(id){
   document.getElementById('vs-alamat').value=vs?.alamat||'';
   document.getElementById('vs-kop-layout').value=vs?.kop_layout||'kiri';
   document.getElementById('vs-kop-warna').value=vs?.kop_warna||'default';
+  document.getElementById('vs-kop-logo-pos').value=vs?.kop_logo_pos||'kiri';
+  const _sz=vs?.kop_logo_size||80;
+  document.getElementById('vs-kop-logo-size').value=_sz;
+  document.getElementById('vs-kop-size-val').textContent=_sz+'px';
   // Rekening rows
   const wrap=document.getElementById('vs-rekening-wrap');
   wrap.innerHTML='';
@@ -221,6 +225,9 @@ function renderVsPreview(){
   const telp=(document.getElementById('vs-telp').value||'').trim();
   const layout=document.getElementById('vs-kop-layout').value||'kiri';
   const ac=VS_ACCENTS[document.getElementById('vs-kop-warna').value]||VS_ACCENTS.default;
+  const logoPos=document.getElementById('vs-kop-logo-pos').value||'kiri';
+  const logoSize=parseInt(document.getElementById('vs-kop-logo-size').value)||80;
+  const pv=Math.max(14,Math.round(logoSize*0.55)); // skala ke ukuran preview mini
   const prev=document.getElementById('vs-kop-preview');
   const kop=(prev&&prev.style.display!=='none')?document.getElementById('vs-kop-img').src:'';
   const addr=[alamat,telp].filter(Boolean).join(' · ')||'Alamat · Telepon';
@@ -228,17 +235,19 @@ function renderVsPreview(){
   const N=esc(nama),A=esc(addr);
   let hdr;
   if(layout==='banner'){
-    hdr=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:${ac};color:#fff;padding:8px 10px;border-radius:4px">
-      <div style="display:flex;align-items:center;gap:7px">${kop?`<img src="${kop}" style="max-height:26px;max-width:90px;object-fit:contain">`:''}<span style="font-weight:700;font-size:12px">${N}</span></div>
+    const rev=logoPos==='kanan'?'flex-direction:row-reverse':'';
+    hdr=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:${ac};color:#fff;padding:8px 10px;border-radius:4px;${rev}">
+      <div style="display:flex;align-items:center;gap:7px;${rev}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:110px;object-fit:contain">`:''}<span style="font-weight:700;font-size:12px">${N}</span></div>
       <span style="font-weight:700;font-size:13px;letter-spacing:.08em">INVOICE</span></div>
       <div style="font-size:9px;color:#6B6560;margin:5px 1px 8px">${A}</div>`;
   } else if(layout==='tengah'){
     hdr=`<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px">
-      ${kop?`<img src="${kop}" style="max-height:30px;max-width:60%;object-fit:contain;display:block;margin:0 auto 3px">`:''}
+      ${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:60%;object-fit:contain;display:block;margin:0 auto 3px">`:''}
       <div style="font-weight:700;font-size:12px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>`;
   } else {
-    hdr=`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px">
-      <div>${kop?`<img src="${kop}" style="max-height:28px;max-width:120px;object-fit:contain;display:block;margin-bottom:3px">`:''}<div style="font-weight:700;font-size:11px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>
+    const alignR=logoPos==='kanan';
+    hdr=`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px${alignR?';flex-direction:row-reverse':''}">
+      <div style="${alignR?'text-align:right':''}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:130px;object-fit:contain;display:block;margin-bottom:3px${alignR?';margin-left:auto':''}">`:''}<div style="font-weight:700;font-size:11px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>
       <div style="font-weight:700;font-size:13px;color:${ac}">INVOICE</div></div>`;
   }
   const body=`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:6px">
@@ -298,7 +307,9 @@ function saveVendorSaya(){
     const vsId=editId||uid();
     const kop_layout=document.getElementById('vs-kop-layout').value||'kiri';
     const kop_warna=document.getElementById('vs-kop-warna').value||'default';
-    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna};
+    const kop_logo_pos=document.getElementById('vs-kop-logo-pos').value||'kiri';
+    const kop_logo_size=parseInt(document.getElementById('vs-kop-logo-size').value)||80;
+    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna,kop_logo_pos,kop_logo_size};
     const doSave=()=>{
       const list=getVendorSaya();
       const idx=list.findIndex(v=>v.id===vsId);
@@ -358,6 +369,9 @@ async function printInvDFormal(invId){
   const ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
   const ac=ACCENTS[vs.kop_warna]||ACCENTS.default;
   const layout=vs.kop_layout||'kiri';
+  const logoPos=vs.kop_logo_pos||'kiri';
+  const logoSize=(typeof vs.kop_logo_size==='number'&&vs.kop_logo_size>0)?vs.kop_logo_size:80;
+  const sizeStyle=`max-height:${logoSize}px`;
   const css=PRINT_CSS+`
     .kop-img{max-width:55%;max-height:130px;object-fit:contain;object-position:left top;display:block;margin-bottom:8px}
     .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${ac}}
@@ -389,20 +403,24 @@ async function printInvDFormal(invId){
   const addrHtml=[vs.alamat,vs.telp].filter(Boolean).map(l=>`<div class="vs-hdr-sub">${esc(l)}</div>`).join('');
   let topHtml;
   if(layout==='banner'){
-    topHtml=`<div class="vs-banner">
-      <div style="display:flex;align-items:center;gap:12px">${kopSrc?`<img src="${kopSrc}" class="kop-img">`:''}<div class="vs-banner-name">${vs.nama}</div></div>
+    const rev=logoPos==='kanan'?'flex-direction:row-reverse':'';
+    topHtml=`<div class="vs-banner" style="${rev}">
+      <div style="display:flex;align-items:center;gap:12px;${rev}">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}<div class="vs-banner-name">${vs.nama}</div></div>
       <div class="vs-banner-inv">INVOICE</div>
     </div>
     ${(vs.alamat||vs.telp)?`<div class="vs-hdr-sub" style="margin-bottom:14px">${[vs.alamat,vs.telp].filter(Boolean).map(esc).join(' · ')}</div>`:'<div style="margin-bottom:10px"></div>'}
     <div class="inv-meta">${dapurHtml}<div style="text-align:right"><div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}</div></div>`;
   } else if(layout==='tengah'){
-    const hdr=`<div class="vs-hdr center">${kopSrc?`<img src="${kopSrc}" class="kop-img">`:''}${kopSrc?'':nameHtml}${kopSrc?`<div class="vs-hdr-sub" style="font-weight:600;color:#1A1814;font-size:13px">${vs.nama}</div>`:''}${addrHtml}</div>`;
+    const hdr=`<div class="vs-hdr center">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}${kopSrc?'':nameHtml}${kopSrc?`<div class="vs-hdr-sub" style="font-weight:600;color:#1A1814;font-size:13px">${vs.nama}</div>`:''}${addrHtml}</div>`;
     topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
   } else { // kiri (default, seperti sebelumnya)
     const vsAddrLines=[vs.nama,vs.alamat||'',vs.telp||''].filter(Boolean);
+    const alignR=logoPos==='kanan';
+    const hdrStyle=alignR?'text-align:right':'';
+    const imgStyle=`${sizeStyle};display:block;margin-bottom:8px${alignR?';margin-left:auto':''}`;
     const hdr=kopSrc
-      ?`<div class="vs-hdr"><img src="${kopSrc}" class="kop-img">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${esc(l)}</div>`).join('')}</div>`
-      :`<div class="vs-hdr">${nameHtml}${addrHtml}</div>`;
+      ?`<div class="vs-hdr" style="${hdrStyle}"><img src="${kopSrc}" class="kop-img" style="${imgStyle}">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${esc(l)}</div>`).join('')}</div>`
+      :`<div class="vs-hdr" style="${hdrStyle}">${nameHtml}${addrHtml}</div>`;
     topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
   }
   // Table

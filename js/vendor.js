@@ -209,7 +209,49 @@ function openModalVendorSaya(id){
     if(existing){img.src=existing;prev.style.display='block';delBtn.style.display='';}
     else{prev.style.display='none';delBtn.style.display='none';}
   } else {prev.style.display='none';delBtn.style.display='none';}
+  renderVsPreview();
   openModal('modal-vendor-saya');
+}
+const VS_ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
+// Pratinjau invoice mini di form mitra — cerminkan layout + warna + isi form secara live
+function renderVsPreview(){
+  const box=document.getElementById('vs-inv-preview');if(!box)return;
+  const nama=(document.getElementById('vs-nama').value||'').trim()||'Nama Perusahaan';
+  const alamat=(document.getElementById('vs-alamat').value||'').trim();
+  const telp=(document.getElementById('vs-telp').value||'').trim();
+  const layout=document.getElementById('vs-kop-layout').value||'kiri';
+  const ac=VS_ACCENTS[document.getElementById('vs-kop-warna').value]||VS_ACCENTS.default;
+  const prev=document.getElementById('vs-kop-preview');
+  const kop=(prev&&prev.style.display!=='none')?document.getElementById('vs-kop-img').src:'';
+  const addr=[alamat,telp].filter(Boolean).join(' · ')||'Alamat · Telepon';
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const N=esc(nama),A=esc(addr);
+  let hdr;
+  if(layout==='banner'){
+    hdr=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:${ac};color:#fff;padding:8px 10px;border-radius:4px">
+      <div style="display:flex;align-items:center;gap:7px">${kop?`<img src="${kop}" style="max-height:26px;max-width:90px;object-fit:contain">`:''}<span style="font-weight:700;font-size:12px">${N}</span></div>
+      <span style="font-weight:700;font-size:13px;letter-spacing:.08em">INVOICE</span></div>
+      <div style="font-size:9px;color:#6B6560;margin:5px 1px 8px">${A}</div>`;
+  } else if(layout==='tengah'){
+    hdr=`<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px">
+      ${kop?`<img src="${kop}" style="max-height:30px;max-width:60%;object-fit:contain;display:block;margin:0 auto 3px">`:''}
+      <div style="font-weight:700;font-size:12px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>`;
+  } else {
+    hdr=`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px">
+      <div>${kop?`<img src="${kop}" style="max-height:28px;max-width:120px;object-fit:contain;display:block;margin-bottom:3px">`:''}<div style="font-weight:700;font-size:11px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>
+      <div style="font-weight:700;font-size:13px;color:${ac}">INVOICE</div></div>`;
+  }
+  const body=`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:6px">
+      <div><div style="color:#9E9890;text-transform:uppercase;font-size:8px">Invoice kepada</div><div style="font-weight:600">Dapur Contoh</div></div>
+      <div style="text-align:right;color:#6B6560;font-family:monospace">INV-D-000 · 2026-07-26</div></div>
+    <table style="width:100%;border-collapse:collapse;font-size:9px">
+      <thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:3px 5px">Item</th><th style="text-align:right;padding:3px 5px">Qty</th><th style="text-align:right;padding:3px 5px">Subtotal</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:3px 5px;border-bottom:1px solid #eee">Ayam Fillet</td><td style="text-align:right;padding:3px 5px;border-bottom:1px solid #eee">10 kg</td><td style="text-align:right;padding:3px 5px;border-bottom:1px solid #eee">Rp 500.000</td></tr>
+        <tr><td style="padding:3px 5px">Wortel</td><td style="text-align:right;padding:3px 5px">15 kg</td><td style="text-align:right;padding:3px 5px">Rp 180.000</td></tr>
+      </tbody></table>
+    <div style="text-align:right;font-weight:700;font-size:12px;color:${ac};margin-top:6px">Total: Rp 680.000</div>`;
+  box.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:12px;color:#1A1814">${hdr}${body}</div>`;
 }
 function vsRekRow(bank='',no='',atas=''){
   return`<div class="r2" style="margin-bottom:6px;align-items:center">
@@ -230,6 +272,7 @@ function previewVsKop(input){
     img.src=e.target.result;
     document.getElementById('vs-kop-preview').style.display='block';
     document.getElementById('vs-kop-del').style.display='';
+    renderVsPreview();
   };
   r.readAsDataURL(f);
 }
@@ -238,6 +281,7 @@ function delVsKop(){
   document.getElementById('vs-kop-preview').style.display='none';
   document.getElementById('vs-kop-del').style.display='none';
   document.getElementById('vs-kop-file').value='';
+  renderVsPreview();
 }
 function saveVendorSaya(){
   try{

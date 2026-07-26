@@ -487,6 +487,24 @@
       </div>
       <div style="font-size:10px;color:var(--t3);margin-top:4px">Format PNG/JPG. Disarankan lebar penuh (800×200px). Akan tampil di bagian atas invoice PDF.</div>
     </div>
+    <div class="r2" style="margin-top:4px">
+      <div class="fg"><label class="lbl">Layout kop invoice</label>
+        <select id="vs-kop-layout">
+          <option value="kiri">Kiri (logo & alamat rata kiri)</option>
+          <option value="tengah">Tengah (simetris)</option>
+          <option value="banner">Banner berwarna</option>
+        </select>
+      </div>
+      <div class="fg"><label class="lbl">Warna aksen invoice</label>
+        <select id="vs-kop-warna">
+          <option value="default">Netral (hitam)</option>
+          <option value="biru">Biru profesional</option>
+          <option value="hijau">Hijau</option>
+          <option value="marun">Merah marun</option>
+          <option value="ungu">Ungu</option>
+        </select>
+      </div>
+    </div>
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-vendor-saya')">Batal</button><button class="btn bp" onclick="saveVendorSaya()">Simpan</button></div>
 </div></div>

@@ -192,6 +192,8 @@ function openModalVendorSaya(id){
   document.getElementById('vs-nama').value=vs?.nama||'';
   document.getElementById('vs-telp').value=vs?.telp||'';
   document.getElementById('vs-alamat').value=vs?.alamat||'';
+  document.getElementById('vs-kop-layout').value=vs?.kop_layout||'kiri';
+  document.getElementById('vs-kop-warna').value=vs?.kop_warna||'default';
   // Rekening rows
   const wrap=document.getElementById('vs-rekening-wrap');
   wrap.innerHTML='';
@@ -250,7 +252,9 @@ function saveVendorSaya(){
     })).filter(r=>r.bank.trim()||r.no.trim());
     const editId=document.getElementById('vs-edit-id').value||'';
     const vsId=editId||uid();
-    const obj={id:vsId,nama,telp,alamat,rekening:reks};
+    const kop_layout=document.getElementById('vs-kop-layout').value||'kiri';
+    const kop_warna=document.getElementById('vs-kop-warna').value||'default';
+    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna};
     const doSave=()=>{
       const list=getVendorSaya();
       const idx=list.findIndex(v=>v.id===vsId);
@@ -306,33 +310,57 @@ async function printInvDFormal(invId){
   if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
   if(kopSrc)kopSrc=await _resizeImageForPrint(kopSrc,800,160);
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
+  // Setelan tampilan per vendor mitra (backward-compat: tanpa setelan = kiri + netral)
+  const ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
+  const ac=ACCENTS[vs.kop_warna]||ACCENTS.default;
+  const layout=vs.kop_layout||'kiri';
   const css=PRINT_CSS+`
     .kop-img{max-width:55%;max-height:130px;object-fit:contain;object-position:left top;display:block;margin-bottom:8px}
-    .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #1A1814}
+    .vs-hdr{margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${ac}}
+    .vs-hdr.center{text-align:center}
+    .vs-hdr.center .kop-img{margin-left:auto;margin-right:auto;object-position:center top;max-width:70%}
     .vs-hdr-main{font-size:18px;font-weight:700;margin-bottom:2px}
     .vs-hdr-sub{font-size:12px;color:#6B6560;line-height:1.6}
+    .vs-banner{display:flex;justify-content:space-between;align-items:center;gap:14px;background:${ac};color:#fff;padding:14px 18px;border-radius:6px;margin-bottom:6px}
+    .vs-banner .kop-img{max-height:60px;max-width:210px;margin:0;object-position:left center}
+    .vs-banner-name{font-size:18px;font-weight:700}
+    .vs-banner-inv{font-size:22px;font-weight:700;letter-spacing:.1em}
+    .inv-meta{display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px}
     .rek-footer{margin-top:20px;padding:10px 12px;background:#F5F3EE;border-radius:4px;font-size:12px}
-    .rek-footer-title{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+    .rek-footer-title{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;color:${ac}}
     .rek-row{display:flex;gap:12px;margin-bottom:3px}
     .rek-bank{font-weight:600;min-width:80px}
   `;
-  // Header block — logo kiri, alamat & tlp di bawahnya rata kiri
-  const vsAddrLines=[vs.nama,vs.alamat||'',vs.telp||''].filter(Boolean);
-  const hdrHtml=kopSrc
-    ?`<div class="vs-hdr"><img src="${kopSrc}" class="kop-img">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${l.replace(/\n/g,'<br>')}</div>`).join('')}</div>`
-    :`<div class="vs-hdr"><div class="vs-hdr-main">${vs.nama}</div>${[vs.alamat,vs.telp].filter(Boolean).map(l=>`<div class="vs-hdr-sub">${l.replace(/\n/g,'<br>')}</div>`).join('')}</div>`;
-  // Lookup dapur full info
   const dapurInfo=getDapurInfo(inv.dapur);
-  // Invoice info
-  const infoHtml=`<div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
-    <div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${dapurInfo.nama||inv.dapur}</div>${dapurInfo.alamat?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${dapurInfo.alamat.replace(/\n/g,'<br>')}</div>`:''}${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560">${dapurInfo.tlp}</div>`:''}</div>
-    <div style="text-align:right">
-      <div style="font-size:20px;font-weight:700">INVOICE</div>
-      <div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>
-      ${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}
-      ${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}
-    </div>
+  const esc=l=>l.replace(/\n/g,'<br>');
+  // Blok penerima (dapur) & blok meta invoice (no/tgl/jatuh/ref) — dipakai bersama antar layout
+  const dapurHtml=`<div><div style="font-size:10px;text-transform:uppercase;color:#9E9890;margin-bottom:2px">Invoice kepada</div><div style="font-weight:600;font-size:15px">${dapurInfo.nama||inv.dapur}</div>${dapurInfo.alamat?`<div style="font-size:12px;color:#6B6560;margin-top:1px">${esc(dapurInfo.alamat)}</div>`:''}${dapurInfo.tlp?`<div style="font-size:12px;color:#6B6560">${dapurInfo.tlp}</div>`:''}</div>`;
+  const metaHtml=`<div style="text-align:right">
+    <div style="font-size:20px;font-weight:700;color:${ac}">INVOICE</div>
+    <div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>
+    ${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}
+    ${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}
   </div>`;
+  const nameHtml=`<div class="vs-hdr-main">${vs.nama}</div>`;
+  const addrHtml=[vs.alamat,vs.telp].filter(Boolean).map(l=>`<div class="vs-hdr-sub">${esc(l)}</div>`).join('');
+  let topHtml;
+  if(layout==='banner'){
+    topHtml=`<div class="vs-banner">
+      <div style="display:flex;align-items:center;gap:12px">${kopSrc?`<img src="${kopSrc}" class="kop-img">`:''}<div class="vs-banner-name">${vs.nama}</div></div>
+      <div class="vs-banner-inv">INVOICE</div>
+    </div>
+    ${(vs.alamat||vs.telp)?`<div class="vs-hdr-sub" style="margin-bottom:14px">${[vs.alamat,vs.telp].filter(Boolean).map(esc).join(' · ')}</div>`:'<div style="margin-bottom:10px"></div>'}
+    <div class="inv-meta">${dapurHtml}<div style="text-align:right"><div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}</div></div>`;
+  } else if(layout==='tengah'){
+    const hdr=`<div class="vs-hdr center">${kopSrc?`<img src="${kopSrc}" class="kop-img">`:''}${kopSrc?'':nameHtml}${kopSrc?`<div class="vs-hdr-sub" style="font-weight:600;color:#1A1814;font-size:13px">${vs.nama}</div>`:''}${addrHtml}</div>`;
+    topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
+  } else { // kiri (default, seperti sebelumnya)
+    const vsAddrLines=[vs.nama,vs.alamat||'',vs.telp||''].filter(Boolean);
+    const hdr=kopSrc
+      ?`<div class="vs-hdr"><img src="${kopSrc}" class="kop-img">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${esc(l)}</div>`).join('')}</div>`
+      :`<div class="vs-hdr">${nameHtml}${addrHtml}</div>`;
+    topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
+  }
   // Table
   const tableHtml=`<table class="tbl"><thead><tr>
     <th>Nama item</th>
@@ -347,7 +375,7 @@ async function printInvDFormal(invId){
   // Totals
   const totHtml=`<div class="tot">
     ${recv>0?`<div style="font-size:12px;color:#6B6560;margin-bottom:3px">Sudah dibayar: Rp ${Math.round(recv).toLocaleString('id-ID')}</div>`:''}
-    <div class="tot-main">Total: Rp ${Math.round(inv.total).toLocaleString('id-ID')}</div>
+    <div class="tot-main" style="color:${ac}">Total: Rp ${Math.round(inv.total).toLocaleString('id-ID')}</div>
     ${sisa>0?`<div style="font-size:13px;color:#8B2020;margin-top:2px">Sisa tagihan: Rp ${Math.round(sisa).toLocaleString('id-ID')}</div>`:'<div style="font-size:12px;color:#2D5A3D;margin-top:2px">✓ Lunas</div>'}
   </div>`;
   // Rekening footer
@@ -356,7 +384,7 @@ async function printInvDFormal(invId){
     ${vs.rekening.map(r=>`<div class="rek-row"><span class="rek-bank">${r.bank}</span><span>${r.no}</span>${r.atas?`<span style="color:#6B6560">a.n. ${r.atas}</span>`:''}</div>`).join('')}
   </div>`:'';
   const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
-  const body=`<div class="w">${hdrHtml}${infoHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
+  const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   const w=window.open('','_blank','width=820,height=800');
   w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
   w.document.close();

@@ -517,6 +517,13 @@
         <input type="range" id="vs-kop-logo-size" min="30" max="160" value="80" style="width:100%" oninput="document.getElementById('vs-kop-size-val').textContent=this.value+'px';renderVsPreview()">
       </div>
     </div>
+    <div class="fg" style="margin-top:4px"><label class="lbl">Teks di kop (saat ada logo)</label>
+      <select id="vs-kop-teks" onchange="renderVsPreview()">
+        <option value="full">Nama & alamat</option>
+        <option value="nama">Nama saja</option>
+        <option value="none">Sembunyikan (logo saja)</option>
+      </select>
+    </div>
     <div class="fg" style="margin-top:6px">
       <label class="lbl">Pratinjau invoice</label>
       <div id="vs-inv-preview"></div>

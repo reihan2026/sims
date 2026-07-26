@@ -198,6 +198,7 @@ function openModalVendorSaya(id){
   const _sz=vs?.kop_logo_size||80;
   document.getElementById('vs-kop-logo-size').value=_sz;
   document.getElementById('vs-kop-size-val').textContent=_sz+'px';
+  document.getElementById('vs-kop-teks').value=vs?.kop_teks||'full';
   // Rekening rows
   const wrap=document.getElementById('vs-rekening-wrap');
   wrap.innerHTML='';
@@ -230,24 +231,29 @@ function renderVsPreview(){
   const pv=Math.max(14,Math.round(logoSize*0.55)); // skala ke ukuran preview mini
   const prev=document.getElementById('vs-kop-preview');
   const kop=(prev&&prev.style.display!=='none')?document.getElementById('vs-kop-img').src:'';
+  const kt=kop?(document.getElementById('vs-kop-teks').value||'full'):'full';
+  const showName=kt!=='none', showAddr=kt==='full';
   const addr=[alamat,telp].filter(Boolean).join(' · ')||'Alamat · Telepon';
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
   const N=esc(nama),A=esc(addr);
+  const nameSpan=showName?`<span style="font-weight:700;font-size:12px">${N}</span>`:'';
+  const nameDiv=showName?`<div style="font-weight:700;font-size:11px">${N}</div>`:'';
+  const addrDiv=showAddr?`<div style="font-size:9px;color:#6B6560">${A}</div>`:'';
   let hdr;
   if(layout==='banner'){
     const rev=logoPos==='kanan'?'flex-direction:row-reverse':'';
     hdr=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:${ac};color:#fff;padding:8px 10px;border-radius:4px;${rev}">
-      <div style="display:flex;align-items:center;gap:7px;${rev}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:110px;object-fit:contain">`:''}<span style="font-weight:700;font-size:12px">${N}</span></div>
+      <div style="display:flex;align-items:center;gap:7px;${rev}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:110px;object-fit:contain">`:''}${nameSpan}</div>
       <span style="font-weight:700;font-size:13px;letter-spacing:.08em">INVOICE</span></div>
-      <div style="font-size:9px;color:#6B6560;margin:5px 1px 8px">${A}</div>`;
+      ${showAddr?`<div style="font-size:9px;color:#6B6560;margin:5px 1px 8px">${A}</div>`:'<div style="margin-bottom:6px"></div>'}`;
   } else if(layout==='tengah'){
     hdr=`<div style="text-align:center;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px">
       ${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:60%;object-fit:contain;display:block;margin:0 auto 3px">`:''}
-      <div style="font-weight:700;font-size:12px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>`;
+      ${showName?`<div style="font-weight:700;font-size:12px">${N}</div>`:''}${addrDiv}</div>`;
   } else {
     const alignR=logoPos==='kanan';
     hdr=`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;border-bottom:2px solid ${ac};margin-bottom:8px${alignR?';flex-direction:row-reverse':''}">
-      <div style="${alignR?'text-align:right':''}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:130px;object-fit:contain;display:block;margin-bottom:3px${alignR?';margin-left:auto':''}">`:''}<div style="font-weight:700;font-size:11px">${N}</div><div style="font-size:9px;color:#6B6560">${A}</div></div>
+      <div style="${alignR?'text-align:right':''}">${kop?`<img src="${kop}" style="max-height:${pv}px;max-width:130px;object-fit:contain;display:block;margin-bottom:3px${alignR?';margin-left:auto':''}">`:''}${nameDiv}${addrDiv}</div>
       <div style="font-weight:700;font-size:13px;color:${ac}">INVOICE</div></div>`;
   }
   const body=`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:6px">
@@ -309,7 +315,8 @@ function saveVendorSaya(){
     const kop_warna=document.getElementById('vs-kop-warna').value||'default';
     const kop_logo_pos=document.getElementById('vs-kop-logo-pos').value||'kiri';
     const kop_logo_size=parseInt(document.getElementById('vs-kop-logo-size').value)||80;
-    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna,kop_logo_pos,kop_logo_size};
+    const kop_teks=document.getElementById('vs-kop-teks').value||'full';
+    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna,kop_logo_pos,kop_logo_size,kop_teks};
     const doSave=()=>{
       const list=getVendorSaya();
       const idx=list.findIndex(v=>v.id===vsId);
@@ -401,25 +408,32 @@ async function printInvDFormal(invId){
   </div>`;
   const nameHtml=`<div class="vs-hdr-main">${vs.nama}</div>`;
   const addrHtml=[vs.alamat,vs.telp].filter(Boolean).map(l=>`<div class="vs-hdr-sub">${esc(l)}</div>`).join('');
+  // Isi teks kop (hanya berlaku saat ada logo; tanpa logo selalu tampilkan penuh agar kop tidak kosong)
+  const kt=kopSrc?(vs.kop_teks||'full'):'full';
+  const showName=kt!=='none';
+  const showAddr=kt==='full';
   let topHtml;
   if(layout==='banner'){
     const rev=logoPos==='kanan'?'flex-direction:row-reverse':'';
-    topHtml=`<div class="vs-banner" style="${rev}">
-      <div style="display:flex;align-items:center;gap:12px;${rev}">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}<div class="vs-banner-name">${vs.nama}</div></div>
-      <div class="vs-banner-inv">INVOICE</div>
-    </div>
-    ${(vs.alamat||vs.telp)?`<div class="vs-hdr-sub" style="margin-bottom:14px">${[vs.alamat,vs.telp].filter(Boolean).map(esc).join(' · ')}</div>`:'<div style="margin-bottom:10px"></div>'}
+    const band=`<div style="display:flex;align-items:center;gap:12px;${rev}">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}${showName?`<div class="vs-banner-name">${vs.nama}</div>`:''}</div>`;
+    const addrLine=(showAddr&&(vs.alamat||vs.telp))?`<div class="vs-hdr-sub" style="margin-bottom:14px">${[vs.alamat,vs.telp].filter(Boolean).map(esc).join(' · ')}</div>`:'<div style="margin-bottom:10px"></div>';
+    topHtml=`<div class="vs-banner" style="${rev}">${band}<div class="vs-banner-inv">INVOICE</div></div>
+    ${addrLine}
     <div class="inv-meta">${dapurHtml}<div style="text-align:right"><div style="font-size:11px;color:#6B6560;font-family:'Courier New',monospace">${inv.no} · ${inv.tgl}</div>${inv.jatuh?`<div style="font-size:11px;color:#9E9890;margin-top:2px">Jatuh tempo: ${inv.jatuh}</div>`:''}${po?`<div style="font-size:11px;color:#9E9890">Ref. PO: ${po.no}</div>`:''}</div></div>`;
   } else if(layout==='tengah'){
-    const hdr=`<div class="vs-hdr center">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}${kopSrc?'':nameHtml}${kopSrc?`<div class="vs-hdr-sub" style="font-weight:600;color:#1A1814;font-size:13px">${vs.nama}</div>`:''}${addrHtml}</div>`;
+    const nameLine=showName?(kopSrc?`<div class="vs-hdr-sub" style="font-weight:600;color:#1A1814;font-size:13px">${vs.nama}</div>`:nameHtml):'';
+    const hdr=`<div class="vs-hdr center">${kopSrc?`<img src="${kopSrc}" class="kop-img" style="${sizeStyle}">`:''}${nameLine}${showAddr?addrHtml:''}</div>`;
     topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
-  } else { // kiri (default, seperti sebelumnya)
-    const vsAddrLines=[vs.nama,vs.alamat||'',vs.telp||''].filter(Boolean);
+  } else { // kiri (default)
     const alignR=logoPos==='kanan';
     const hdrStyle=alignR?'text-align:right':'';
     const imgStyle=`${sizeStyle};display:block;margin-bottom:8px${alignR?';margin-left:auto':''}`;
+    const lines=[];
+    if(showName)lines.push({t:vs.nama,bold:true});
+    if(showAddr){if(vs.alamat)lines.push({t:vs.alamat,bold:false});if(vs.telp)lines.push({t:vs.telp,bold:false});}
+    const linesHtml=lines.map(l=>`<div class="vs-hdr-sub" style="${l.bold?'font-weight:600;color:#1A1814;font-size:13px':''}">${esc(l.t)}</div>`).join('');
     const hdr=kopSrc
-      ?`<div class="vs-hdr" style="${hdrStyle}"><img src="${kopSrc}" class="kop-img" style="${imgStyle}">${vsAddrLines.map((l,i)=>`<div class="vs-hdr-sub" style="${i===0?'font-weight:600;color:#1A1814;font-size:13px':''}">${esc(l)}</div>`).join('')}</div>`
+      ?`<div class="vs-hdr" style="${hdrStyle}"><img src="${kopSrc}" class="kop-img" style="${imgStyle}">${linesHtml}</div>`
       :`<div class="vs-hdr" style="${hdrStyle}">${nameHtml}${addrHtml}</div>`;
     topHtml=`${hdr}<div class="inv-meta">${dapurHtml}${metaHtml}</div>`;
   }

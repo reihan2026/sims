@@ -365,9 +365,11 @@ function openEditInvV(invId){
     if(_ePO){const pi=(typeof item.idx==='number'&&_ePO.items[item.idx]?.nama===item.nama)?_ePO.items[item.idx]:_ePO.items.find(p=>p.nama===item.nama);if(pi!=null)poQty=pi.qty;}
     const qtyMismatch=poQty!=null&&poQty!==item.qty;
     const poRef=poQty!=null?`<div style="font-size:10px;margin-top:2px;color:${qtyMismatch?'var(--wt)':'var(--t3)'}">PO: ${poQty} ${item.satuan_po||item.satuan||''}${qtyMismatch?' ⚠':''}</div>`:'';
+    // Item konversi: satuan invoice memang sengaja beda dari PO — beri tahu sebelum ditimpa
+    const konvHint=item.konv?`<div style="font-size:10px;margin-top:2px;color:var(--t3)">Konversi: 1 ${item.satuan} = ${item.konv} ${item.satuan_po||''} PO</div>`:'';
     return `<tr>
     <td style="font-weight:500">${item.nama}</td>
-    <td>${item.satuan||''}</td>
+    <td><input type="text" id="einvv-sat-${i}" value="${item.satuan||''}" style="width:70px;font-size:12px;padding:4px 6px">${konvHint}</td>
     <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()">${poRef}</td>
     <td class="num">${fmtF(item.harga_vendor||0)}</td>
     <td><input type="number" id="einvv-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:110px;font-size:12px;font-family:var(--mn)" oninput="calcEditInvVTotal()"></td>
@@ -385,10 +387,27 @@ function saveEditInvV(){
   const invId=document.getElementById('einvv-id').value;const catRev=document.getElementById('einvv-cat-rev').value.trim();
   const invs=getInvV();const inv=invs.find(v=>v.id===invId);if(!inv)return;
   const oldTotal=inv.total;let newTotal=0;
+  const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
   (inv.items||[]).forEach((item,i)=>{
     const hv=parseFloat(document.getElementById('einvv-hv-'+i)?.value)||item.harga_vendor||0;
     const qtyInput=document.getElementById('einvv-qty-'+i);
     const qty=qtyInput?parseFloat(qtyInput.value)||0:item.qty||0;
+    // Satuan — perlu diproses sebelum harga_vendor_po karena bisa membatalkan konversi
+    const satInput=document.getElementById('einvv-sat-'+i);
+    const satBaru=(satInput?satInput.value.trim():'')||item.satuan||'';
+    const satLama=item.satuan||'';
+    const satPO=item.satuan_po||satLama;
+    const sejajarSebelumnya=satLama.toLowerCase()===satPO.toLowerCase();
+    item.satuan=satBaru;
+    if(satBaru.toLowerCase()===satPO.toLowerCase()){
+      // Satuan invoice kembali sama dengan PO — konversi tidak berlaku lagi
+      if(item.konv){delete item.konv;delete item.sat_changed;
+        const pi=po&&po.items[item.idx];if(pi&&pi.satuan_konv)delete pi.satuan_konv;}
+      item.satuan_po=satPO;
+    } else if(sejajarSebelumnya){
+      // Satuan invoice & PO tadinya sejajar → ini koreksi data, bukan konversi
+      item.satuan_po=satBaru;
+    }
     item.harga_vendor=hv;
     item.harga_vendor_po=item.konv?hv/item.konv:hv;
     item.qty=qty;
@@ -398,7 +417,6 @@ function saveEditInvV(){
   if(!inv.edits)inv.edits=[];
   inv.edits.push({tgl:today(),total_lama:oldTotal,total_baru:newTotal,catatan:catRev||'Revisi harga vendor'});
   // Sync harga_vendor_po back ke PO items (consistent with saveInvV)
-  const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
   if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
   const invds=getInvD();const ptInvD=invds.find(d=>d.type==='passthrough'&&d.pt_inv_id===invId);
   if(ptInvD)ptInvD.total=newTotal;

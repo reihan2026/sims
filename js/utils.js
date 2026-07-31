@@ -5,6 +5,8 @@ function getCatOpts(selected=''){return['<option value="">—</option>',...getCa
 // ===== UTILS =====
 const today=()=>new Date().toISOString().split('T')[0];
 const uid=()=>'ID'+Date.now()+Math.floor(Math.random()*9999);
+// Nama item invoice bisa berisi baris tambahan / badge ⚠✕ — ambil nama dasarnya saja
+const baseNama=n=>(n||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
 const fmt=n=>{n=Math.round(n||0);if(Math.abs(n)>=1e9)return'Rp '+(n/1e9).toFixed(2)+'M';if(Math.abs(n)>=1e6)return'Rp '+(n/1e6).toFixed(1)+'jt';return'Rp '+n.toLocaleString('id-ID')};
 const fmtF=n=>'Rp '+Math.round(n||0).toLocaleString('id-ID');
 const _BULAN={'Januari':1,'Februari':2,'Maret':3,'April':4,'Mei':5,'Juni':6,'Juli':7,'Agustus':8,'September':9,'Oktober':10,'November':11,'Desember':12};

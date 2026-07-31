@@ -643,7 +643,7 @@ function openItemEdit(poId,idx){
     const parts=[];
     if(hasInvV)parts.push('invoice vendor ('+itemInvV[idx].no+')');
     if(hasInvD)parts.push('invoice dapur ('+itemInvD[idx].no+')');
-    warnEl.innerHTML='⚠ Item ini sudah punya '+parts.join(' dan ')+'. Mengubah <strong>qty di sini tidak mengubah qty di invoice</strong> — perbarui invoice secara terpisah jika qty berubah.';
+    warnEl.innerHTML='⚠ Item ini sudah punya '+parts.join(' dan ')+'. Mengubah <strong>satuan</strong> akan ditawarkan untuk disinkronkan ke invoice saat disimpan. Tapi <strong>qty dan harga di sini tidak mengubah invoice</strong> — perbarui invoice secara terpisah jika keduanya berubah.';
     warnEl.dataset.invvNo=hasInvV?itemInvV[idx].no:'';
     warnEl.style.display='block';
   } else {
@@ -655,7 +655,7 @@ function openItemEdit(poId,idx){
 function saveItemEdit(){
   const poId=document.getElementById('ie-po-id').value;const idx=parseInt(document.getElementById('ie-idx').value);
   const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
-  const oldQty=item.qty;const oldHP=item.harga_po;
+  const oldQty=item.qty;const oldHP=item.harga_po;const oldSat=item.satuan;
   item.qty=parseFloat(document.getElementById('ie-qty').value)||item.qty;
   item.satuan=document.getElementById('ie-satuan').value.trim()||item.satuan;
   item.harga_po=parseFloat(document.getElementById('ie-harga-po').value)||item.harga_po;
@@ -669,11 +669,61 @@ function saveItemEdit(){
     if(!po.revisions)po.revisions=[];
     po.revisions.push({tgl:today(),changes:[{nama:item.nama,qty_lama:oldQty,qty_baru:item.qty,harga_lama:oldHP,harga_baru:item.harga_po,alasan:alasan||'Edit item'}]});
   }
-  addLog('edit_item','Edit item','item',poId,po?.no,item?.nama||'');setPOs(pos);closeModal('modal-item');
+  addLog('edit_item','Edit item','item',poId,po?.no,item?.nama||'');
+  const satSynced=item.satuan!==oldSat?syncSatuanKeInvoice(po,item,oldSat):false;
+  if(!satSynced)setPOs(pos);
+  closeModal('modal-item');
   const _invvNo=document.getElementById('item-edit-warn').dataset.invvNo||'';
   if(item.qty!==oldQty&&_invvNo)showToast('Qty PO diperbarui. Jangan lupa update qty di invoice vendor '+_invvNo+' juga.',true);
   else showToast('Item diperbarui!');
   showDetail(poId);
+}
+
+// Koreksi satuan di PO → tawarkan sinkronisasi ke invV & invD terkait.
+// Item konversi PT (punya `konv`) selalu dilewati — satuannya memang sengaja beda dari PO.
+// Return true jika data sudah ditulis (caller tidak perlu setPOs lagi).
+function syncSatuanKeInvoice(po,item,oldSat){
+  const nama=item.nama;const satBaru=item.satuan;
+  const invs=getInvV();const invds=getInvD();
+  const targetV=[],targetD=[];let dilewati=0;
+  invs.forEach(iv=>{
+    if(iv.po_id!==po.id)return;
+    (iv.items||[]).forEach(i=>{
+      if(baseNama(i.nama)!==nama)return;
+      if(i.konv){dilewati++;return;}
+      targetV.push({inv:iv,item:i});
+    });
+  });
+  invds.forEach(d=>{
+    // InvD passthrough menurunkan item dari invV saat render — tidak perlu disentuh
+    if(d.po_id!==po.id||d.type==='passthrough')return;
+    (d.items||[]).forEach(i=>{if(baseNama(i.nama)===nama)targetD.push({inv:d,item:i});});
+  });
+  if(!targetV.length&&!targetD.length){
+    // Semua yang cocok ternyata item konversi — jelaskan kenapa tidak ikut berubah
+    if(dilewati)alert('Satuan di PO sudah diperbarui, tapi invoice terkait TIDAK diubah karena item-nya memakai konversi satuan '+
+      '(satuan invoice memang sengaja beda dari PO).\n\nKalau konversi itu keliru, perbaiki lewat Revisi Invoice Vendor.');
+    return false;
+  }
+
+  const ringkas=(arr,label)=>{
+    const byNo=new Map();
+    arr.forEach(t=>byNo.set(t.inv.no,(byNo.get(t.inv.no)||0)+1));
+    return byNo.size?'\n• '+label+': '+[...byNo].map(([no,n])=>no+' ('+n+' item)').join(', '):'';
+  };
+  const pesan='Satuan "'+nama+'" diubah '+oldSat+' → '+satBaru+'.\n'+
+    'Ikut perbarui satuan di invoice terkait?'+
+    ringkas(targetV,'Invoice vendor')+ringkas(targetD,'Invoice dapur')+
+    '\n\nInvoice dapur yang sudah dicetak/dikirim akan ikut berubah.'+
+    (dilewati?'\n\nItem dengan konversi satuan dilewati ('+dilewati+' item).':'');
+  if(!confirm(pesan))return false;
+
+  targetV.forEach(t=>{t.item.satuan=satBaru;t.item.satuan_po=satBaru;});
+  targetD.forEach(t=>{t.item.satuan=satBaru;});
+  addLog('sync_satuan','Sinkron satuan ke invoice','item',po.id,po.no,nama+': '+oldSat+' → '+satBaru);
+  setBatch({po:getPOs(),invv:invs,invd:invds});
+  invalidatePO(po.id);
+  return true;
 }
 function openGantiItem(poId,idx){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;

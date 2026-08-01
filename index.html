@@ -560,9 +560,13 @@
       <div class="fg"><label class="lbl">Tanggal PO</label><input type="date" id="bpov-tgl"></div>
     </div>
     <div class="fg" style="margin-bottom:12px"><label class="lbl">Catatan untuk vendor (opsional)</label><input type="text" id="bpov-cat" placeholder="mis. minta konfirmasi harga sebelum kirim"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div class="ct" style="margin:0">Pilih item</div>
-      <div class="bg"><button class="btn bxs" onclick="bpovCheckAll(true)">Pilih semua</button><button class="btn bxs" onclick="bpovCheckAll(false)">Kosongkan</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+      <div class="ct" style="margin:0">Pilih item <span id="bpov-count" style="font-weight:400;color:var(--t3);text-transform:none;letter-spacing:0"></span></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="bpov-kat-filter" style="font-size:11px;padding:3px 6px;width:135px;display:none" onchange="filterBPOVItems()"><option value="">Semua kategori</option></select>
+        <input type="text" id="bpov-srch" placeholder="🔍 Cari item..." style="font-size:11px;padding:3px 7px;width:130px" oninput="filterBPOVItems()">
+        <div class="bg"><button class="btn bxs" onclick="bpovCheckAll(true)">Pilih semua</button><button class="btn bxs" onclick="bpovCheckAll(false)">Kosongkan</button></div>
+      </div>
     </div>
     <div id="bpov-items"></div>
   </div>

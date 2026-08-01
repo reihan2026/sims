@@ -29,10 +29,10 @@ function bpovRenderItems(po,vendorNama){
   el.innerHTML=po.items.map((item,idx)=>{
     const precheck=vendorNama&&item.vendor===vendorNama;
     const deadline=item.deadline?` · deadline ${item.deadline}`:'';
-    const spek=item.spek?`<span style="color:var(--t3);font-size:10px"> — ${item.spek}</span>`:'';
     const kat=item.kat?`<span class="tag tgr" style="font-size:9px">${item.kat}</span> `:'';
-    return`<label style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--bd);cursor:pointer">
-      <input type="checkbox" id="bpov-item-${idx}" ${precheck?'checked':''} style="margin-top:2px;flex-shrink:0">
+    const cari=((item.nama||'')+' '+(item.spek||'')).toLowerCase().replace(/"/g,'&quot;');
+    return`<label class="bpov-row" data-kat="${(item.kat||'').replace(/"/g,'&quot;')}" data-cari="${cari}" style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--bd);cursor:pointer">
+      <input type="checkbox" id="bpov-item-${idx}" ${precheck?'checked':''} onchange="updateBPOVCount()" style="margin-top:2px;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:500">${kat}${item.nama}</div>
         <div style="font-size:11px;color:var(--t2);font-family:var(--mn)">${item.qty} ${item.satuan}${deadline}</div>
@@ -40,11 +40,52 @@ function bpovRenderItems(po,vendorNama){
       </div>
     </label>`;
   }).join('');
+  // Filter kategori — hanya berguna kalau PO punya lebih dari satu kategori
+  const katF=document.getElementById('bpov-kat-filter');
+  if(katF){
+    const kats=[...new Set(po.items.map(i=>i.kat).filter(Boolean))].sort();
+    katF.innerHTML='<option value="">Semua kategori</option>'+kats.map(k=>`<option value="${k}">${k}</option>`).join('');
+    katF.style.display=kats.length>1?'':'none';
+    katF.value='';
+  }
+  const srch=document.getElementById('bpov-srch');if(srch)srch.value='';
+  filterBPOVItems();
 }
 
+// Sembunyikan baris lewat style.display — JANGAN render ulang. savePOV membaca
+// checkbox `bpov-item-${idx}` untuk semua item PO, jadi baris yang dibuang dari
+// DOM akan menghilangkan centangnya tanpa disadari.
+function filterBPOVItems(){
+  const q=(document.getElementById('bpov-srch')?.value||'').toLowerCase().trim();
+  const kat=document.getElementById('bpov-kat-filter')?.value||'';
+  document.querySelectorAll('#bpov-items .bpov-row').forEach(row=>{
+    const cocok=(!kat||row.dataset.kat===kat)&&(!q||(row.dataset.cari||'').includes(q));
+    row.style.display=cocok?'flex':'none';
+  });
+  updateBPOVCount();
+}
+
+function updateBPOVCount(){
+  const el=document.getElementById('bpov-count');if(!el)return;
+  const rows=[...document.querySelectorAll('#bpov-items .bpov-row')];
+  const terlihat=rows.filter(r=>r.style.display!=='none');
+  const dipilih=rows.filter(r=>r.querySelector('input[type=checkbox]')?.checked);
+  const tersembunyi=dipilih.filter(r=>r.style.display==='none').length;
+  let t='· '+dipilih.length+' dipilih';
+  if(terlihat.length!==rows.length)t+=' · tampil '+terlihat.length+'/'+rows.length;
+  // Pilihan di luar filter tetap ikut tersimpan — beri tahu supaya tidak mengagetkan
+  if(tersembunyi)t+=' · '+tersembunyi+' pilihan di luar filter';
+  el.textContent=t;
+}
+
+// Hanya baris yang sedang tampil — "Pilih semua" saat filter aktif berarti
+// semua item pada filter itu, bukan seluruh PO.
 function bpovCheckAll(checked){
-  const po=getPOs().find(p=>p.id===_buatPOVSourceId);if(!po)return;
-  po.items.forEach((_,idx)=>{const cb=document.getElementById('bpov-item-'+idx);if(cb)cb.checked=checked;});
+  document.querySelectorAll('#bpov-items .bpov-row').forEach(row=>{
+    if(row.style.display==='none')return;
+    const cb=row.querySelector('input[type=checkbox]');if(cb)cb.checked=checked;
+  });
+  updateBPOVCount();
 }
 
 function savePOV(mode){

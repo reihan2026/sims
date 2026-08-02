@@ -155,7 +155,7 @@ function nav(name){
   if(name==='pov')renderPOV();
   if(name==='konsumsi')renderKonsumsi();
   if(name==='laporan-keu')renderLaporanKeu();
-  if(name==='master'){renderMaster();initUserProfile();_logShowAll=false;renderLog();}
+  if(name==='master'){renderMaster();initUserProfile();_logShowAll=false;renderLog();renderArsipPeriode();}
   if(name==='po-baru')initPOForm();
   _pushNavState();
   renderBackBtn();

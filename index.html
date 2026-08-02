@@ -318,6 +318,14 @@
       <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama vendor</th><th>Kategori / Rekening</th><th>No. HP / Telp</th><th>Cashback</th><th>Aksi</th></tr></thead><tbody id="vendor-tbl"></tbody></table></div>
     </div>
     <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
+        <div class="ct" style="margin:0">Arsip Periode Lama</div>
+        <div class="bg"><button class="btn bsm" onclick="renderArsipPeriode()">↻ Periksa</button></div>
+      </div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px">PO yang sudah tutup penuh dan berumur lebih dari 3 bulan bisa dipindah ke dokumen terpisah. Laporan tetap utuh karena ringkasan per bulan disimpan di dokumen utama.</div>
+      <div id="arsip-periode-list"></div>
+    </div>
+    <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div class="ct" style="margin:0">Log Aktivitas</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -576,6 +584,21 @@
     <button class="btn bi" onclick="savePOV('pdf')">Simpan + Cetak PDF</button>
     <button class="btn" style="background:#25D366;color:#fff;border-color:#25D366" onclick="savePOV('wa')">Simpan + Buka WA</button>
   </div>
+</div></div>
+
+<!-- Pratinjau Arsip -->
+<div class="modal-bg" id="modal-arsip-pv"><div class="modal mw">
+  <div class="mh"><span class="mht">Pratinjau Arsip — <span id="arsip-pv-periode"></span></span><button class="btn bgh bsm" onclick="closeModal('modal-arsip-pv')">✕</button></div>
+  <div class="mb" id="arsip-pv-body"></div>
+  <input type="hidden" id="arsip-pv-id">
+  <div class="mf"><button class="btn" onclick="closeModal('modal-arsip-pv')">Batal</button><button class="btn bw" id="arsip-pv-btn" onclick="jalankanArsip()">Arsipkan sekarang</button></div>
+</div></div>
+
+<!-- Lihat Isi Arsip -->
+<div class="modal-bg" id="modal-arsip-view"><div class="modal mw">
+  <div class="mh"><span class="mht">Arsip — <span id="arsip-view-periode"></span></span><button class="btn bgh bsm" onclick="closeModal('modal-arsip-view')">✕</button></div>
+  <div class="mb" id="arsip-view-body"></div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-arsip-view')">Tutup</button></div>
 </div></div>
 
 <!-- View PO ke Vendor -->

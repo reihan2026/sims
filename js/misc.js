@@ -232,7 +232,9 @@ function syncPTInvDTotals(){
 }
 
 // ===== ACTIVITY LOG =====
-const MAX_LOG=500;
+// 500 entri = ~125 KB dari batas 1 MB dokumen Firestore. 150 masih menyisakan
+// sekitar sebulan jejak audit dengan biaya ~38 KB.
+const MAX_LOG=150;
 function getLog(){return ST.g('log',[]);}
 function setLog(d){ST.s('log',d);}
 function getUserProfile(){

@@ -2,7 +2,8 @@
 function renderCashflow(){
   const _cfDEl=document.getElementById('cf-dapur-filter');
   if(_cfDEl){
-    const dapurs=[...new Set([...getInvD().map(d=>d.dapur),...getPOs().map(p=>p.dapur)].filter(Boolean))].sort();
+    const dapurs=[...new Set([...getInvD().map(d=>d.dapur),...getPOs().map(p=>p.dapur),
+      ...Object.values(getArsipRingkas()).flatMap(r=>r.dapurs||[])].filter(Boolean))].sort();
     const prev=_cfDEl.value;
     _cfDEl.innerHTML='<option value="">Semua dapur</option>'+dapurs.map(d=>`<option value="${d}">${d}</option>`).join('');
     if(dapurs.includes(prev))_cfDEl.value=prev;
@@ -16,6 +17,7 @@ function renderCashflow(){
   const _cfMonths=new Set();
   invV.forEach(iv=>(iv.payments||[]).forEach(p=>{if(p.tgl)_cfMonths.add(p.tgl.slice(0,7));}));
   invD.forEach(id=>(id.payments||[]).forEach(p=>{if(p.tgl)_cfMonths.add(p.tgl.slice(0,7));}));
+  Object.values(getArsipRingkas()).forEach(r=>Object.keys(r.bayar||{}).forEach(bl=>_cfMonths.add(bl)));
   const _cfSortedM=[..._cfMonths].sort().reverse();
   const _cfNowYM=new Date().toISOString().slice(0,7);
   const _cfPSel=document.getElementById('cf-period-filter');
@@ -29,14 +31,24 @@ function renderCashflow(){
   const _cfPLabel=_cfP==='all'?'':((()=>{const[y,mo]=_cfP.split('-');return new Date(+y,+mo-1).toLocaleDateString('id-ID',{month:'long',year:'numeric'});})());
   invV.forEach(iv=>{const n=invVNet(iv);sudahBayar+=(iv.payments||[]).filter(p=>_inP(p.tgl)).reduce((s,p)=>s+p.jumlah,0);if(iv.bayar_status!=='lunas'&&!isPassthrough(iv.id))utangV+=n.sisa;});
   invD.forEach(id=>{const allRecv=(id.payments||[]).reduce((s,py)=>s+py.jumlah,0);sudahTerima+=(id.payments||[]).filter(p=>_inP(p.tgl)).reduce((s,py)=>s+py.jumlah,0);if(id.terima_status!=='lunas')piutang+=Math.max(0,id.total-allRecv);});
+  // Periode terarsip. Piutang & utang tidak perlu ditambah — yang diarsip pasti
+  // sudah lunas. Ringkasan pembayaran tidak dipecah per dapur, jadi saat filter
+  // dapur aktif arsip sengaja dilewati daripada menampilkan angka keliru.
+  const _arsipR=getArsipRingkas();
+  let _cfArsipDilewati=false;
+  if(_cfDapur){_cfArsipDilewati=Object.keys(_arsipR).length>0;}
+  else Object.values(_arsipR).forEach(r=>Object.entries(r.bayar||{}).forEach(([bl,b])=>{
+    if(_inP(bl+'-01')){sudahBayar+=b.keluar||0;sudahTerima+=b.masuk||0;}
+  }));
   const net=piutang-utangV;
+  const _arsipNote=_cfArsipDilewati?'<div style="font-size:10px;color:var(--wt);margin-top:2px">Belum termasuk periode terarsip — hapus filter dapur untuk melihat totalnya</div>':'';
   const _periodSub=_cfPLabel?`<div style="font-size:10px;color:var(--t3);margin-top:-1px;margin-bottom:2px">${_cfPLabel}</div>`:'';
   document.getElementById('cf-met').innerHTML=`
     <div class="met"><div class="ml">Piutang dapur</div><div class="mv num g">${fmt(piutang)}</div></div>
     <div class="met"><div class="ml">Utang vendor</div><div class="mv num r">${fmt(utangV)}</div></div>
     <div class="met"><div class="ml">Net posisi</div><div class="mv num ${net>=0?'g':'r'}">${fmt(net)}</div></div>
-    <div class="met"><div class="ml">Sudah terima</div>${_periodSub}<div class="mv num g">${fmt(sudahTerima)}</div></div>
-    <div class="met"><div class="ml">Sudah bayar</div>${_periodSub}<div class="mv num r">${fmt(sudahBayar)}</div></div>`;
+    <div class="met"><div class="ml">Sudah terima</div>${_periodSub}<div class="mv num g">${fmt(sudahTerima)}</div>${_arsipNote}</div>
+    <div class="met"><div class="ml">Sudah bayar</div>${_periodSub}<div class="mv num r">${fmt(sudahBayar)}</div>${_arsipNote}</div>`;
 
   // Build all payments
   const allPay=[];
@@ -115,6 +127,14 @@ function renderCashflow(){
 function renderRekening(){
   const reks=getReks();const invV=getInvV();const invD=getInvD();
   const usage={};const masukRek={};reks.forEach(r=>{usage[r.id]=0;masukRek[r.id]=0;});
+  // Mulai dari total periode terarsip — tanpa ini saldo rekening akan mengecil
+  // diam-diam begitu invoice lunas dipindah ke sims_arsip.
+  Object.values(getArsipRingkas()).forEach(r=>{
+    Object.entries(r.rek||{}).forEach(([id,x])=>{
+      if(usage[id]!==undefined)usage[id]+=x.keluar||0;
+      if(masukRek[id]!==undefined)masukRek[id]+=x.masuk||0;
+    });
+  });
   invV.forEach(iv=>(iv.payments||[]).forEach(p=>{if(usage[p.rek_id]!==undefined)usage[p.rek_id]+=p.jumlah;}));
   invD.forEach(iv=>(iv.payments||[]).forEach(p=>{if(masukRek[p.rek_id]!==undefined)masukRek[p.rek_id]+=p.jumlah;}));
   let totU=0,totK=0;reks.forEach(r=>{totU+=usage[r.id]||0;totK+=(r.pengembalian||[]).reduce((s,p)=>s+p.jumlah,0);});

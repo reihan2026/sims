@@ -474,6 +474,16 @@ function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat,fSatuan){
       rows.push({nama:(item.nama||'').trim(),kat:item.kat||'Lainnya',qty,satuan,nilai,vendor:item.vendor||'—',dapur:po.dapur,bulan,tgl});
     });
   });
+  // Baris dari periode terarsip — sudah teragregasi per nama/kat/satuan/vendor/dapur/bulan.
+  // Filter yang sama diterapkan ulang supaya perilakunya identik dengan data hidup.
+  arsipKonsumsiRows().forEach(r=>{
+    if(fDapur&&r.dapur!==fDapur)return;
+    if(fBulan&&r.bulan!==fBulan)return;
+    if(fVendor&&r.vendor!==fVendor)return;
+    if(fKat&&(r.kat||'')!==fKat)return;
+    if(fSatuan&&(r.satuan||'pcs')!==fSatuan)return;
+    rows.push({...r,tgl:r.bulan+'-01'});
+  });
   return rows;
 }
 
@@ -779,13 +789,42 @@ function _lkBuildData(from,to){
     });
     byPO.push({po,revenue,modal,ongkir,cashback,profit});
   });
+  // Gabungkan periode yang sudah diarsip. Ringkasan bergranularitas bulan, jadi
+  // satu bulan ikut utuh bila bulannya masuk rentang — persis untuk mode tahun
+  // (01-01..12-31); untuk rentang custom yang memotong tengah bulan, ditandai
+  // lewat arsipParsial agar UI bisa memberi tahu.
+  const fromM=from.substring(0,7),toM=to.substring(0,7);
+  let arsipCnt=0,arsipParsial=false;
+  Object.entries(getArsipRingkas()).forEach(([periode,r])=>{
+    if(periode<fromM||periode>toM)return;
+    if((periode===fromM&&from.substring(8)!=='01')||(periode===toM&&to.substring(8)<'28'))arsipParsial=true;
+    totalRevenue+=r.revenue||0;totalModal+=r.modal||0;
+    totalOngkir+=r.ongkir||0;totalCashback+=r.cashback||0;
+    arsipCnt+=r.po_cnt||0;
+    if(!monthly[periode])monthly[periode]={revenue:0,modal:0,ongkir:0,cashback:0,profit:0,cnt:0};
+    monthly[periode].revenue+=r.revenue||0;monthly[periode].modal+=r.modal||0;
+    monthly[periode].ongkir+=r.ongkir||0;monthly[periode].cashback+=r.cashback||0;
+    monthly[periode].profit+=r.profit||0;monthly[periode].cnt+=r.po_cnt||0;
+    Object.entries(r.byVendor||{}).forEach(([v,x])=>{
+      if(!byVendor[v])byVendor[v]={modal:0,ongkir:0,cashback:0};
+      byVendor[v].modal+=x.modal||0;byVendor[v].ongkir+=x.ongkir||0;byVendor[v].cashback+=x.cashback||0;
+    });
+    Object.entries(r.byDapur||{}).forEach(([dp,x])=>{
+      if(!byDapur[dp])byDapur[dp]={revenue:0,cnt:0};
+      byDapur[dp].revenue+=x.revenue||0;byDapur[dp].cnt+=x.cnt||0;
+    });
+    (r.po||[]).forEach(p=>byPO.push({po:{id:p.id,no:p.no,date:p.date,dapur:p.dapur},
+      revenue:p.revenue,modal:p.modal,ongkir:p.ongkir,cashback:p.cashback,profit:p.profit,
+      arsip:true,periode}));
+  });
   const totalProfit=totalRevenue-totalModal-totalOngkir+totalCashback;
   const totalMarginPct=totalRevenue>0?(totalProfit/totalRevenue*100):0;
-  return{totalRevenue,totalModal,totalOngkir,totalCashback,totalProfit,totalMarginPct,monthly,byVendor,byDapur,byPO,posCount:pos.length};
+  return{totalRevenue,totalModal,totalOngkir,totalCashback,totalProfit,totalMarginPct,monthly,byVendor,byDapur,byPO,posCount:pos.length+arsipCnt,arsipParsial};
 }
 
 function renderLaporanKeu(){
-  const allYears=[...new Set(getPOs().map(po=>po.date.substring(0,4)))].sort().reverse();
+  const allYears=[...new Set([...getPOs().map(po=>po.date.substring(0,4)),
+    ...Object.keys(getArsipRingkas()).map(p=>p.substring(0,4))])].sort().reverse();
   const curY=new Date().getFullYear().toString();
   const savedY=localStorage.getItem('lk-tahun')||curY;
   const savedMode=localStorage.getItem('lk-mode')||'tahun';

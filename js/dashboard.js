@@ -4,7 +4,8 @@ function renderDashboard(){
   // Dapur filter
   const _ddEl=document.getElementById('dash-dapur-filter');
   if(_ddEl){
-    const dapurs=[...new Set(getPOs().map(p=>p.dapur).filter(Boolean))].sort();
+    const dapurs=[...new Set([...getPOs().map(p=>p.dapur),
+      ...Object.values(getArsipRingkas()).flatMap(r=>r.dapurs||[])].filter(Boolean))].sort();
     const prev=_ddEl.value;
     _ddEl.innerHTML='<option value="">Semua dapur</option>'+dapurs.map(d=>`<option value="${d}">${d}</option>`).join('');
     if(dapurs.includes(prev))_ddEl.value=prev;
@@ -175,6 +176,13 @@ function renderDashboard(){
     const poCB=poInvV.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((a,c)=>a+c.jumlah,0),0);
     monthly[k].tp+=t.tp;monthly[k].tv+=t.tv;
     monthly[k].margin+=t.margin;monthly[k].ongkir+=poOngkir;monthly[k].cashback+=poCB;monthly[k].cnt++;
+  });
+  // Periode terarsip. Filter dapur dilewati: ringkasan tidak dipecah per dapur,
+  // jadi menambahkannya saat difilter akan menampilkan angka keliru.
+  if(!_fDapur)Object.entries(getArsipRingkas()).forEach(([k,r])=>{
+    if(!monthly[k])monthly[k]={tp:0,tv:0,margin:0,ongkir:0,cashback:0,cnt:0};
+    monthly[k].tp+=r.tp||0;monthly[k].tv+=r.tv||0;monthly[k].margin+=r.margin||0;
+    monthly[k].ongkir+=r.ongkir||0;monthly[k].cashback+=r.cashback||0;monthly[k].cnt+=r.po_cnt||0;
   });
   const monthKeys=Object.keys(monthly).sort().reverse();
   document.getElementById('dash-monthly').innerHTML=monthKeys.slice(0,5).map((k,i)=>{

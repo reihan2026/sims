@@ -309,7 +309,7 @@ const loadFile=async(key)=>{
 function backupData(){
   // log & arsip_* wajib ikut: tanpa log jejak audit hilang saat restore, tanpa
   // arsip_ringkas laporan periode terarsip jadi kosong setelah restore.
-  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),vendor_saya:getVendorSaya(),master:getMaster(),log:_cache.log||[],arsip_ringkas:_cache.arsip_ringkas||{},arsip_idx:_cache.arsip_idx||[],periode:getPeriode(),ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'7'};
+  const data={po:getPOs(),invv:getInvV(),invd:getInvD(),pov:getPOVs(),rek:getReks(),vendor_saya:getVendorSaya(),master:getMaster(),log:_cache.log||[],arsip_ringkas:_cache.arsip_ringkas||{},arsip_idx:_cache.arsip_idx||[],periode:getPeriode(),users:_cache.users||{},ctr_invv:_cache.ctr_invv,ctr_invd:_cache.ctr_invd,ctr_pov:_cache.ctr_pov,exported:new Date().toISOString(),ver:'8'};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SIMS-backup-'+today()+'.json';a.click();localStorage.setItem('sims_last_backup',new Date().toISOString());showToast('Backup berhasil didownload!');
 }
@@ -318,7 +318,7 @@ function restoreData(){
   input.onchange=e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>{
     try{const data=JSON.parse(ev.target.result);if(!data.po||!data.invv)throw new Error('Format tidak valid');
       if(!confirm(`Restore dari backup ${data.exported?.split('T')[0]||'?'}?\n\nSEMUA DATA SAAT INI AKAN DIGANTIKAN.`))return;
-      ['po','invv','invd','pov','rek','vendor_saya','master','log','arsip_ringkas','arsip_idx','periode','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
+      ['po','invv','invd','pov','rek','vendor_saya','master','log','arsip_ringkas','arsip_idx','periode','users','ctr_invv','ctr_invd','ctr_pov'].forEach(k=>{if(data[k]!==undefined)_cache[k]=data[k];});
       addLog('restore_backup','Restore backup','sistem','','',data.exported||'unknown');
       saveData();showToast('Restore berhasil! Memuat ulang...');setTimeout(()=>location.reload(),1200);
     }catch(err){showToast('Gagal restore: '+err.message,true);}

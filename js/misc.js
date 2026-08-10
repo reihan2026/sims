@@ -237,14 +237,18 @@ function syncPTInvDTotals(){
 const MAX_LOG=150;
 function getLog(){return ST.g('log',[]);}
 function setLog(d){ST.s('log',d);}
+// Profil PER AKUN, dikunci ke uid Firebase. Sebelumnya `_cache.user` adalah satu
+// field bersama di dokumen tunggal: siapa pun yang terakhir mengisi profil akan
+// menjadi nama pencatat untuk SEMUA orang, sehingga log salah atribusi.
 function getUserProfile(){
-  // If logged in via Firebase, use email name as fallback
-  const stored=_cache.user||{};
-  if(!stored.nama&&_currentUser){
-    stored.nama=_currentUser.email.split('@')[0];
-    stored.initial=stored.nama.substring(0,2).toUpperCase();
+  const uid=_currentUser?.uid;
+  const perAkun=(_cache.users||{})[uid];
+  if(perAkun&&perAkun.nama)return{...perAkun};
+  if(_currentUser){
+    const nama=_currentUser.email.split('@')[0];
+    return{nama,initial:nama.substring(0,2).toUpperCase()};
   }
-  return stored;
+  return{nama:'',initial:''};
 }
 
 
@@ -312,6 +316,11 @@ function addLog(action,label,refType,refId,refNo,detail){
     time:now.toTimeString().split(' ')[0],
     user:u.nama||'—',
     initial:u.initial||'?',
+    // Identitas dari akun terautentikasi — tidak bisa ditimpa dengan mengetik
+    // nama di Profil Pengguna. Inilah kebenaran dasar jejak audit; `user` di
+    // atas hanya nama tampilan.
+    email:_currentUser?.email||'',
+    uid:_currentUser?.uid||'',
     action,label,
     ref_type:refType,ref_id:refId||'',ref_no:refNo||'',
     detail:detail||''
@@ -323,11 +332,15 @@ function addLog(action,label,refType,refId,refNo,detail){
 }
 
 function saveUserProfile(){
+  const uid=_currentUser?.uid;if(!uid)return;
   const nama=document.getElementById('user-nama')?.value.trim()||'';
   const initial=document.getElementById('user-initial')?.value.trim().toUpperCase()||'';
-  ST.s('user',{nama,initial});
+  const users={...(_cache.users||{})};
+  users[uid]={nama,initial,email:_currentUser.email||''};
+  ST.s('users',users);
   const el=document.getElementById('user-status');
-  if(el)el.textContent=nama?`✓ Tercatat sebagai "${nama}" (${initial||'?'})` :'⚠ Nama belum diisi — aktivitas akan dicatat tanpa nama';
+  if(el)el.textContent=nama?`✓ Tercatat sebagai "${nama}" (${initial||'?'}) — ${_currentUser.email}`
+    :`⚠ Nama belum diisi — aktivitas dicatat sebagai ${_currentUser.email}`;
 }
 
 function renderLog(){
@@ -336,8 +349,10 @@ function renderLog(){
   const fAction=document.getElementById('log-f-action')?.value||'';
   const fTgl=document.getElementById('log-f-tgl')?.value||'';
 
-  // Populate user filter
-  const users=[...new Set(logs.map(l=>l.user).filter(Boolean))];
+  // Filter per akun. Entri baru punya `email` (dari akun terautentikasi);
+  // entri lama hanya punya `user` (nama tampilan bersama) — keduanya didukung.
+  const idOf=l=>l.email||l.user||'';
+  const users=[...new Set(logs.map(idOf).filter(Boolean))].sort();
   const userSel=document.getElementById('log-f-user');
   if(userSel){
     const cur=userSel.value;
@@ -345,7 +360,7 @@ function renderLog(){
   }
 
   const filtered=logs.filter(l=>{
-    if(fUser&&l.user!==fUser)return false;
+    if(fUser&&idOf(l)!==fUser)return false;
     if(fTgl&&l.tgl!==fTgl)return false;
     if(fAction){
       const map={po:['buat_po','hapus_po','clone_po'],invv:['buat_invv','bayar_invv','edit_invv','konversi_pt','catat_cashback','catat_retur','catat_ongkir'],invd:['buat_invd','terima_invd'],item:['edit_item','ganti_item','hapus_item','tambah_item'],kirim:['update_kirim']};
@@ -375,7 +390,7 @@ function renderLog(){
           <div style="flex-shrink:0;font-size:10px;font-family:var(--mn);color:var(--t3);padding-top:1px;min-width:42px">${l.time.substring(0,5)}</div>
           <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:var(--t2)">${l.initial||'?'}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px"><span style="font-weight:500;color:${ACTION_COLOR[l.action]||'var(--tx)'}">${l.label}</span>${l.user?' <span style="color:var(--t3);font-size:10px">oleh '+l.user+'</span>':''}</div>
+            <div style="font-size:12px"><span style="font-weight:500;color:${ACTION_COLOR[l.action]||'var(--tx)'}">${l.label}</span>${l.email?' <span style="color:var(--t3);font-size:10px">oleh '+(l.user&&l.user!=='—'?l.user+' ('+l.email+')':l.email)+'</span>':(l.user?' <span style="color:var(--t3);font-size:10px">oleh '+l.user+' <span title="Entri lama: dicatat sebelum log menyimpan akun, atribusinya tidak dapat dipastikan">⚠</span></span>':'')}</div>
             ${l.ref_no?`<div style="font-size:11px;color:var(--t2);margin-top:1px">${l.ref_no}${l.detail?' · '+l.detail:''}</div>`:''}
             ${!l.ref_no&&l.detail?`<div style="font-size:11px;color:var(--t3);margin-top:1px">${l.detail}</div>`:''}
           </div>
@@ -395,7 +410,12 @@ function initUserProfile(){
   const nEl=document.getElementById('user-nama');const iEl=document.getElementById('user-initial');
   if(nEl)nEl.value=u.nama||'';
   if(iEl)iEl.value=u.initial||'';
-  saveUserProfile();
+  // Dulu di sini memanggil saveUserProfile() sehingga setiap login menulis balik
+  // profil — itulah yang menyebarkan nama satu orang ke sesi orang lain.
+  // Cukup perbarui teks statusnya; penyimpanan hanya saat field diubah.
+  const el=document.getElementById('user-status');
+  if(el&&_currentUser)el.textContent=u.nama?`✓ Tercatat sebagai "${u.nama}" (${u.initial||'?'}) — ${_currentUser.email}`
+    :`⚠ Nama belum diisi — aktivitas dicatat sebagai ${_currentUser.email}`;
 }
 
 

@@ -102,7 +102,12 @@ function buildLaporanData(poId){
     else if(namaGanda.has(nm)&&invDItemMap[diKeySat]!=null)harga_dapur=invDItemMap[diKeySat];
     else if(!namaGanda.has(nm)&&invDItemMap[`${nm}||__any__`]!=null)harga_dapur=invDItemMap[`${nm}||__any__`];
     else if(passThroughInvVIds.has(bestIv?.id))harga_dapur=hv;
-    byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur});
+    // harga_vendor di bawah ini adalah angka INVOICE (uang yang benar-benar
+    // keluar). Simpan juga angka yang tersimpan di item PO supaya selisih
+    // keduanya bisa dilaporkan. Item konversi dikecualikan — di sana satuan
+    // invoice memang beda dari PO sehingga angkanya wajar tidak sama.
+    byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur,
+      hv_po_item:item.harga_vendor,hv_konversi:!!bestIvItem?.konv});
   });
 
   const totalModalVendor=Object.values(vendorMap).reduce((s,v)=>s+v.total,0);
@@ -146,6 +151,22 @@ function renderLaporanHTML(d){
   devItems.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
   const devTotal=devItems.reduce((s,x)=>s+x.delta,0);
 
+  // Sisi biaya: harga vendor di PO vs yang benar-benar ditagih di invoice.
+  // Laporan selalu memakai angka invoice (uang yang benar-benar keluar); kalau
+  // PO menyimpan angka lain, salah satunya belum diperbarui dan itu harus
+  // kelihatan, bukan ditemukan lewat pertanyaan. Item dengan konversi satuan
+  // dilewati — di sana perbedaan angka memang wajar.
+  const hvDevItems=[];
+  allItems.forEach(item=>{
+    const hvPO=item.hv_po_item;
+    if(item.hv_konversi||!(hvPO>0)||!(item.harga_vendor>0))return;
+    const delta=(hvPO-item.harga_vendor)*(item.qty||0);
+    if(Math.abs(delta)>=DEV_MIN)hvDevItems.push({nama:item.nama,hari:item.hari,qty:item.qty||0,
+      satuan:item.satuan||'',hv_po:hvPO,hv_inv:item.harga_vendor,delta});
+  });
+  hvDevItems.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+  const hvDevTotal=hvDevItems.reduce((s,x)=>s+x.delta,0);
+
   // Overall margin: actual invD revenue - vendor cost (accrual basis)
   const marginBersih=totalInvD>0?totalInvD-totalModalVendor-totalOngkir+totalCashback:null;
   const pct=marginBersih!=null&&totalInvD>0?(marginBersih/totalInvD*100).toFixed(1):null;
@@ -182,6 +203,26 @@ function renderLaporanHTML(d){
     html+=`<div style="margin-bottom:20px;padding:11px 14px;background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:8px">
       <div style="font-weight:700;font-size:13px;color:#b45309">⚠ ${devItems.length} item ditagih ke dapur berbeda dari harga PO</div>
       <div style="font-size:12px;color:#92400e;margin-top:3px">Total selisih: <strong style="font-family:monospace">${devTotal>=0?'+':''}${fmtF(devTotal)}</strong> dari nilai PO. Ini bisa wajar (mis. harga passthrough mengikuti nota vendor) — rincian ada di bawah.</div>
+    </div>`;
+  }
+
+  // Banner alert: harga vendor di PO berbeda dari yang ditagih di invoice.
+  // Salah satunya belum diperbarui — dan laporan selalu memakai angka invoice.
+  if(hvDevItems.length){
+    html+=`<div style="margin-bottom:20px;padding:11px 14px;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:8px">
+      <div style="font-weight:700;font-size:13px;color:#b91c1c">⚠ ${hvDevItems.length} item: harga vendor di PO beda dari invoice</div>
+      <div style="font-size:12px;color:#991b1b;margin-top:3px">Laporan memakai <strong>harga invoice</strong> karena itu uang yang benar-benar keluar. Kalau harga PO yang benar, invoice-nya perlu direvisi — selisihnya <strong style="font-family:monospace">${hvDevTotal>=0?'+':''}${fmtF(hvDevTotal)}</strong>.</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+        <thead><tr style="color:#991b1b"><th style="padding:3px 6px;text-align:left">Item</th><th style="padding:3px 6px;text-align:left">Hari</th><th style="padding:3px 6px;text-align:right">Qty</th><th style="padding:3px 6px;text-align:right">Hrg PO</th><th style="padding:3px 6px;text-align:right">Hrg invoice</th><th style="padding:3px 6px;text-align:right">Selisih</th></tr></thead>
+        <tbody>${hvDevItems.map(x=>`<tr>
+          <td style="padding:3px 6px">${x.nama}</td>
+          <td style="padding:3px 6px;color:#666">${(x.hari||'').split(',')[0]}</td>
+          <td style="padding:3px 6px;text-align:right;font-family:monospace">${x.qty} ${x.satuan}</td>
+          <td style="padding:3px 6px;text-align:right;font-family:monospace">${fmtF(x.hv_po)}</td>
+          <td style="padding:3px 6px;text-align:right;font-family:monospace">${fmtF(x.hv_inv)}</td>
+          <td style="padding:3px 6px;text-align:right;font-family:monospace;font-weight:600">${x.delta>=0?'+':''}${fmtF(x.delta)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
     </div>`;
   }
 

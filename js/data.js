@@ -36,11 +36,18 @@ function loadAllData(){
         // Auto-fix invoices stuck in 'belum' despite being fully paid
         let statusFixed=0;
         (_cache.invv||[]).forEach(iv=>{
+          const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+          const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
+          const netTotal=Math.max(0,(iv.total||0)-retur);
           if(iv.bayar_status!=='lunas'){
-            const paid=(iv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
-            const retur=(iv.returs||[]).reduce((s,r)=>s+r.val,0);
-            const netTotal=Math.max(0,(iv.total||0)-retur);
             if(paid>=netTotal&&netTotal>0){iv.bayar_status='lunas';statusFixed++;}
+          }else if(paid<netTotal&&netTotal>0){
+            // Arah sebaliknya: tagihan direvisi naik setelah dibayar. Tanpa ini
+            // invoice tetap "lunas", tombol Rekam bayar tidak muncul, dan
+            // kekurangannya hilang dari utang vendor. Passthrough dikecualikan —
+            // syncPassthroughInvV memang menandainya lunas tanpa pembayaran.
+            const isPT=(_cache.invd||[]).some(d=>d.type==='passthrough'&&d.pt_inv_id===iv.id);
+            if(!isPT){iv.bayar_status='belum';statusFixed++;}
           }
         });
         (_cache.invd||[]).forEach(id=>{

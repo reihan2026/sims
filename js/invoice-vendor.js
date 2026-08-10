@@ -414,13 +414,26 @@ function saveEditInvV(){
     newTotal+=qty*hv;
   });
   inv.total=newTotal;inv.jatuh=document.getElementById('einvv-jatuh').value;
+  // Total berubah → status bayar lama bisa tidak valid lagi. Tanpa hitung ulang,
+  // invoice yang tagihannya naik tetap berlabel "Lunas", tombol Rekam bayar
+  // tidak muncul, dan kekurangannya hilang dari utang vendor.
+  const _netBaru=invVNet_compute(inv);
+  const _statusLama=inv.bayar_status;
+  inv.bayar_status=(_netBaru.netTotal>0&&_netBaru.paid>=_netBaru.netTotal)?'lunas':'belum';
   if(!inv.edits)inv.edits=[];
   inv.edits.push({tgl:today(),total_lama:oldTotal,total_baru:newTotal,catatan:catRev||'Revisi harga vendor'});
   // Sync harga_vendor_po back ke PO items (consistent with saveInvV)
   if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
   const invds=getInvD();const ptInvD=invds.find(d=>d.type==='passthrough'&&d.pt_inv_id===invId);
   if(ptInvD)ptInvD.total=newTotal;
-  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,'');setBatch({po:pos,invv:invs,...(ptInvD?{invd:invds}:{})});closeModal('modal-edit-invv');showToast('Invoice vendor direvisi!');if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,
+    oldTotal!==newTotal?fmtF(oldTotal)+' → '+fmtF(newTotal):'');
+  setBatch({po:pos,invv:invs,...(ptInvD?{invd:invds}:{})});closeModal('modal-edit-invv');
+  // Status turun dari lunas → beri tahu kekurangannya, jangan cuma "direvisi!"
+  if(_statusLama==='lunas'&&inv.bayar_status!=='lunas')
+    showToast('Invoice direvisi. Tagihan naik '+fmtF(_netBaru.sisa)+' dari yang sudah dibayar — statusnya kembali BELUM LUNAS, rekam sisa pembayarannya.',true);
+  else showToast('Invoice vendor direvisi!');
+  if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
 }
 
 // ===== BAYAR INVOICE VENDOR =====

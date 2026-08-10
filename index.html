@@ -416,7 +416,17 @@
         <span style="font-size:11px;color:var(--t3)">s/d</span>
         <input type="date" id="lk-sampai" style="font-size:12px">
       </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap"><input type="radio" name="lk-mode" value="periode" onchange="_lkOnModeChange('periode')"> Periode</label>
+      <div id="lk-periode-wrap" style="display:none;align-items:center;gap:5px">
+        <select id="lk-periode-sel" style="min-width:160px"><option value="">— Pilih periode —</option></select>
+        <button class="btn bsm" onclick="openPeriodeBaru()">+ Buat</button>
+        <button class="btn bsm" onclick="openPeriodeKelola()">Kelola</button>
+      </div>
       <button class="btn bp bsm" onclick="_lkTerapkan()">Terapkan</button>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="btn bsm" onclick="cetakLaporanKeu()">🖨 Cetak / PDF</button>
+        <button class="btn bsm" onclick="exportLaporanKeuExcel()">⬇ Excel</button>
+      </div>
     </div>
     <div id="lk-cards" style="margin-bottom:13px"></div>
     <div class="card" style="margin-bottom:13px">
@@ -584,6 +594,34 @@
     <button class="btn bi" onclick="savePOV('pdf')">Simpan + Cetak PDF</button>
     <button class="btn" style="background:#25D366;color:#fff;border-color:#25D366" onclick="savePOV('wa')">Simpan + Buka WA</button>
   </div>
+</div></div>
+
+<!-- Buat / Ubah Periode Laporan -->
+<div class="modal-bg" id="modal-periode"><div class="modal mw">
+  <div class="mh"><span class="mht" id="periode-modal-judul">Buat Periode Laporan</span><button class="btn bgh bsm" onclick="closeModal('modal-periode')">✕</button></div>
+  <div class="mb">
+    <div class="r2" style="margin-bottom:10px">
+      <div class="fg"><label class="lbl">Nama periode</label><input type="text" id="periode-nama" placeholder="mis. Periode 5 — Agustus 2026"></div>
+      <div class="fg"><label class="lbl">Catatan (opsional)</label><input type="text" id="periode-catatan" placeholder="mis. tutup buku 4 PO"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+      <div class="ct" style="margin:0">Pilih PO</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="periode-srch" placeholder="🔍 Cari PO..." style="font-size:11px;padding:3px 7px;width:130px" oninput="filterPeriodePO()">
+        <div class="bg"><button class="btn bxs" onclick="periodePilihTerakhir(4)">4 PO selesai terakhir</button><button class="btn bxs" onclick="periodeCheckAll(false)">Kosongkan</button></div>
+      </div>
+    </div>
+    <div id="periode-hitung" style="padding:8px 11px;background:var(--ibg);border:1px solid var(--ib);border-radius:var(--r);font-size:12px;color:var(--it);margin-bottom:9px"></div>
+    <div id="periode-po-list" style="max-height:340px;overflow-y:auto"></div>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-periode')">Batal</button><button class="btn bw" onclick="simpanPeriode()">Simpan periode</button></div>
+</div></div>
+
+<!-- Kelola Periode -->
+<div class="modal-bg" id="modal-periode-kelola"><div class="modal mw">
+  <div class="mh"><span class="mht">Kelola Periode Laporan</span><button class="btn bgh bsm" onclick="closeModal('modal-periode-kelola')">✕</button></div>
+  <div class="mb" id="periode-kelola-body"></div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-periode-kelola')">Tutup</button><button class="btn bp" onclick="closeModal('modal-periode-kelola');openPeriodeBaru()">+ Buat periode</button></div>
 </div></div>
 
 <!-- Pratinjau Arsip -->
@@ -1182,5 +1220,6 @@
 <script src="js/scan.js"></script>
 <script src="js/arsip.js"></script>
 <script src="js/arsip-data.js"></script>
+<script src="js/periode.js"></script>
 </body>
 </html>

@@ -766,8 +766,11 @@ function _lkGetRange(){
   return{from:tahun+'-01-01',to:tahun+'-12-31'};
 }
 
-function _lkBuildData(from,to){
-  const pos=getPOs().filter(po=>po.date>=from&&po.date<=to);
+// poIds (opsional): bangun dari kumpulan PO tertentu, bukan rentang tanggal.
+// Dipakai mode Periode — tutup buku di sini mengikuti siklus PO, bukan kalender.
+function _lkBuildData(from,to,poIds){
+  const pos=poIds?getPOs().filter(po=>poIds.includes(po.id))
+                 :getPOs().filter(po=>po.date>=from&&po.date<=to);
   const allInvV=getInvV();const allInvD=getInvD();
   let totalRevenue=0,totalModal=0,totalOngkir=0,totalCashback=0;
   const monthly={},byVendor={},byDapur={},byPO=[];
@@ -801,9 +804,11 @@ function _lkBuildData(from,to){
   // satu bulan ikut utuh bila bulannya masuk rentang — persis untuk mode tahun
   // (01-01..12-31); untuk rentang custom yang memotong tengah bulan, ditandai
   // lewat arsipParsial agar UI bisa memberi tahu.
-  const fromM=from.substring(0,7),toM=to.substring(0,7);
+  // Mode periode memilih PO satu per satu dari data hidup; PO terarsip tidak
+  // ikut dipilih, jadi penggabungan berbasis rentang tanggal dilewati.
+  const fromM=poIds?null:from.substring(0,7),toM=poIds?null:to.substring(0,7);
   let arsipCnt=0,arsipParsial=false;
-  Object.entries(getArsipRingkas()).forEach(([periode,r])=>{
+  Object.entries(poIds?{}:getArsipRingkas()).forEach(([periode,r])=>{
     if(periode<fromM||periode>toM)return;
     if((periode===fromM&&from.substring(8)!=='01')||(periode===toM&&to.substring(8)<'28'))arsipParsial=true;
     totalRevenue+=r.revenue||0;totalModal+=r.modal||0;
@@ -849,16 +854,20 @@ function renderLaporanKeu(){
   const sampaiEl=document.getElementById('lk-sampai');
   if(dariEl)dariEl.value=localStorage.getItem('lk-dari')||'';
   if(sampaiEl)sampaiEl.value=localStorage.getItem('lk-sampai')||'';
+  const mPeriode=document.querySelector('input[name="lk-mode"][value="periode"]');
+  if(mPeriode)mPeriode.checked=savedMode==='periode';
+  _lkIsiDropdownPeriode();
   _lkToggleMode(savedMode);
   _lkRenderAll();
 }
 
 function _lkToggleMode(mode){
-  const isCustom=mode==='custom';
   const tw=document.getElementById('lk-tahun-wrap');
   const cw=document.getElementById('lk-custom-wrap');
-  if(tw)tw.style.display=isCustom?'none':'flex';
-  if(cw)cw.style.display=isCustom?'flex':'none';
+  const pw=document.getElementById('lk-periode-wrap');
+  if(tw)tw.style.display=mode==='tahun'?'flex':'none';
+  if(cw)cw.style.display=mode==='custom'?'flex':'none';
+  if(pw)pw.style.display=mode==='periode'?'flex':'none';
 }
 
 function _lkOnModeChange(mode){
@@ -872,6 +881,10 @@ function _lkTerapkan(){
   if(mode==='tahun'){
     const y=document.getElementById('lk-tahun-sel')?.value||new Date().getFullYear().toString();
     localStorage.setItem('lk-tahun',y);
+  }else if(mode==='periode'){
+    const pid=document.getElementById('lk-periode-sel')?.value||'';
+    if(!pid){showToast('Pilih periode dulu, atau buat baru',true);return;}
+    localStorage.setItem('lk-periode',pid);
   }else{
     const dari=document.getElementById('lk-dari')?.value||'';
     const sampai=document.getElementById('lk-sampai')?.value||'';
@@ -882,11 +895,41 @@ function _lkTerapkan(){
   _lkRenderAll();
 }
 
+// Periode aktif kalau mode='periode' dan id-nya masih ada. Kalau periodenya
+// sudah dihapus, jangan diam-diam menampilkan data lain — kembalikan null
+// supaya pemanggil bisa memberi tahu.
+function _lkPeriodeAktif(){
+  if((localStorage.getItem('lk-mode')||'tahun')!=='periode')return null;
+  const pid=localStorage.getItem('lk-periode')||'';
+  return getPeriode().find(p=>p.id===pid)||null;
+}
+
 function _lkRenderAll(){
-  const{from,to}=_lkGetRange();
-  _lkLastData=_lkBuildData(from,to);
+  const mode=localStorage.getItem('lk-mode')||'tahun';
+  if(mode==='periode'){
+    const p=_lkPeriodeAktif();
+    if(!p){
+      document.getElementById('lk-cards').innerHTML='<div class="empty" style="padding:14px">Periode belum dipilih — pilih dari dropdown atau buat baru</div>';
+      document.getElementById('lk-body').innerHTML='';
+      _lkLastData=null;return;
+    }
+    _lkLastData=_lkBuildData(null,null,p.po_ids||[]);
+    _lkLastData.periode=p;
+  }else{
+    const{from,to}=_lkGetRange();
+    _lkLastData=_lkBuildData(from,to);
+  }
   _lkRenderCards(_lkLastData);
   _lkSetTab(localStorage.getItem('lk-tab')||'bulan');
+}
+
+// Isi dropdown periode, terbaru di atas
+function _lkIsiDropdownPeriode(){
+  const sel=document.getElementById('lk-periode-sel');if(!sel)return;
+  const cur=localStorage.getItem('lk-periode')||'';
+  const list=getPeriode().slice().sort((a,b)=>(b.created||'').localeCompare(a.created||''));
+  sel.innerHTML='<option value="">— Pilih periode —</option>'+list.map(p=>
+    `<option value="${p.id}" ${p.id===cur?'selected':''}>${p.nama} (${(p.po_ids||[]).length} PO)</option>`).join('');
 }
 
 function _lkCard(label,val,color){

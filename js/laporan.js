@@ -40,6 +40,12 @@ function buildLaporanData(poId){
       // Fallback key for old items without hari
       const fallback=`${iNama}||__any__`;
       if(!(fallback in invDItemMap))invDItemMap[fallback]=i.harga_dapur;
+      // Fallback bersatuan — dipakai saat nama item muncul lebih dari sekali di
+      // PO. Kiriman beberapa hari sering ditagihkan menyatu di satu baris
+      // invoice (mis. telur Jumat ikut baris Rabu), jadi harga per satuan yang
+      // sama tetap boleh dipinjam; harga dari satuan berbeda tidak.
+      const fbSat=`${iNama}||${(i.satuan||'').toLowerCase().trim()}||__sat__`;
+      if(!(fbSat in invDItemMap))invDItemMap[fbSat]=i.harga_dapur;
     });
   });
 
@@ -90,7 +96,10 @@ function buildLaporanData(poId){
     // harga_dapur from invD item (actual revenue per unit)
     const diKey=`${nm}||${item.hari||''}`;
     let harga_dapur=null;
+    const diKeySat=`${nm}||${(item.satuan||'').toLowerCase().trim()}||__sat__`;
     if(invDItemMap[diKey]!=null)harga_dapur=invDItemMap[diKey];
+    // Nama ganda: hanya boleh meminjam harga dari baris invoice bersatuan sama.
+    else if(namaGanda.has(nm)&&invDItemMap[diKeySat]!=null)harga_dapur=invDItemMap[diKeySat];
     else if(!namaGanda.has(nm)&&invDItemMap[`${nm}||__any__`]!=null)harga_dapur=invDItemMap[`${nm}||__any__`];
     else if(passThroughInvVIds.has(bestIv?.id))harga_dapur=hv;
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur});
@@ -319,6 +328,23 @@ function renderLaporanHTML(d){
     <td colspan="4" style="padding:6px 8px;text-align:right">Total margin</td>
     <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${totalItemMargin>=0?'#16a34a':'#dc2626'}">${fmtF(totalItemMargin)}</td>
   </tr></tbody></table>`;
+  // Rekonsiliasi ke margin bersih PO. Margin per item tidak memuat cashback &
+  // ongkir (keduanya tingkat invoice, tidak bisa dibagi per item), plus sisa
+  // pembulatan konversi satuan — tanpa penjelasan ini kedua angka tampak
+  // bertentangan padahal keduanya benar.
+  if(marginBersih!==null){
+    const selisihRekon=marginBersih-totalItemMargin-totalCashback+totalOngkir;
+    const barisRekon=(l,v,tanda)=>`<tr><td style="padding:3px 8px;color:#666">${l}</td><td style="padding:3px 8px;text-align:right;font-family:monospace;color:#666">${tanda}${fmtF(Math.abs(v))}</td></tr>`;
+    itemMarginHtml+=`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:10px;background:#fafafa">
+      <tbody>
+        <tr><td style="padding:4px 8px;font-weight:600" colspan="2">Rekonsiliasi ke margin bersih PO</td></tr>
+        ${barisRekon('Jumlah margin per item',totalItemMargin,'')}
+        ${totalCashback?barisRekon('Cashback (tingkat invoice, tidak per item)',totalCashback,'+ '):''}
+        ${totalOngkir?barisRekon('Ongkos kirim (tingkat invoice)',totalOngkir,'− '):''}
+        ${Math.abs(selisihRekon)>=1?barisRekon('Selisih pembulatan / konversi satuan',selisihRekon,selisihRekon>=0?'+ ':'− '):''}
+        <tr style="border-top:1px solid #ccc;font-weight:700"><td style="padding:4px 8px">Margin bersih PO</td><td style="padding:4px 8px;text-align:right;font-family:monospace;color:${marginBersih>=0?'#16a34a':'#dc2626'}">${fmtF(marginBersih)}</td></tr>
+      </tbody></table>`;
+  }
   html+=sec('Margin per Item',itemMarginHtml);
 
   // Margin by vendor

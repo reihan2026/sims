@@ -232,9 +232,10 @@ function syncPTInvDTotals(){
 }
 
 // ===== ACTIVITY LOG =====
-// 500 entri = ~125 KB dari batas 1 MB dokumen Firestore. 150 masih menyisakan
-// sekitar sebulan jejak audit dengan biaya ~38 KB.
-const MAX_LOG=150;
+// Diukur dari data nyata: ~12 entri/hari, tapi sangat timpang (0–49 sehari).
+// 250 menutup ~3 minggu sehingga dua minggu padat pun aman, dengan biaya ~79 KB
+// (~315 byte/entri sejak log menyimpan email & uid akun).
+const MAX_LOG=250;
 function getLog(){return ST.g('log',[]);}
 function setLog(d){ST.s('log',d);}
 // Profil PER AKUN, dikunci ke uid Firebase. Sebelumnya `_cache.user` adalah satu

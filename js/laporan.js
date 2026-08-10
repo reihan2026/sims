@@ -43,6 +43,14 @@ function buildLaporanData(poId){
     });
   });
 
+  // Nama yang muncul lebih dari sekali di PO tidak boleh memakai fallback __any__.
+  // Dua item bernama sama bisa beda satuan, hari, dan vendor (mis. "Minyak Goreng"
+  // 12 jerigen @425rb vs 24 botol @42,5rb) — menebak harga dapur dari baris hari
+  // lain menghasilkan margin palsu, ke arah positif maupun negatif.
+  const _namaHitung={};
+  po.items.forEach(i=>{const n=(i.nama||'').trim();_namaHitung[n]=(_namaHitung[n]||0)+1;});
+  const namaGanda=new Set(Object.keys(_namaHitung).filter(n=>_namaHitung[n]>1));
+
   // Items by hari — search directly across all invVs by hari+nama to avoid stale-idx issues
   const {itemInvV}=buildLookup(poId);
   const byHari={};
@@ -83,7 +91,7 @@ function buildLaporanData(poId){
     const diKey=`${nm}||${item.hari||''}`;
     let harga_dapur=null;
     if(invDItemMap[diKey]!=null)harga_dapur=invDItemMap[diKey];
-    else if(invDItemMap[`${nm}||__any__`]!=null)harga_dapur=invDItemMap[`${nm}||__any__`];
+    else if(!namaGanda.has(nm)&&invDItemMap[`${nm}||__any__`]!=null)harga_dapur=invDItemMap[`${nm}||__any__`];
     else if(passThroughInvVIds.has(bestIv?.id))harga_dapur=hv;
     byHari[h].push({...item,idx,harga_vendor:hv,vendor:displayVendor,harga_dapur});
   });

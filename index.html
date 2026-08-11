@@ -922,7 +922,7 @@
     </div>
     <input type="hidden" id="bayar-invv-id">
   </div>
-  <div class="mf"><button class="btn" onclick="closeModal('modal-bayar-invv')">Batal</button><button class="btn bp" onclick="saveBayarInvV()">Rekam pembayaran</button></div>
+  <div class="mf"><button class="btn bw" id="bayar-konv-pt" style="margin-right:auto" title="Pakai ini kalau dapur yang membayar langsung ke vendor. Invoice akan ditagihkan pass-through, dan pembayaran manual yang sudah tercatat akan dihapus." onclick="konversiPTdariBayar()">⇄ Konversi Pass-through</button><button class="btn" onclick="closeModal('modal-bayar-invv')">Batal</button><button class="btn bp" onclick="saveBayarInvV()">Rekam pembayaran</button></div>
 </div></div>
 
 <!-- Bulk rekam bayar beberapa invoice vendor -->

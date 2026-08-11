@@ -448,7 +448,21 @@ function openBayarInvV(invId){
   const showCB=!!(vObj?.cashback||hasCBHistory);
   document.getElementById('cb-wrap').style.display=showCB?'block':'none';
   document.getElementById('bayar-cb-jml').value='';document.getElementById('bayar-cb-tgl').value=today();
+  // Konversi pass-through hanya relevan selama invoice belum jadi pass-through
+  const kb=document.getElementById('bayar-konv-pt');
+  if(kb)kb.style.display=isPassthrough(invId)?'none':'';
   openModal('modal-bayar-invv');
+}
+
+// Dari modal rekam bayar: ternyata dapur yang membayar langsung ke vendor,
+// jadi invoice ini pass-through — bukan pembayaran dari rekening kita.
+// openKonversiPT sendiri yang memverifikasi & memperingatkan soal pembayaran
+// manual yang akan dihapus.
+function konversiPTdariBayar(){
+  const id=document.getElementById('bayar-invv-id')?.value;
+  if(!id)return;
+  closeModal('modal-bayar-invv');
+  openKonversiPT(id);
 }
 function saveBayarInvV(){
   const invId=document.getElementById('bayar-invv-id').value;const jml=parseFloat(document.getElementById('bayar-invv-jml').value)||0;

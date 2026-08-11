@@ -185,60 +185,158 @@ function _lkDataSiap(){
   return{d:_lkLastData,j};
 }
 
+// Rincian tambahan untuk PDF: margin per vendor/kategori, pemisahan pass-through,
+// pendapatan per vendor mitra, dan posisi utang-piutang akhir periode.
+// Dihitung dari buildLaporanData per PO karena margin hanya ada di tingkat item.
+// PO terarsip dilewati — detail per itemnya tidak lagi ada di dokumen utama.
+function _lkRincian(d){
+  const hidup=(d.byPO||[]).filter(x=>!x.arsip);
+  const arsipCnt=(d.byPO||[]).length-hidup.length;
+  const vendor={},kategori={},mitra={};
+  const jenis={pt:{rev:0,modal:0,inv:0},markup:{rev:0,modal:0,inv:0}};
+  const utangList=[],piutangList=[];
+  hidup.forEach(x=>{
+    let b;try{b=buildLaporanData(x.po.id);}catch(e){return;}
+    if(!b)return;
+    Object.values(b.byHari).flat().forEach(i=>{
+      if(i.harga_dapur==null||!(i.harga_vendor>0))return;
+      const qty=i.qty||0,rev=i.harga_dapur*qty,mod=i.harga_vendor*qty;
+      const v=i.vendor||'(tanpa vendor)';
+      if(!vendor[v])vendor[v]={modal:0,rev:0,margin:0};
+      vendor[v].rev+=rev;vendor[v].modal+=mod;vendor[v].margin+=rev-mod;
+      const k=i.kat||'Lainnya';
+      if(!kategori[k])kategori[k]={modal:0,rev:0,margin:0};
+      kategori[k].rev+=rev;kategori[k].modal+=mod;kategori[k].margin+=rev-mod;
+    });
+    b.invDs.forEach(x2=>{
+      const t=x2.type==='passthrough'?'pt':'markup';
+      jenis[t].rev+=x2.total||0;jenis[t].inv++;
+      const mk=x2.vendor_saya_id||'';
+      if(!mitra[mk])mitra[mk]={rev:0,n:0};
+      mitra[mk].rev+=x2.total||0;mitra[mk].n++;
+      if(x2.terima_status!=='lunas'){
+        const recv=(x2.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+        const sisa=Math.max(0,(x2.total||0)-recv);
+        if(sisa>0)piutangList.push({no:x2.no,pihak:x2.dapur||'',sisa});
+      }
+    });
+    b.invVs.forEach(v=>{
+      const isPT=b.passThroughInvVIds.has(v.id);
+      jenis[isPT?'pt':'markup'].modal+=v.total||0;
+      if(v.bayar_status!=='lunas'&&!isPT){
+        const n=invVNet_compute(v);
+        if(n.sisa>0)utangList.push({no:v.no,pihak:v.vendor||'',sisa:n.sisa});
+      }
+    });
+  });
+  utangList.sort((a,b)=>b.sisa-a.sisa);piutangList.sort((a,b)=>b.sisa-a.sisa);
+  return{vendor,kategori,mitra,jenis,arsipCnt,utangList,piutangList,
+    utang:utangList.reduce((s,x)=>s+x.sisa,0),
+    piutang:piutangList.reduce((s,x)=>s+x.sisa,0)};
+}
+
 function cetakLaporanKeu(){
   const siap=_lkDataSiap();if(!siap)return;
   const{d,j}=siap;
-  const baris=(l,v,tebal)=>`<tr><td${tebal?' style="font-weight:700"':''}>${l}</td><td style="text-align:right;font-family:'Courier New',monospace${tebal?';font-weight:700':''}">${fmtF(v)}</td></tr>`;
-  const bulanKeys=Object.keys(d.monthly).sort();
+  const r=_lkRincian(d);
+  const uang=v=>`<td style="text-align:right;font-family:'Courier New',monospace">${fmtF(v)}</td>`;
+  const pct=(a,b)=>b>0?(a/b*100).toFixed(1)+'%':'—';
+  const sec=(judul,isi,pisah)=>`<div class="sec${pisah?' brk':''}"><div class="sh">${judul}</div>${isi}</div>`;
+  const vsList=getVendorSaya();
+
+  // Margin markup murni — pass-through ditagih persis nota vendor sehingga
+  // marginnya nol dan menekan angka gabungan.
+  const mMarkup=r.jenis.markup.rev-r.jenis.markup.modal;
+
+  const barisRing=(l,v,tebal)=>`<tr><td${tebal?' style="font-weight:700"':''}>${l}</td><td style="text-align:right;font-family:'Courier New',monospace${tebal?';font-weight:700':''}">${fmtF(v)}</td></tr>`;
+  const ringkasan=`<table class="tbl"><tbody>
+    ${barisRing('Pendapatan (invoice ke dapur)',d.totalRevenue)}
+    ${barisRing('Modal vendor (HPP)',d.totalModal)}
+    ${barisRing('Ongkos kirim',d.totalOngkir)}
+    ${barisRing('Cashback',d.totalCashback)}
+    ${barisRing('Profit bersih',d.totalProfit,true)}
+    <tr><td style="font-weight:700">Margin gabungan</td><td style="text-align:right;font-family:'Courier New',monospace;font-weight:700">${d.totalRevenue>0?d.totalMarginPct.toFixed(1)+'%':'—'}</td></tr>
+    <tr><td>Jumlah PO</td><td style="text-align:right;font-family:'Courier New',monospace">${d.posCount}</td></tr>
+  </tbody></table>`;
+
+  const jenisTbl=(r.jenis.pt.inv||r.jenis.markup.inv)?`
+    <table class="tbl"><thead><tr><th>Jenis invoice</th><th style="text-align:right">Invoice</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Modal</th><th style="text-align:right">Margin</th><th style="text-align:right">%</th></tr></thead><tbody>
+      <tr><td>Markup</td><td style="text-align:right">${r.jenis.markup.inv}</td>${uang(r.jenis.markup.rev)}${uang(r.jenis.markup.modal)}${uang(mMarkup)}<td style="text-align:right;font-family:'Courier New',monospace;font-weight:700">${pct(mMarkup,r.jenis.markup.rev)}</td></tr>
+      <tr><td>Pass-through</td><td style="text-align:right">${r.jenis.pt.inv}</td>${uang(r.jenis.pt.rev)}${uang(r.jenis.pt.modal)}${uang(r.jenis.pt.rev-r.jenis.pt.modal)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(r.jenis.pt.rev-r.jenis.pt.modal,r.jenis.pt.rev)}</td></tr>
+    </tbody></table>
+    <div class="note">Pass-through ditagihkan ke dapur persis sebesar nota vendor, jadi marginnya nol secara desain. Margin gabungan di atas karena itu lebih rendah dari kinerja markup yang sebenarnya (<strong>${pct(mMarkup,r.jenis.markup.rev)}</strong>).</div>`:'';
+
+  const vendorRows=Object.entries(r.vendor).sort((a,b)=>b[1].margin-a[1].margin);
+  const vendorTbl=vendorRows.length?`<table class="tbl"><thead><tr><th>Vendor</th><th style="text-align:right">Modal</th><th style="text-align:right">Ditagih ke dapur</th><th style="text-align:right">Margin</th><th style="text-align:right">%</th></tr></thead><tbody>
+    ${vendorRows.map(([n,v])=>`<tr><td>${n}</td>${uang(v.modal)}${uang(v.rev)}${uang(v.margin)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(v.margin,v.rev)}</td></tr>`).join('')}
+    </tbody></table><div class="note">Vendor bermargin nol adalah pemasok pass-through — bukan kerugian.</div>`:'';
+
+  const mitraRows=Object.entries(r.mitra).sort((a,b)=>b[1].rev-a[1].rev);
+  const mitraTbl=mitraRows.length?`<table class="tbl"><thead><tr><th>Vendor mitra penerbit</th><th style="text-align:right">Invoice</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Porsi</th></tr></thead><tbody>
+    ${mitraRows.map(([id,v])=>`<tr><td>${vsList.find(x=>x.id===id)?.nama||'Tanpa mitra (pass-through)'}</td><td style="text-align:right">${v.n}</td>${uang(v.rev)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(v.rev,d.totalRevenue)}</td></tr>`).join('')}
+    </tbody></table>`:'';
+
+  const katRows=Object.entries(r.kategori).sort((a,b)=>b[1].margin-a[1].margin);
+  const katTbl=katRows.length?`<table class="tbl"><thead><tr><th>Kategori</th><th style="text-align:right">Modal</th><th style="text-align:right">Ditagih ke dapur</th><th style="text-align:right">Margin</th><th style="text-align:right">%</th></tr></thead><tbody>
+    ${katRows.map(([n,v])=>`<tr><td>${n}</td>${uang(v.modal)}${uang(v.rev)}${uang(v.margin)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(v.margin,v.rev)}</td></tr>`).join('')}
+    </tbody></table>`:'';
+
+  const posisi=`<table class="tbl"><tbody>
+      <tr><td style="font-weight:700">Utang ke vendor (belum dibayar)</td>${uang(r.utang)}</tr>
+      <tr><td style="font-weight:700">Piutang dari dapur (belum diterima)</td>${uang(r.piutang)}</tr>
+      <tr><td style="font-weight:700">Posisi bersih</td><td style="text-align:right;font-family:'Courier New',monospace;font-weight:700">${fmtF(r.piutang-r.utang)}</td></tr>
+    </tbody></table>
+    ${r.utangList.length?`<div class="sub">Rincian utang vendor</div><table class="tbl"><thead><tr><th>Invoice</th><th>Vendor</th><th style="text-align:right">Sisa</th></tr></thead><tbody>${r.utangList.map(x=>`<tr><td>${x.no}</td><td>${x.pihak}</td>${uang(x.sisa)}</tr>`).join('')}</tbody></table>`:''}
+    ${r.piutangList.length?`<div class="sub">Rincian piutang dapur</div><table class="tbl"><thead><tr><th>Invoice</th><th>Dapur</th><th style="text-align:right">Sisa</th></tr></thead><tbody>${r.piutangList.map(x=>`<tr><td>${x.no}</td><td>${x.pihak}</td>${uang(x.sisa)}</tr>`).join('')}</tbody></table>`:''}
+    ${!r.utangList.length&&!r.piutangList.length?'<div class="note">Tidak ada tagihan yang menggantung pada periode ini.</div>':''}`;
+
   const poRows=d.byPO.slice().sort((a,b)=>(a.po.date||'').localeCompare(b.po.date||''));
-  const vendorRows=Object.entries(d.byVendor).sort((a,b)=>b[1].modal-a[1].modal);
+  const poTbl=`<table class="tbl"><thead><tr><th>PO</th><th>Dapur</th><th>Tanggal</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Modal</th><th style="text-align:right">Profit</th><th style="text-align:right">%</th></tr></thead><tbody>
+    ${poRows.map(x=>`<tr><td>${x.po.no}${x.arsip?' <span style="font-size:9px;color:#999">arsip</span>':''}</td><td>${x.po.dapur||''}</td><td>${x.po.date||''}</td>${uang(x.revenue)}${uang(x.modal)}${uang(x.profit)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(x.profit,x.revenue)}</td></tr>`).join('')}
+    </tbody></table>`;
+
+  const bulanKeys=Object.keys(d.monthly).sort();
+  const bulanTbl=bulanKeys.length>1?`<table class="tbl"><thead><tr><th>Bulan</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Modal</th><th style="text-align:right">Profit</th><th style="text-align:right">%</th></tr></thead><tbody>
+    ${bulanKeys.map(k=>{const m=d.monthly[k];return`<tr><td>${_fmtBulan(k)}</td>${uang(m.revenue)}${uang(m.modal)}${uang(m.profit)}<td style="text-align:right;font-family:'Courier New',monospace">${pct(m.profit,m.revenue)}</td></tr>`;}).join('')}
+    </tbody></table>`:'';
+
+  const catatanArsip=r.arsipCnt?`<div class="note">${r.arsipCnt} PO pada periode ini sudah diarsipkan — hanya masuk ringkasan dan tabel per PO. Rincian per vendor, kategori, dan posisi utang-piutang tidak mencakup PO tersebut.</div>`:'';
 
   const body=`<div class="w">
-    <div class="h"><div>
-      <div class="t">Laporan Keuangan</div>
-      <div class="m">${j.judul} · ${j.sub}</div>
-    </div><div style="text-align:right">
-      <div style="font-size:11px;color:#6B6560">SIMS</div>
-      <div class="m">Dicetak ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</div>
-    </div></div>
-
-    <table class="tbl"><thead><tr><th colspan="2">Ringkasan</th></tr></thead><tbody>
-      ${baris('Pendapatan (invoice ke dapur)',d.totalRevenue)}
-      ${baris('Modal vendor (HPP)',d.totalModal)}
-      ${baris('Ongkos kirim',d.totalOngkir)}
-      ${baris('Cashback',d.totalCashback)}
-      ${baris('Profit bersih',d.totalProfit,true)}
-      <tr><td style="font-weight:700">Margin</td><td style="text-align:right;font-family:'Courier New',monospace;font-weight:700">${d.totalRevenue>0?d.totalMarginPct.toFixed(1)+'%':'—'}</td></tr>
-      <tr><td>Jumlah PO</td><td style="text-align:right;font-family:'Courier New',monospace">${d.posCount}</td></tr>
-    </tbody></table>
-
-    <table class="tbl"><thead><tr><th>PO</th><th>Dapur</th><th>Tanggal</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Modal</th><th style="text-align:right">Profit</th></tr></thead><tbody>
-      ${poRows.map(x=>`<tr><td>${x.po.no}</td><td>${x.po.dapur||''}</td><td>${x.po.date||''}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(x.revenue)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(x.modal)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(x.profit)}</td></tr>`).join('')}
-    </tbody></table>
-
-    ${bulanKeys.length>1?`<table class="tbl"><thead><tr><th>Bulan</th><th style="text-align:right">Pendapatan</th><th style="text-align:right">Modal</th><th style="text-align:right">Profit</th></tr></thead><tbody>
-      ${bulanKeys.map(k=>`<tr><td>${_fmtBulan(k)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(d.monthly[k].revenue)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(d.monthly[k].modal)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(d.monthly[k].profit)}</td></tr>`).join('')}
-    </tbody></table>`:''}
-
-    <table class="tbl"><thead><tr><th>Vendor</th><th style="text-align:right">Modal</th><th style="text-align:right">Ongkir</th><th style="text-align:right">Cashback</th></tr></thead><tbody>
-      ${vendorRows.map(([n,v])=>`<tr><td>${n}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(v.modal)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(v.ongkir)}</td>
-        <td style="text-align:right;font-family:'Courier New',monospace">${fmtF(v.cashback)}</td></tr>`).join('')}
-    </tbody></table>
-
+    <div class="h">
+      <div><div class="t">Laporan Keuangan</div><div class="m">${j.judul} · ${j.sub}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:#6B6560">SIMS</div>
+        <div class="m">Dicetak ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</div></div>
+    </div>
+    ${catatanArsip}
+    ${sec('Ringkasan Finansial',ringkasan)}
+    ${jenisTbl?sec('Pass-through vs Markup',jenisTbl):''}
+    ${sec('Posisi Akhir Periode',posisi)}
+    ${sec('Rincian per PO',poTbl,true)}
+    ${bulanTbl?sec('Rincian per Bulan',bulanTbl):''}
+    ${vendorTbl?sec('Margin per Vendor',vendorTbl,true):''}
+    ${mitraTbl?sec('Pendapatan per Vendor Mitra',mitraTbl):''}
+    ${katTbl?sec('Rekap per Kategori',katTbl,true):''}
     <div class="stamp"><div class="stamp-box">Disiapkan oleh</div><div class="stamp-box">Disetujui oleh</div></div>
     <div class="ft">Dibuat otomatis oleh SIMS — Sistem Internal Manajemen Suplai</div>
   </div>`;
 
-  const w=window.open('','_blank','width=880,height=760');
-  w.document.write(`<!DOCTYPE html><html><head><title>Laporan Keuangan — ${j.judul}</title><style>${PRINT_CSS}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
+  // Pemenggalan halaman: section & baris tabel tidak boleh terpotong, header
+  // tabel diulang di tiap halaman. Nomor halaman tidak bisa dari CSS (Chrome
+  // tidak mendukung margin box @page) — pakai opsi "Header dan footer" di
+  // dialog cetak.
+  const cssCetak=PRINT_CSS+`
+    .sec{margin-bottom:18px;break-inside:avoid;page-break-inside:avoid}
+    .sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6B6560;border-bottom:2px solid #1A1814;padding-bottom:4px;margin-bottom:8px}
+    .sub{font-size:11px;font-weight:600;color:#6B6560;margin-top:10px}
+    .note{font-size:11px;color:#6B6560;margin-top:6px;line-height:1.45}
+    .tbl tr{break-inside:avoid;page-break-inside:avoid}
+    .tbl thead{display:table-header-group}
+    @page{margin:14mm}
+    @media print{.brk{break-before:page;page-break-before:always}}`;
+
+  const w=window.open('','_blank','width=900,height=780');
+  w.document.write(`<!DOCTYPE html><html><head><title>Laporan Keuangan — ${j.judul}</title><style>${cssCetak}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
   w.document.close();
 }
 

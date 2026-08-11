@@ -616,3 +616,60 @@ function downloadRekapVendorExcel(){
   showToast('Excel berhasil didownload!');
 }
 
+
+// ===== KELOLA PENGGUNA =====
+// Akun ditemukan dari log (uid+email tersimpan sejak atribusi per akun) dan dari
+// profil yang sudah ada. Nama hanya label tampilan — identitas di log adalah
+// email/uid dari akun terautentikasi dan tidak bisa diubah dari sini.
+function _akunTerdeteksi(){
+  const akun={};
+  Object.entries(_cache.users||{}).forEach(([uid,u])=>{
+    akun[uid]={uid,email:u.email||'',nama:u.nama||'',initial:u.initial||'',jml:0,terakhir:''};
+  });
+  (getLog()||[]).forEach(l=>{
+    if(!l.uid)return;
+    if(!akun[l.uid])akun[l.uid]={uid:l.uid,email:l.email||'',nama:'',initial:'',jml:0,terakhir:''};
+    const a=akun[l.uid];
+    if(!a.email&&l.email)a.email=l.email;
+    a.jml++;
+    const cap=l.tgl+' '+(l.time||'');
+    if(cap>a.terakhir)a.terakhir=cap;
+  });
+  // Akun sendiri selalu muncul walau belum sempat beraktivitas
+  if(_currentUser&&!akun[_currentUser.uid])
+    akun[_currentUser.uid]={uid:_currentUser.uid,email:_currentUser.email||'',nama:'',initial:'',jml:0,terakhir:''};
+  return Object.values(akun).sort((a,b)=>(b.terakhir||'').localeCompare(a.terakhir||''));
+}
+
+function renderUsersAdmin(){
+  const el=document.getElementById('users-admin-list');if(!el)return;
+  const list=_akunTerdeteksi();
+  if(!list.length){el.innerHTML='<div class="empty" style="padding:12px">Belum ada akun terdeteksi</div>';return;}
+  el.innerHTML=`<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+    <th>Email akun</th><th>Nama tampilan</th><th style="width:70px">Inisial</th>
+    <th style="text-align:right">Aktivitas</th><th>Terakhir</th><th></th></tr></thead><tbody>${
+    list.map(a=>`<tr>
+      <td><div style="font-size:12px;font-weight:500">${a.email||'(email tidak tercatat)'}</div>
+        <div style="font-size:10px;color:var(--t3);font-family:var(--mn)">${a.uid.substring(0,10)}…${_currentUser&&a.uid===_currentUser.uid?' · Anda':''}</div></td>
+      <td><input type="text" id="ua-nama-${a.uid}" value="${(a.nama||'').replace(/"/g,'&quot;')}" placeholder="mis. Budi" style="font-size:12px;padding:4px 6px;width:100%"></td>
+      <td><input type="text" id="ua-init-${a.uid}" value="${(a.initial||'').replace(/"/g,'&quot;')}" maxlength="3" placeholder="BD" style="font-size:12px;padding:4px 6px;width:60px;text-transform:uppercase"></td>
+      <td class="num" style="text-align:right">${a.jml||'—'}</td>
+      <td style="font-size:11px;color:var(--t3);font-family:var(--mn)">${a.terakhir||'—'}</td>
+      <td><button class="btn bxs bp" onclick="simpanUserAdmin('${a.uid}')">Simpan</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+
+function simpanUserAdmin(uid){
+  const nama=document.getElementById('ua-nama-'+uid)?.value.trim()||'';
+  const initial=(document.getElementById('ua-init-'+uid)?.value.trim()||'').toUpperCase();
+  const lama=(_cache.users||{})[uid]||{};
+  const emailAkun=lama.email||_akunTerdeteksi().find(a=>a.uid===uid)?.email||'';
+  const users={...(_cache.users||{})};
+  users[uid]={nama,initial,email:emailAkun};
+  ST.s('users',users);
+  addLog('edit_profil','Ubah nama pengguna','sistem','','',(emailAkun||uid.substring(0,10))+' → '+(nama||'(kosong)'));
+  showToast('Nama untuk '+(emailAkun||'akun')+' disimpan');
+  renderUsersAdmin();
+  // Kalau yang diubah akun sendiri, segarkan juga form profil di atas
+  if(_currentUser&&uid===_currentUser.uid)initUserProfile();
+}

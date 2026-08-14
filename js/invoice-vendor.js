@@ -117,23 +117,12 @@ function loadInvVItems(){
   if(!po){wrap.innerHTML='';info.style.display='block';info.textContent='Pilih PO dulu';return;}
   info.style.display='none';
 
-  // Build set of already-covered items — use idx (primary) + composite key (nama||hari||deadline)
-  const existingInvV=getInvV().filter(iv=>iv.po_id===poId);
-  const coveredIdx=new Set();
-  const coveredKey=new Set();
-  existingInvV.forEach(iv=>(iv.items||[]).forEach(i=>{
-    const directIdx=typeof i.idx==='number'?i.idx:-1;
-    const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
-    if(idxFresh)coveredIdx.add(directIdx);
-    if(!idxFresh&&(i.hari||i.deadline))coveredKey.add(itemKey(i));
-  }));
-  const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>{
-    if(coveredIdx.has(item._idx))return false;
-    if((item.hari||item.deadline)&&coveredKey.has(itemKey(item)))return false;
-    // Nama-only fallback for items with stale/missing idx and no hari/deadline key
-    if(!item.hari&&!item.deadline&&existingInvV.some(iv=>(iv.items||[]).some(i=>{const dIdx=typeof i.idx==='number'?i.idx:-1;const iFresh=dIdx>=0&&po.items[dIdx]&&po.items[dIdx].nama===i.nama;return!i.hari&&!i.deadline&&!iFresh&&i.nama===item.nama;})))return false;
-    return true;
-  });
+  // Item yang sudah masuk invoice vendor mana pun tidak boleh ditawarkan lagi.
+  // Sumber kebenarannya satu: buildLookup — dulu penutupan di sini punya logika
+  // pencocokan sendiri, lalu menyimpang dari buildLookup dan meloloskan item yang
+  // sebenarnya sudah diinvoice (risiko invoice ganda) begitu idx PO bergeser.
+  const {itemInvV:coveredBy}=buildLookup(poId);
+  const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>!coveredBy[item._idx]);
 
   if(!available.length){
     wrap.innerHTML=`<div style="padding:10px 0;font-size:12px;color:var(--t3)">Semua item PO sudah masuk ke invoice vendor. Gunakan <strong>Edit qty/harga</strong> pada invoice yang sudah ada jika perlu mengubah qty atau harga.</div>`;

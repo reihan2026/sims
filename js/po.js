@@ -125,9 +125,19 @@ function renderPOShortcut(){
 function itemKey(item){
   return `${(item.nama||'').trim()}||${item.hari||''}||${item.deadline||''}`;
 }
+// Kunci longgar — tanpa deadline. Deadline itu metadata operasional yang wajar
+// diedit di PO setelah invoice dibuat; kalau ikut jadi identitas, item kehilangan
+// jaring pengamannya begitu idx bergeser (mis. ada item lain dihapus dari PO).
+// hari sudah cukup membedakan item bernama sama dalam satu PO.
+function itemKeyLoose(item){
+  return `${(item.nama||'').trim()}||${item.hari||''}`;
+}
 function findPoItem(po,i){
   if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama)return po.items[i.idx];
   if(i.hari||i.deadline){const k=itemKey(i);const m=po.items.find(pi=>itemKey(pi)===k);if(m)return m;}
+  // Abaikan deadline sebelum jatuh ke nama saja — kalau hari-nya cocok, itu jauh
+  // lebih tepat daripada mengambil item bernama sama dari hari yang berbeda.
+  if(i.hari){const lk=itemKeyLoose(i);const m=po.items.find(pi=>itemKeyLoose(pi)===lk);if(m)return m;}
   return po.items.find(pi=>pi.nama===i.nama)||null;
 }
 
@@ -149,31 +159,39 @@ function buildLookup(poId){
 
   const itemInvV={};
   if(po){
+    // Item invoice yang sudah dapat slot PO — supaya pass berikutnya tahu mana
+    // yang masih perlu dicarikan, tanpa menebak dari idx yang mungkin sudah basi.
+    const placed=new Set();
     // Pass 1: exact idx+nama match (skip if item at idx has different name — stale idx)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
-      if(directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama&&!(directIdx in itemInvV))
-        itemInvV[directIdx]=iv;
+      if(directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama&&!(directIdx in itemInvV)){
+        itemInvV[directIdx]=iv;placed.add(i);
+      }
     }));
     // Pass 2: composite key match — for items whose stored idx wasn't successfully assigned in Pass 1
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
-      const directIdx=typeof i.idx==='number'?i.idx:-1;
-      const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
-      if(idxFresh&&itemInvV[directIdx]===iv)return;// Pass 1 assigned THIS iv to THIS position — skip
+      if(placed.has(i))return;
       const iKey=itemKey(i);
       po.items.forEach((pi,pidx)=>{
-        if(!(pidx in itemInvV)&&itemKey(pi)===iKey)itemInvV[pidx]=iv;
+        if(!(pidx in itemInvV)&&itemKey(pi)===iKey){itemInvV[pidx]=iv;placed.add(i);}
       });
+    }));
+    // Pass 2b: kunci longgar (nama+hari, abaikan deadline) — menolong item yang
+    // deadline-nya diedit di PO setelah invoice dibuat, lalu idx-nya ikut bergeser.
+    // Aturan aman sama seperti Pass 3: hanya tautkan kalau kandidatnya tunggal.
+    invV.forEach(iv=>(iv.items||[]).forEach(i=>{
+      if(placed.has(i))return;
+      const lKey=itemKeyLoose(i);
+      const cands=po.items.reduce((a,pi,pidx)=>{if(!(pidx in itemInvV)&&itemKeyLoose(pi)===lKey)a.push(pidx);return a;},[]);
+      if(cands.length===1){itemInvV[cands[0]]=iv;placed.add(i);}
     }));
     // Pass 3: nama-only fallback — only when unambiguous (exactly one unlinked candidate)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
-      const directIdx=typeof i.idx==='number'?i.idx:-1;
-      const idxFresh=directIdx>=0&&po.items[directIdx]&&po.items[directIdx].nama===i.nama;
-      if(!i.hari&&!i.deadline&&!(idxFresh&&itemInvV[directIdx]===iv)){
-        const cands=po.items.reduce((a,pi,pidx)=>{if(!(pidx in itemInvV)&&pi.nama===i.nama)a.push(pidx);return a;},[]);
-        if(cands.length===1)itemInvV[cands[0]]=iv;
-        // if cands.length > 1: ambiguous, leave unlinked — safer than wrong link
-      }
+      if(placed.has(i))return;
+      const cands=po.items.reduce((a,pi,pidx)=>{if(!(pidx in itemInvV)&&pi.nama===i.nama)a.push(pidx);return a;},[]);
+      if(cands.length===1){itemInvV[cands[0]]=iv;placed.add(i);}
+      // if cands.length > 1: ambiguous, leave unlinked — safer than wrong link
     }));
   }
 

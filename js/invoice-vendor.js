@@ -351,14 +351,24 @@ function openEditInvV(invId){
   const _ePO=getPOs().find(p=>p.id===inv.po_id);
   document.getElementById('einvv-items-body').innerHTML=(inv.items||[]).map((item,i)=>{
     let poQty=null;
-    if(_ePO){const pi=(typeof item.idx==='number'&&_ePO.items[item.idx]?.nama===item.nama)?_ePO.items[item.idx]:_ePO.items.find(p=>p.nama===item.nama);if(pi!=null)poQty=pi.qty;}
+    if(_ePO){const pi=findPoItem(_ePO,item);if(pi!=null)poQty=pi.qty;}
     const qtyMismatch=poQty!=null&&poQty!==item.qty;
     const poRef=poQty!=null?`<div style="font-size:10px;margin-top:2px;color:${qtyMismatch?'var(--wt)':'var(--t3)'}">PO: ${poQty} ${item.satuan_po||item.satuan||''}${qtyMismatch?' ⚠':''}</div>`:'';
-    // Item konversi: satuan invoice memang sengaja beda dari PO — beri tahu sebelum ditimpa
-    const konvHint=item.konv?`<div style="font-size:10px;margin-top:2px;color:var(--t3)">Konversi: 1 ${item.satuan} = ${item.konv} ${item.satuan_po||''} PO</div>`:'';
+    // Konversi bisa diisi/diperbaiki di sini. Dulu kolom ini cuma ada di form
+    // invoice baru, jadi konversi yang telanjur kosong tidak bisa dibetulkan sama
+    // sekali — harga per satuan invoice terlanjur tercatat sebagai harga per
+    // satuan PO dan laporan per item ikut salah tanpa jalan perbaikan.
+    const satPO=item.satuan_po||item.satuan||'';
+    const satBeda=(item.satuan||'').toLowerCase()!==satPO.toLowerCase();
+    // Saran konversi dari rasio qty PO : qty invoice — mis. 16 kg PO vs 8 pcs = 2
+    const konvSaran=(poQty>0&&item.qty>0)?Math.round((poQty/item.qty)*10000)/10000:'';
     return `<tr>
     <td style="font-weight:500">${item.nama}</td>
-    <td><input type="text" id="einvv-sat-${i}" value="${item.satuan||''}" style="width:70px;font-size:12px;padding:4px 6px">${konvHint}</td>
+    <td><input type="text" id="einvv-sat-${i}" data-sat-po="${satPO}" value="${item.satuan||''}" oninput="onEditSatChange(${i})" style="width:70px;font-size:12px;padding:4px 6px">
+      <div id="einvv-konv-wrap-${i}" style="display:${satBeda?'block':'none'};margin-top:4px">
+        <label style="font-size:9px;color:var(--t3);display:block;line-height:1.3">1 <span id="einvv-konv-lbl-${i}">${item.satuan||''}</span> = ? ${satPO} PO</label>
+        <input type="number" id="einvv-konv-${i}" value="${item.konv||''}" placeholder="${konvSaran||'cth: 2'}" min="0" step="any" style="width:70px;font-size:12px;padding:3px 6px;font-family:var(--mn)">
+      </div></td>
     <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()">${poRef}</td>
     <td class="num">${fmtF(item.harga_vendor||0)}</td>
     <td><input type="number" id="einvv-hv-${i}" value="${item.harga_vendor||''}" min="0" style="width:110px;font-size:12px;font-family:var(--mn)" oninput="calcEditInvVTotal()"></td>
@@ -366,6 +376,17 @@ function openEditInvV(invId){
   </tr>`;}).join('');
   calcEditInvVTotal();
   openModal('modal-edit-invv');
+}
+// Kolom konversi hanya relevan kalau satuan invoice beda dari satuan PO —
+// ikut berubah saat satuannya diketik ulang, bukan cuma saat modal dibuka.
+function onEditSatChange(i){
+  const el=document.getElementById('einvv-sat-'+i);if(!el)return;
+  const satPO=el.dataset.satPo||'';
+  const beda=el.value.trim().toLowerCase()!==satPO.toLowerCase();
+  const wrap=document.getElementById('einvv-konv-wrap-'+i);
+  if(wrap)wrap.style.display=beda?'block':'none';
+  const lbl=document.getElementById('einvv-konv-lbl-'+i);
+  if(lbl)lbl.textContent=el.value.trim()||satPO;
 }
 function calcEditInvVTotal(){
   const inv=getInvV().find(v=>v.id===document.getElementById('einvv-id').value);if(!inv)return;
@@ -375,6 +396,16 @@ function calcEditInvVTotal(){
 function saveEditInvV(){
   const invId=document.getElementById('einvv-id').value;const catRev=document.getElementById('einvv-cat-rev').value.trim();
   const invs=getInvV();const inv=invs.find(v=>v.id===invId);if(!inv)return;
+  // Satuan invoice beda dari satuan PO tapi konversinya kosong adalah kombinasi
+  // yang diam-diam merusak laporan: harga per satuan invoice tersimpan sebagai
+  // harga per satuan PO, lalu dikalikan qty PO. Jangan sampai lolos tanpa sadar.
+  const tanpaKonv=(inv.items||[]).map((item,i)=>{
+    const satBaru=(document.getElementById('einvv-sat-'+i)?.value.trim())||item.satuan||'';
+    const satPO=item.satuan_po||item.satuan||'';
+    const konvVal=parseFloat(document.getElementById('einvv-konv-'+i)?.value)||0;
+    return(satBaru.toLowerCase()!==satPO.toLowerCase()&&!(konvVal>0))?`· ${item.nama} — invoice "${satBaru}" vs PO "${satPO}"`:null;
+  }).filter(Boolean);
+  if(tanpaKonv.length&&!confirm('Satuan invoice beda dari satuan PO, tapi konversinya belum diisi:\n\n'+tanpaKonv.join('\n')+'\n\nTanpa konversi, harga per satuan invoice akan dianggap harga per satuan PO — margin dan tabel selisih di laporan jadi salah.\n\nTetap simpan?'))return;
   const oldTotal=inv.total;let newTotal=0;
   const pos=getPOs();const po=pos.find(p=>p.id===inv.po_id);
   (inv.items||[]).forEach((item,i)=>{
@@ -397,6 +428,13 @@ function saveEditInvV(){
       // Satuan invoice & PO tadinya sejajar → ini koreksi data, bukan konversi
       item.satuan_po=satBaru;
     }
+    // Konversi dari form — dipakai di bawah untuk menurunkan harga per satuan PO
+    const konvVal=parseFloat(document.getElementById('einvv-konv-'+i)?.value)||0;
+    if(item.satuan.toLowerCase()!==(item.satuan_po||'').toLowerCase()&&konvVal>0){
+      item.konv=konvVal;item.sat_changed=true;
+      const pi=po&&findPoItem(po,item);
+      if(pi)pi.satuan_konv={inv:item.satuan,po:item.satuan_po,konv:konvVal};
+    }
     item.harga_vendor=hv;
     item.harga_vendor_po=item.konv?hv/item.konv:hv;
     item.qty=qty;
@@ -411,8 +449,11 @@ function saveEditInvV(){
   inv.bayar_status=(_netBaru.netTotal>0&&_netBaru.paid>=_netBaru.netTotal)?'lunas':'belum';
   if(!inv.edits)inv.edits=[];
   inv.edits.push({tgl:today(),total_lama:oldTotal,total_baru:newTotal,catatan:catRev||'Revisi harga vendor'});
-  // Sync harga_vendor_po back ke PO items (consistent with saveInvV)
-  if(po)(inv.items||[]).forEach(i=>{if(po.items[i.idx])po.items[i.idx].harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
+  // Sync harga_vendor_po back ke PO items (consistent with saveInvV).
+  // Lewat findPoItem, bukan po.items[i.idx] langsung — idx bisa basi kalau ada
+  // item PO yang dihapus, dan menulis harga ke baris yang salah jauh lebih buruk
+  // daripada tidak menulis sama sekali.
+  if(po)(inv.items||[]).forEach(i=>{const pi=findPoItem(po,i);if(pi)pi.harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);});
   const invds=getInvD();const ptInvD=invds.find(d=>d.type==='passthrough'&&d.pt_inv_id===invId);
   if(ptInvD)ptInvD.total=newTotal;
   addLog('edit_invv','Revisi invoice vendor','invv',inv.id,inv.no,

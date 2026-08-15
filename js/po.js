@@ -210,21 +210,55 @@ function buildLookup(poId){
           const storedNama=(i.nama||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
           // Merged item: match each _src_item to its own PO slot
           if(i._src_items&&i._src_items.length){
+            const srcLonggar=new Set();
+            const diklaim=[];
+            const longgar=(nama,hari)=>`${(nama||'').toLowerCase().trim()}||${hari||''}`;
             i._src_items.forEach(si=>{
               const siKey=`${storedNama.toLowerCase().trim()}||${si.hari||''}||${si.deadline||''}`;
+              const siLonggar=longgar(storedNama,si.hari);
+              srcLonggar.add(siLonggar);
               let matched=false;
               po.items.forEach((pi,pidx)=>{
                 if(matched)return;
                 const piKey=`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`;
-                if(!(pidx in itemInvD)&&piKey===siKey){itemInvD[pidx]=id2;matched=true;}
+                if(!(pidx in itemInvD)&&piKey===siKey){itemInvD[pidx]=id2;diklaim.push(pidx);matched=true;}
               });
+              // Deadline di PO sering diedit setelah invoice dibuat, jadi kunci
+              // penuh gampang meleset. Coba nama+hari dulu sebelum jatuh ke nama
+              // saja — fallback nama saja mengambil baris bebas pertama dan bisa
+              // nyasar ke hari yang salah kalau item yang sama datang beberapa kali.
               if(!matched){
                 po.items.forEach((pi,pidx)=>{
                   if(matched)return;
-                  if(!(pidx in itemInvD)&&pi.nama.toLowerCase()===storedNama.toLowerCase()){itemInvD[pidx]=id2;matched=true;}
+                  if(!(pidx in itemInvD)&&longgar(pi.nama,pi.hari)===siLonggar){itemInvD[pidx]=id2;diklaim.push(pidx);matched=true;}
+                });
+              }
+              if(!matched){
+                po.items.forEach((pi,pidx)=>{
+                  if(matched)return;
+                  if(!(pidx in itemInvD)&&pi.nama.toLowerCase()===storedNama.toLowerCase()){itemInvD[pidx]=id2;diklaim.push(pidx);matched=true;}
                 });
               }
             });
+            // Satu sumber gabungan bisa bersesuaian dengan lebih dari satu baris PO
+            // — mis. item yang sama dibeli dari dua vendor lalu barisnya dipecah.
+            // Loop di atas berhenti di baris pertama, jadi sisanya tampak belum
+            // ditagih padahal ikut tercakup. Klaim sisanya hanya selama qty yang
+            // tertutup belum melewati qty yang benar-benar ditagih di baris ini;
+            // begitu pas, berhenti — baris yang memang belum ditagih tidak ikut
+            // tertandai lunas. Satuan harus sama, kalau tidak qty-nya tak sebanding.
+            const target=i.qty||0;
+            let tertutup=diklaim.reduce((s,px)=>s+(po.items[px]?.qty||0),0);
+            const satInv=(i.satuan||'').toLowerCase().trim();
+            if(target>tertutup){
+              po.items.forEach((pi,pidx)=>{
+                if(pidx in itemInvD)return;
+                if((pi.satuan||'').toLowerCase().trim()!==satInv)return;
+                if(!srcLonggar.has(longgar(pi.nama,pi.hari)))return;
+                const q=pi.qty||0;
+                if(q>0&&tertutup+q<=target){itemInvD[pidx]=id2;tertutup+=q;}
+              });
+            }
             return;
           }
           const iKey=`${storedNama.toLowerCase().trim()}||${i.hari||''}||${i.deadline||''}`;

@@ -367,7 +367,8 @@ function openEditInvV(invId){
     <td><input type="text" id="einvv-sat-${i}" data-sat-po="${satPO}" value="${item.satuan||''}" oninput="onEditSatChange(${i})" style="width:70px;font-size:12px;padding:4px 6px">
       <div id="einvv-konv-wrap-${i}" style="display:${satBeda?'block':'none'};margin-top:4px">
         <label style="font-size:9px;color:var(--t3);display:block;line-height:1.3">1 <span id="einvv-konv-lbl-${i}">${item.satuan||''}</span> = ? ${satPO} PO</label>
-        <input type="number" id="einvv-konv-${i}" value="${item.konv||''}" placeholder="${konvSaran||'cth: 2'}" min="0" step="any" style="width:70px;font-size:12px;padding:3px 6px;font-family:var(--mn)">
+        <input type="number" id="einvv-konv-${i}" value="${item.konv||''}" placeholder="${konvSaran?'saran '+konvSaran:'cth: 2'}" min="0" step="any" style="width:70px;font-size:12px;padding:3px 6px;font-family:var(--mn)">
+        ${konvSaran&&!item.konv?`<div onclick="document.getElementById('einvv-konv-${i}').value=${konvSaran}" style="font-size:9px;color:var(--ac);cursor:pointer;margin-top:2px;text-decoration:underline;text-underline-offset:2px">Pakai saran ${konvSaran}</div>`:''}
       </div></td>
     <td><input type="number" id="einvv-qty-${i}" value="${item.qty||0}" min="0" step="any" style="width:75px;font-size:12px;font-family:var(--mn);text-align:right" oninput="calcEditInvVTotal()">${poRef}</td>
     <td class="num">${fmtF(item.harga_vendor||0)}</td>

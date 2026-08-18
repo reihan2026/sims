@@ -4,33 +4,36 @@ function filterDetItems(){
   const fStat=document.getElementById('det-f-stat')?.value||'';
   const fKat=document.getElementById('det-f-kat')?.value||'';
   const fVendor=document.getElementById('det-f-vendor')?.value||'';
-  const rows=document.querySelectorAll('#det-body .tbl tbody tr');
-  let visible=0,total=rows.length;
-  rows.forEach(tr=>{
-    const nama=tr.dataset.nama||'';
-    const kat=(tr.dataset.kat||'').toLowerCase();
-    const vendor=tr.dataset.vendor||'';
-    const stat=tr.dataset.status||'';
-    const show=(
+  const matches=el=>{
+    const nama=el.dataset.nama||'';
+    const kat=(el.dataset.kat||'').toLowerCase();
+    const vendor=el.dataset.vendor||'';
+    const stat=el.dataset.status||'';
+    return(
       (!q||nama.includes(q)||kat.includes(q)||vendor.includes(q))&&
       (!fStat||stat===fStat)&&
-      (!fKat||(tr.dataset.kat||'')===fKat)&&
+      (!fKat||(el.dataset.kat||'')===fKat)&&
       (!fVendor||vendor===fVendor.toLowerCase())
     );
-    tr.style.display=show?'':'none';
-    if(show)visible++;
-  });
-  // Hide/show hari sections based on visible rows
-  document.querySelectorAll('#det-body .tbl').forEach(tbl=>{
-    const anyVisible=[...tbl.querySelectorAll('tbody tr')].some(r=>r.style.display!=='none');
-    const tableWrap=tbl.closest('div[style*="overflow-x"]');
-    if(tableWrap)tableWrap.style.display=anyVisible?'':'none';
-    const section=tableWrap?.parentElement;
-    if(section&&section.id&&section.id.startsWith('hari-sec-')){
-      const hdr=section.previousElementSibling;
-      if(hdr)hdr.style.display=anyVisible?'':'none';
-      section.style.display=anyVisible?'':'none';
-    }
+  };
+  // Baris tabel (tampilan desktop) dan kartu (tampilan mobile, di bawah 600px)
+  // me-render item PO yang sama dua kali dalam markup berbeda — CSS yang
+  // memilih mana yang tampak. Dulu cuma baris tabel yang difilter, jadi di
+  // hape (kartu yang tampak) daftarnya diam saja walau sudah diketik/dicari.
+  const rows=document.querySelectorAll('#det-body .tbl tbody tr');
+  let visible=0,total=rows.length;
+  rows.forEach(tr=>{const show=matches(tr);tr.style.display=show?'':'none';if(show)visible++;});
+  document.querySelectorAll('#det-body .det-item-cards>div').forEach(card=>{card.style.display=matches(card)?'':'none';});
+  // Hide/show hari sections kalau tak ada baris maupun kartu yang cocok.
+  // Bukan cuma kontainer hari yang id-nya diawali "hari-sec-" — span panah
+  // kolapsnya juga (id "hari-sec-...-arrow") ikut tertangkap prefix yang sama
+  // dan salah diproses sebagai section kalau tidak dikecualikan di sini.
+  document.querySelectorAll('#det-body [id^="hari-sec-"]:not([id$="-arrow"])').forEach(section=>{
+    const anyVisible=[...section.querySelectorAll('tbody tr'),...section.querySelectorAll('.det-item-cards>div')]
+      .some(el=>el.style.display!=='none');
+    const hdr=section.previousElementSibling;
+    if(hdr)hdr.style.display=anyVisible?'':'none';
+    section.style.display=anyVisible?'':'none';
   });
   const cnt=document.getElementById('det-srch-cnt');
   const filtered=q||fStat||fKat||fVendor;

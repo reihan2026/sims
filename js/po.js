@@ -455,7 +455,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       const statusLabel=allDone2?'✓ Selesai':hasWarn2?'! Perlu aksi':'· Berjalan';
       const statusColor=allDone2?'var(--ac)':hasWarn2?'var(--wn)':'var(--t3)';
       const statusBg=allDone2?'var(--abg)':hasWarn2?'var(--wbg)':'var(--s2)';
-      html+=`<div style="padding:10px 0;border-bottom:1px solid var(--bd)">
+      html+=`<div data-status="${allDone2?'done':hasWarn2?'todo':'running'}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}" style="padding:10px 0;border-bottom:1px solid var(--bd)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
           <div style="font-weight:500;font-size:13px;flex:1">${item.nama}</div>
           <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="flex-shrink:0;padding:2px 7px;font-size:10px;border-radius:9px;background:${statusBg};color:${statusColor};border:none;cursor:pointer">${statusLabel}</button>

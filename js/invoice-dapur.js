@@ -416,7 +416,13 @@ function renderInvD(){
         </div>
       </div>
       <div class="bg">
-        ${iv.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${iv.id}')">Rekam terima</button>`:''}
+        ${iv.terima_status!=='lunas'
+          ?`<button class="btn bsm bp" onclick="openTerima('${iv.id}')">Rekam terima</button>`
+          // Dapur kadang mentransfer lebih dari nilai invoice — mis. invoice
+          // dikoreksi turun setelah uangnya dikirim. Dulu tombolnya hilang begitu
+          // lunas, jadi kelebihan itu tidak punya cara masuk sama sekali dan
+          // catatan kas jadi lebih kecil dari saldo sebenarnya.
+          :`<button class="btn bsm bt" onclick="openTerima('${iv.id}')">Rekam terima tambahan</button>`}
         ${iv.type==='passthrough'&&iv.terima_status==='lunas'&&iv.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===iv.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
           ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();renderInvD();showToast('Invoice vendor diupdate!')">Sync vendor</button>`:''}
         ${iv.vendor_saya_id?`<button class="btn bsm bp" onclick="printInvDFormal('${iv.id}')">🖨 Cetak Invoice</button>`:''}

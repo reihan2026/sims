@@ -122,7 +122,7 @@ function openLaporanPO(poId){
 }
 
 function renderLaporanHTML(d){
-  const{po,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,invDs,totalModalVendor,invDItemMap,passThroughInvVIds}=d;
+  const{po,t,vendorMap,totalOngkir,totalCashback,totalInvD,totalTerima,byHari,invVs,invDs,totalModalVendor,invDItemMap,passThroughInvVIds}=d;
 
   // Pre-compute allItems and vMarginMap — margin = harga_dapur - harga_vendor (actual)
   const allItems=[];
@@ -166,6 +166,23 @@ function renderLaporanHTML(d){
   });
   hvDevItems.sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
   const hvDevTotal=hvDevItems.reduce((s,x)=>s+x.delta,0);
+
+  // Uang yang sudah berpindah tapi tagihannya berubah setelahnya — biasanya
+  // invoice direvisi turun sesudah dibayar. Sisa tagihan dinolkan (invVNet_compute
+  // memakai Math.max(0,...)), dan invoice tetap berlabel Lunas, jadi kelebihannya
+  // tidak muncul di angka mana pun. Tanpa blok ini ia cuma hidup di ingatan.
+  const LEBIH_MIN=1000;
+  const jml=arr=>(arr||[]).reduce((s,p)=>s+(p.jumlah||0),0);
+  const lebihDapur=(invDs||[]).map(x=>({no:x.no,jenis:x.type||'markup',total:x.total||0,
+    paid:jml(x.payments),lebih:jml(x.payments)-(x.total||0),catatan:x.catatan||''}))
+    .filter(x=>x.lebih>=LEBIH_MIN).sort((a,b)=>b.lebih-a.lebih);
+  const lebihVendor=(invVs||[]).map(v=>{
+    const net=Math.max(0,(v.total||0)-(v.returs||[]).reduce((s,r)=>s+(r.val||0),0));
+    const rev=(v.edits||[]).filter(e=>e.total_lama!==e.total_baru).slice(-1)[0];
+    return{no:v.no,vendor:v.vendor,total:net,paid:jml(v.payments),lebih:jml(v.payments)-net,
+      catatan:rev?rev.catatan||'':''};})
+    .filter(x=>x.lebih>=LEBIH_MIN).sort((a,b)=>b.lebih-a.lebih);
+  const lebihTotal=lebihDapur.reduce((s,x)=>s+x.lebih,0)+lebihVendor.reduce((s,x)=>s+x.lebih,0);
 
   // Overall margin: actual invD revenue - vendor cost (accrual basis)
   const marginBersih=totalInvD>0?totalInvD-totalModalVendor-totalOngkir+totalCashback:null;
@@ -222,6 +239,29 @@ function renderLaporanHTML(d){
           <td style="padding:3px 6px;text-align:right;font-family:monospace">${fmtF(x.hv_inv)}</td>
           <td style="padding:3px 6px;text-align:right;font-family:monospace;font-weight:600">${x.delta>=0?'+':''}${fmtF(x.delta)}</td>
         </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+
+  // Kelebihan bayar — uang nyata yang tidak terwakili angka mana pun di laporan
+  if(lebihDapur.length||lebihVendor.length){
+    const baris=(x,pihak)=>`<tr>
+      <td style="padding:4px 6px;font-weight:600">${x.no}</td>
+      <td style="padding:4px 6px;color:#666">${pihak}</td>
+      <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtF(x.total)}</td>
+      <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtF(x.paid)}</td>
+      <td style="padding:4px 6px;text-align:right;font-family:monospace;font-weight:700">${fmtF(x.lebih)}</td>
+      <td style="padding:4px 6px;color:#666;font-size:10px">${x.catatan||'—'}</td>
+    </tr>`;
+    html+=`<div style="margin-bottom:20px;padding:11px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid #2563eb;border-radius:8px">
+      <div style="font-weight:700;font-size:13px;color:#1d4ed8">Kelebihan bayar ${fmtF(lebihTotal)}</div>
+      <div style="font-size:12px;color:#1e40af;margin-top:3px">Pembayaran melampaui nilai invoice — umumnya karena invoice direvisi turun setelah uangnya berpindah. Sistem menolkan sisa tagihan dan tetap menandainya Lunas, sehingga selisih ini tidak terwakili angka mana pun di laporan. Perlu dikembalikan atau dipotongkan ke tagihan berikutnya.</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:8px">
+        <thead><tr style="color:#1e40af"><th style="padding:3px 6px;text-align:left">Invoice</th><th style="padding:3px 6px;text-align:left">Pihak</th><th style="padding:3px 6px;text-align:right">Nilai invoice</th><th style="padding:3px 6px;text-align:right">Dibayar</th><th style="padding:3px 6px;text-align:right">Kelebihan</th><th style="padding:3px 6px;text-align:left">Keterangan</th></tr></thead>
+        <tbody>
+          ${lebihDapur.map(x=>baris(x,'Dapur → kita')).join('')}
+          ${lebihVendor.map(x=>baris(x,'Kita → '+x.vendor)).join('')}
+        </tbody>
       </table>
     </div>`;
   }

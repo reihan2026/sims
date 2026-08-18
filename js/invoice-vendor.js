@@ -625,9 +625,34 @@ function saveRetur(){
 }
 
 // ===== KONVERSI INVOICE VENDOR KE PASS-THROUGH =====
+// Baris invoice dapur markup yang sumbernya invoice vendor ini. Kalau ada, item
+// itu sudah pernah ditagihkan ke dapur — mengkonversi jadi pass-through berarti
+// menagih barang yang sama untuk kedua kalinya. Arah sebaliknya sudah dijaga di
+// loadInvDItems (js/invoice-dapur.js), arah ini dulu tidak.
+function _ptSudahDitagihMarkup(invVId){
+  const out=[];
+  getInvD().forEach(d=>{
+    if((d.type||'markup')==='passthrough')return;
+    (d.items||[]).forEach(i=>{
+      if(i.invv_id!==invVId)return;
+      out.push({invD:d.no,nama:i.nama,qty:i.qty,satuan:i.satuan||'',
+        nilai:(i.qty||0)*(i.harga_dapur||0),terima:d.terima_status});
+    });
+  });
+  return out;
+}
+
 function openKonversiPT(invVId){
   const inv=getInvV().find(v=>v.id===invVId);if(!inv)return;
   if(isPassthrough(invVId)){showToast('Invoice vendor ini sudah punya invoice dapur pass-through.',true);return;}
+  const bentrok=_ptSudahDitagihMarkup(invVId);
+  if(bentrok.length){
+    const nilai=bentrok.reduce((s,x)=>s+x.nilai,0);
+    showToast('Tidak bisa dikonversi — '+bentrok.length+' item dari '+inv.no+' sudah ditagihkan ke dapur lewat '+
+      [...new Set(bentrok.map(x=>x.invD))].join(', ')+' senilai '+fmtF(nilai)+
+      '. Pass-through akan menagih barang yang sama dua kali.',true);
+    return;
+  }
   const payments=inv.payments||[];
   document.getElementById('konv-invv-id').value=invVId;
   document.getElementById('konv-alasan').value='Pembayaran langsung dari dapur ke vendor';
@@ -668,6 +693,13 @@ function saveKonversiPT(){
   const cbPct=adaCB?parseFloat(document.getElementById('konv-cb-pct').value)||0:0;
   const cbNominal=adaCB?parseFloat(document.getElementById('konv-cb-nominal').value)||0:0;
   const invVs=getInvV();const iv=invVs.find(v=>v.id===invVId);if(!iv)return;
+  // Penjaga kedua — modal bisa saja sudah terbuka sebelum invoice markup dibuat
+  const _bentrok=_ptSudahDitagihMarkup(invVId);
+  if(_bentrok.length){
+    showToast('Dibatalkan — item dari '+iv.no+' sudah ditagihkan lewat '+
+      [...new Set(_bentrok.map(x=>x.invD))].join(', ')+'. Hapus baris itu dulu sebelum dikonversi.',true);
+    closeModal('modal-konversi-pt');return;
+  }
   const hapusCount=(iv.payments||[]).length;
   const tgl=today();
 

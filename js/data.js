@@ -73,6 +73,11 @@ function loadAllData(){
         // Detect concurrent edit from another user
         if(!_ignoreNextSnapshot&&_dirty.size>0&&resolved){_showConcurrentWarning();}
 
+        // Cek ukuran begitu data dimuat — jangan tunggu sampai ada yang
+        // mencoba menyimpan baru ketahuan dokumennya sudah penuh.
+        const sizeKB=Math.round(JSON.stringify(_cache).length/1024);
+        if(sizeKB>900)_showSizeWarning(sizeKB);else _hideSizeWarning();
+
         _hideOfflineBanner();
 
         if(!resolved){
@@ -104,6 +109,23 @@ function _showOfflineBanner(saved){
   b.innerHTML=`Koneksi terputus — menampilkan data offline per ${tgl}. Perubahan tidak bisa disimpan. <button onclick="this.closest('#offline-banner').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>`;
 }
 function _hideOfflineBanner(){const b=document.getElementById('offline-banner');if(b)b.remove();}
+// Dokumen Firestore ini punya batas keras 1024 KB. Indikator kecil di pojok
+// kiri bawah gampang terlewat — pernah kejadian dokumen kepenuhan tanpa
+// disadari, simpan gagal berulang-ulang, dan satu invoice hilang total karena
+// tabnya keburu ditutup sebelum tersimpan. Banner ini tidak bisa dilewatkan.
+function _showSizeWarning(sizeKB){
+  let b=document.getElementById('size-banner');
+  if(!b){b=document.createElement('div');b.id='size-banner';b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9997;background:#c0392b;color:#fff;font-size:12px;font-weight:600;padding:7px 16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:10px';document.body.prepend(b);}
+  b.innerHTML=`⚠ Dokumen data hampir penuh — ~${sizeKB} KB dari batas 1024 KB. Penyimpanan bisa mulai gagal. Hubungi admin untuk arsipkan data lama. <button onclick="this.closest('#size-banner').remove()" style="background:rgba(255,255,255,0.25);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>`;
+}
+function _hideSizeWarning(){const b=document.getElementById('size-banner');if(b)b.remove();}
+// Cegah tab ditutup/reload sementara ada perubahan yang belum sampai ke
+// server — penyebab langsung invoice yang hilang tanpa jejak kemarin. Ini
+// menjaring semua sebab gagal simpan (dokumen penuh, jaringan putus, dll),
+// bukan cuma satu skenario spesifik.
+window.addEventListener('beforeunload',e=>{
+  if(_dirty.size>0||_saving){e.preventDefault();e.returnValue='';}
+});
 let _concurrentWarnTimer=null;
 function _showConcurrentWarning(){
   if(document.getElementById('concurrent-banner'))return;
@@ -201,10 +223,15 @@ async function _flushSave(){
   try{
     _ignoreNextSnapshot=true; // our own write — skip the echo snapshot
     await db.collection('sims').doc('data').set(payload,{merge:true});
-    const sizeKB=Math.round(JSON.stringify(Object.fromEntries(Object.entries(_cache).filter(([k])=>!k.startsWith('file_')))).length/1024);
+    // Hitung TERMASUK file_* — dulu dikecualikan, jadi indikator ini pernah
+    // menunjukkan "933 KB aman" padahal dokumen sesungguhnya (dengan lampiran)
+    // sudah 1.166 KB, lewat batas 1024 KB. Itu sebab kegagalan simpan
+    // kemarin tidak ketahuan sampai sudah terjadi berulang-ulang.
+    const sizeKB=Math.round(JSON.stringify(_cache).length/1024);
     const sizeColor=sizeKB>900?'var(--dn)':sizeKB>700?'var(--wn)':'var(--ac)';
     _setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB / 1024 KB`,sizeColor);
     setTimeout(()=>_setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB`,sizeKB>700?sizeColor:'var(--t3)'),2000);
+    if(sizeKB>900)_showSizeWarning(sizeKB);else _hideSizeWarning();
     const cb=document.getElementById('concurrent-banner');if(cb)cb.remove();
   }catch(e){
     console.error('Firebase save error:',e);

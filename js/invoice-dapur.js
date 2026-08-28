@@ -74,9 +74,17 @@ function loadInvDItems(){
     const linkedInvV=_dItemInvV[pidx];
     let invVItem=null;
     if(linkedInvV){
-      // Match by stored idx first (exact), fallback to nama-only
-      invVItem=(linkedInvV.items||[]).find(i=>typeof i.idx==='number'&&i.idx===pidx&&i.nama===item.nama);
-      if(!invVItem)invVItem=(linkedInvV.items||[]).find(i=>i.nama===item.nama);
+      // idx tersimpan bisa basi kalau ada item lain di PO yang dihapus/ditambah
+      // setelah invoice ini dibuat (idx bergeser). Fallback nama-only lama akan
+      // mengambil baris PERTAMA yang cocok nama di array — berbahaya kalau
+      // vendor ini punya beberapa baris item sama nama di hari berbeda (mis.
+      // ayam fillet dikirim Senin dan Kamis dengan qty beda): qty baris yang
+      // salah bisa ikut tertagih ke dapur. Coba kunci penuh (nama+hari+deadline)
+      // lalu kunci longgar (nama+hari) dulu sebelum jatuh ke nama saja.
+      invVItem=(linkedInvV.items||[]).find(i=>typeof i.idx==='number'&&i.idx===pidx&&i.nama===item.nama)
+        ||(linkedInvV.items||[]).find(i=>itemKey(i)===itemKey(item))
+        ||(linkedInvV.items||[]).find(i=>itemKeyLoose(i)===itemKeyLoose(item))
+        ||(linkedInvV.items||[]).find(i=>i.nama===item.nama);
     }
     return{
       _idx:pidx,nama:item.nama,kat:item.kat||'',

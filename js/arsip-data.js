@@ -2,8 +2,10 @@
 // Fungsi murni: tidak menyentuh _cache, tidak menulis Firestore.
 // Semua agregat yang dibutuhkan laporan setelah PO dipindah ke sims_arsip/{periode}.
 
-// PO diarsipkan setelah lebih tua dari ini. Turunkan ke 2 kalau dokumen terasa mepet.
-const ARSIP_BULAN=3;
+// PO diarsipkan setelah lebih tua dari ini.
+// Diturunkan dari 3 ke 2 pada 2026-08-28 — dokumen sudah lewat batas 1024 KB
+// (1.033 KB) dan ambang 3 bulan cuma menjangkau 1 PO / 31 KB, tidak cukup.
+const ARSIP_BULAN=2;
 
 // Batas periode: PO dengan date < batas ini layak diarsip.
 // Mengembalikan 'YYYY-MM' — periode paling awal yang MASIH ditahan di dokumen utama.

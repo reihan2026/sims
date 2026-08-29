@@ -5,6 +5,12 @@ function getCatOpts(selected=''){return['<option value="">—</option>',...getCa
 // ===== UTILS =====
 const today=()=>new Date().toISOString().split('T')[0];
 const uid=()=>'ID'+Date.now()+Math.floor(Math.random()*9999);
+// Kode permanen untuk item PO (lihat js/data.js — backfill saat data dimuat).
+// Pakai counter, bukan cuma random seperti uid() — backfill bisa menandai
+// ratusan item dalam satu tick sinkron (Date.now() sama persis), dan ruang
+// random uid() (0-9998) cukup kecil untuk bentrok di volume segitu.
+let _itemIdCtr=0;
+const _newItemId=()=>{_itemIdCtr++;return'IT'+Date.now().toString(36)+_itemIdCtr.toString(36);};
 // Nama item invoice bisa berisi baris tambahan / badge ⚠✕ — ambil nama dasarnya saja
 const baseNama=n=>(n||'').split('\n')[0].replace(/[⚠✕].*/,'').trim();
 const fmt=n=>{n=Math.round(n||0);if(Math.abs(n)>=1e9)return'Rp '+(n/1e9).toFixed(2)+'M';if(Math.abs(n)>=1e6)return'Rp '+(n/1e6).toFixed(1)+'jt';return'Rp '+n.toLocaleString('id-ID')};

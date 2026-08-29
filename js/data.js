@@ -58,6 +58,21 @@ function loadAllData(){
         });
         if(statusFixed>0){saveData(['invv','invd']);console.log(`[SIMS] Auto-fixed ${statusFixed} invoice statuses`);}
 
+        // Backfill kode permanen (item.id) untuk item PO yang belum punya.
+        // Ini LANGKAH 1 dari perbaikan idx-basi — murni menambah field baru,
+        // TIDAK mengubah field apa pun yang sudah ada, dan belum mengubah
+        // logika pencocokan invoice mana pun. Item yang sudah punya id tidak
+        // disentuh. Tujuannya: begitu langkah berikutnya (pencocokan via id)
+        // dikerjakan, semua item lama sudah siap dipakai — tidak perlu migrasi
+        // dadakan saat itu.
+        let itemIdBackfilled=0;
+        (_cache.po||[]).forEach(po=>{
+          (po.items||[]).forEach(item=>{
+            if(!item.id){item.id=_newItemId();itemIdBackfilled++;}
+          });
+        });
+        if(itemIdBackfilled>0){saveData(['po']);console.log(`[SIMS] Backfilled ${itemIdBackfilled} item.id (kode permanen item PO)`);}
+
         // Dedup vendor_saya by nama (keep first occurrence per name)
         if((_cache.vendor_saya||[]).length>0){
           const seen=new Set();const before=_cache.vendor_saya.length;

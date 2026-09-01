@@ -790,7 +790,7 @@ function onSplitQtyInput(){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
   const q=parseFloat(document.getElementById('si-qty').value);
   const sisaEl=document.getElementById('si-sisa');
-  if(q>0&&q<item.qty)sisaEl.textContent='Baris baru (belum ada vendor/invoice): '+fmtF(item.qty-q)+' '+item.satuan;
+  if(q>0&&q<item.qty)sisaEl.textContent='Baris baru (belum ada vendor/invoice): '+(item.qty-q)+' '+item.satuan;
   else sisaEl.textContent='';
 }
 function saveSplitItem(){

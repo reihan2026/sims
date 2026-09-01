@@ -131,7 +131,7 @@ function renderDashboard(){
   const overdueInvD=invD.filter(id=>id.terima_status!=='lunas'&&id.jatuh&&id.jatuh<tgl).length;
 
   document.getElementById('dash-met').innerHTML=`
-    <div class="met"><div class="ml">Estimasi margin</div><div class="mv num ${ttlM>=0?'g':'r'}">${fmt(ttlM)}</div><div class="ms">${pos.length} PO aktif</div></div>
+    <div class="met"><div class="ml">Estimasi margin</div><div class="mv num ${ttlM>=0?'g':'r'}">${fmt(ttlM)}</div><div class="ms">dari ${pos.length} PO</div></div>
     <div class="met"><div class="ml">Tagihan vendor</div><div class="mv num r">${fmt(blmBV)}</div><div class="ms">belum dibayar${overdueInvV?` · <span style="color:var(--dn);font-weight:600">${overdueInvV} LEWAT JT</span>`:''}</div></div>
     <div class="met"><div class="ml">Piutang dapur</div><div class="mv num a">${fmt(blmTD)}</div><div class="ms">belum diterima${overdueInvD?` · <span style="color:var(--dn);font-weight:600">${overdueInvD} LEWAT JT</span>`:''}</div></div>
     <div class="met"><div class="ml">Harga belum diisi</div><div class="mv num ${blmVnd>0?'a':''}">${blmVnd}</div><div class="ms">item dari vendor</div></div>`;

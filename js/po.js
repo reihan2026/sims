@@ -457,6 +457,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
               <button class="kbb-btn" onclick="openKbb('kbb-item-${id}-${idx}',event)">⋯</button>
               <div class="kbb-menu" id="kbb-item-${id}-${idx}">
                 <button onclick="openItemEdit('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Edit</button>
+                <button onclick="openSplitItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Split item</button>
                 <button onclick="openGantiItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Ganti item</button>
                 <div class="kbb-div"></div>
                 <button class="kd" onclick="hapusItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Hapus</button>
@@ -500,6 +501,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
           <div class="kbb"><button class="kbb-btn" onclick="openKbb('kbb-mob-${id}-${idx}',event)" style="font-size:11px;padding:4px 8px">⋯</button>
             <div class="kbb-menu" id="kbb-mob-${id}-${idx}">
               <button onclick="openItemEdit('${id}',${idx})">Edit</button>
+              <button onclick="openSplitItem('${id}',${idx})">Split item</button>
               <button onclick="openGantiItem('${id}',${idx})">Ganti item</button>
               <button onclick="showStatPopup(event,'${id}',${idx})">Lihat status</button>
               <div class="kbb-div"></div>
@@ -753,6 +755,67 @@ function saveItemEdit(){
   const _invvNo=document.getElementById('item-edit-warn').dataset.invvNo||'';
   if(item.qty!==oldQty&&_invvNo)showToast('Qty PO diperbarui. Jangan lupa update qty di invoice vendor '+_invvNo+' juga.',true);
   else showToast('Item diperbarui!');
+  showDetail(poId);
+}
+
+// ===== SPLIT ITEM PO (satu item dipenuhi >1 vendor/invoice) =====
+// Baris asli dikurangi qty-nya di tempat (idx tidak berubah), baris baru
+// SELALU ditambahkan di akhir array via push (pola sama seperti saveTambahItem)
+// dan dapat kode permanen baru lewat _newItemId(). Ini penting: menyisipkan di
+// tengah akan menggeser idx item-item sesudahnya dan berisiko memutus tautan
+// invoice lama yang belum punya poItemId (riwayat bug idx-basi di PO ini panjang
+// — lihat itemKeyLoose/Pass 2b). Push di akhir + qty diedit di tempat = 0 idx lain berubah.
+function openSplitItem(poId,idx){
+  const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
+  document.getElementById('si-po-id').value=poId;document.getElementById('si-idx').value=idx;
+  document.getElementById('si-item-info').textContent=item.nama+' — '+item.qty+' '+item.satuan+(item.hari?' · '+item.hari:'');
+  document.getElementById('si-qty').value=item.qty;
+  document.getElementById('si-qty').max=item.qty;
+  document.getElementById('si-alasan').value='';
+  onSplitQtyInput();
+  const warnEl=document.getElementById('si-warn');
+  const {itemInvV,itemInvD}=buildLookup(poId);
+  const hasInvV=!!itemInvV[idx];const hasInvD=!!itemInvD[idx];
+  if(hasInvV||hasInvD){
+    const parts=[];
+    if(hasInvV)parts.push('invoice vendor ('+itemInvV[idx].no+')');
+    if(hasInvD)parts.push('invoice dapur ('+itemInvD[idx].no+')');
+    warnEl.innerHTML='⚠ Item ini sudah punya '+parts.join(' dan ')+'. Baris asli (qty dikurangi) tetap tertaut ke invoice tsb — kalau qty di invoice itu juga perlu dikurangi, update manual di sana setelah split ini.';
+    warnEl.style.display='block';
+  } else { warnEl.style.display='none'; }
+  openModal('modal-split-item');
+}
+function onSplitQtyInput(){
+  const poId=document.getElementById('si-po-id').value;const idx=parseInt(document.getElementById('si-idx').value);
+  const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
+  const q=parseFloat(document.getElementById('si-qty').value);
+  const sisaEl=document.getElementById('si-sisa');
+  if(q>0&&q<item.qty)sisaEl.textContent='Baris baru (belum ada vendor/invoice): '+fmtF(item.qty-q)+' '+item.satuan;
+  else sisaEl.textContent='';
+}
+function saveSplitItem(){
+  const poId=document.getElementById('si-po-id').value;const idx=parseInt(document.getElementById('si-idx').value);
+  const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
+  const qtyBaris1=parseFloat(document.getElementById('si-qty').value);
+  if(!(qtyBaris1>0)||qtyBaris1>=item.qty){showToast('Qty baris pertama harus lebih dari 0 dan kurang dari qty asli ('+item.qty+' '+item.satuan+')',true);return;}
+  const oldQty=item.qty;const sisa=oldQty-qtyBaris1;
+  const alasan=document.getElementById('si-alasan').value.trim()||'Split item';
+
+  item.qty=qtyBaris1;
+  const itemBaru={...item,qty:sisa,id:_newItemId(),retur:null,nota_key:item.nota_key||null};
+  po.items.push(itemBaru);
+
+  if(!po.revisions)po.revisions=[];
+  po.revisions.push({tgl:today(),changes:[
+    {nama:item.nama,qty_lama:oldQty,qty_baru:qtyBaris1,harga_lama:item.harga_po,harga_baru:item.harga_po,alasan},
+    {nama:item.nama,qty_lama:0,qty_baru:sisa,harga_lama:item.harga_po,harga_baru:item.harga_po,alasan:alasan+' — baris baru'}
+  ]});
+  addLog('split_item','Split item','item',poId,po?.no,item.nama+': '+oldQty+' → '+qtyBaris1+' + '+sisa+' '+item.satuan);
+  setPOs(pos);
+  closeModal('modal-split-item');
+  const {itemInvV}=buildLookup(poId);
+  if(itemInvV[idx])showToast('Item di-split. Cek lagi qty di invoice vendor '+itemInvV[idx].no+' — mungkin perlu disesuaikan juga.',true);
+  else showToast('Item di-split jadi 2 baris — baris baru siap diisi vendor/invoice.');
   showDetail(poId);
 }
 

@@ -688,6 +688,24 @@
   </div>
 </div></div>
 
+<!-- Split Item PO -->
+<div class="modal-bg" id="modal-split-item"><div class="modal">
+  <div class="mh"><span class="mht">Split Item</span><button class="btn bgh bsm" onclick="closeModal('modal-split-item')">✕</button></div>
+  <div class="mb">
+    <div id="si-item-info" style="padding:8px 10px;background:var(--s2);border-radius:var(--r);font-size:13px;font-weight:600;margin-bottom:10px"></div>
+    <div id="si-warn" style="display:none;padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt);margin-bottom:10px"></div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">Dipakai kalau satu item dipenuhi lebih dari satu vendor/invoice. Baris asli akan dikurangi jadi qty di bawah, sisanya otomatis jadi baris baru (vendor & invoice diisi terpisah untuk baris baru itu).</div>
+    <div class="fg"><label class="lbl">Qty untuk baris pertama (tetap di baris ini)</label><input type="number" id="si-qty" min="0" step="any" oninput="onSplitQtyInput()"></div>
+    <div id="si-sisa" style="font-size:12px;color:var(--t3);margin-bottom:6px"></div>
+    <div class="fg"><label class="lbl">Alasan (opsional)</label><input type="text" id="si-alasan" placeholder="mis. sebagian dari vendor lain"></div>
+    <input type="hidden" id="si-po-id"><input type="hidden" id="si-idx">
+  </div>
+  <div class="mf">
+    <button class="btn" onclick="closeModal('modal-split-item')">Batal</button>
+    <button class="btn bp" onclick="saveSplitItem()">Split</button>
+  </div>
+</div></div>
+
 <!-- Ganti Item PO -->
 <div class="modal-bg" id="modal-ganti-item"><div class="modal">
   <div class="mh"><span class="mht">Ganti Item</span><button class="btn bgh bsm" onclick="closeModal('modal-ganti-item')">✕</button></div>

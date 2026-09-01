@@ -367,7 +367,7 @@ function renderLog(){
     if(fUser&&idOf(l)!==fUser)return false;
     if(fTgl&&l.tgl!==fTgl)return false;
     if(fAction){
-      const map={po:['buat_po','hapus_po','clone_po'],invv:['buat_invv','bayar_invv','edit_invv','konversi_pt','catat_cashback','catat_retur','catat_ongkir'],invd:['buat_invd','terima_invd'],item:['edit_item','ganti_item','hapus_item','tambah_item'],kirim:['update_kirim']};
+      const map={po:['buat_po','hapus_po','clone_po'],invv:['buat_invv','bayar_invv','edit_invv','konversi_pt','catat_cashback','catat_retur','catat_ongkir'],invd:['buat_invd','terima_invd'],item:['edit_item','ganti_item','hapus_item','tambah_item','split_item'],kirim:['update_kirim']};
       if(!map[fAction]?.includes(l.action))return false;
     }
     return true;

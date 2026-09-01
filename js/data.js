@@ -1,5 +1,11 @@
 // ===== DATA LAYER =====
-const _cache={po:[],invv:[],invd:[],pov:[],rek:[],vendor_saya:[],master:{dapur:[],vendor:[]},log:[],periode:[],user:{nama:'',initial:''},ctr_invv:0,ctr_invd:0,ctr_pov:0};
+// arsip_ringkas, arsip_idx, users HARUS terdaftar di sini walau nilai awalnya
+// kosong — sinkronisasi dari server di loadAllData cuma mengisi ulang key yang
+// SUDAH ADA di objek ini (lihat Object.keys(_cache).forEach di bawah). Ketiga
+// field ini dulu tidak terdaftar: datanya aman di server, tapi hilang dari
+// tampilan di setiap sesi/tab baru kecuali sesi itu sendiri baru saja menulis
+// ke salah satunya (yang mengisi _cache secara lokal, menutupi bug-nya).
+const _cache={po:[],invv:[],invd:[],pov:[],rek:[],vendor_saya:[],master:{dapur:[],vendor:[]},log:[],periode:[],user:{nama:'',initial:''},arsip_ringkas:{},arsip_idx:[],users:{},ctr_invv:0,ctr_invd:0,ctr_pov:0};
 function loadAllData(){
   return new Promise((resolve)=>{
     // Unsubscribe any existing listener first

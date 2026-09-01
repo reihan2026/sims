@@ -133,6 +133,12 @@ function itemKeyLoose(item){
   return `${(item.nama||'').trim()}||${item.hari||''}`;
 }
 function findPoItem(po,i){
+  // Kode permanen (poItemId) — kalau ada, ini satu-satunya sumber kebenaran:
+  // tidak peduli item lain di PO dihapus/ditambah/diurutkan ulang, kode ini
+  // selalu menunjuk ke baris yang sama. Item invoice lama (dibuat sebelum
+  // kode ini ada) tidak punya poItemId, jadi jatuh ke rantai lama di bawah —
+  // itu tetap seperti sebelumnya, tidak ada yang berubah untuk invoice lama.
+  if(i.poItemId){const m=po.items.find(pi=>pi.id===i.poItemId);if(m)return m;}
   if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama)return po.items[i.idx];
   if(i.hari||i.deadline){const k=itemKey(i);const m=po.items.find(pi=>itemKey(pi)===k);if(m)return m;}
   // Abaikan deadline sebelum jatuh ke nama saja — kalau hari-nya cocok, itu jauh
@@ -162,6 +168,15 @@ function buildLookup(poId){
     // Item invoice yang sudah dapat slot PO — supaya pass berikutnya tahu mana
     // yang masih perlu dicarikan, tanpa menebak dari idx yang mungkin sudah basi.
     const placed=new Set();
+    // Pass 0: kode permanen (poItemId) — kalau ada dan itemnya masih ada di PO,
+    // ini final, tidak perlu pass lain. Item invoice lama (dibuat sebelum kode
+    // ini ada) tidak punya poItemId, otomatis lanjut ke Pass 1 dst di bawah —
+    // tidak ada yang berubah untuk invoice lama.
+    invV.forEach(iv=>(iv.items||[]).forEach(i=>{
+      if(!i.poItemId)return;
+      const pidx=po.items.findIndex(pi=>pi.id===i.poItemId);
+      if(pidx>=0&&!(pidx in itemInvV)){itemInvV[pidx]=iv;placed.add(i);}
+    }));
     // Pass 1: exact idx+nama match (skip if item at idx has different name — stale idx)
     invV.forEach(iv=>(iv.items||[]).forEach(i=>{
       const directIdx=typeof i.idx==='number'?i.idx:-1;
@@ -218,7 +233,12 @@ function buildLookup(poId){
               const siLonggar=longgar(storedNama,si.hari);
               srcLonggar.add(siLonggar);
               let matched=false;
-              po.items.forEach((pi,pidx)=>{
+              // Pass 0: kode permanen per sumber — final kalau ada dan valid.
+              if(si.poItemId){
+                const pidx=po.items.findIndex(pi=>pi.id===si.poItemId);
+                if(pidx>=0&&!(pidx in itemInvD)){itemInvD[pidx]=id2;diklaim.push(pidx);matched=true;}
+              }
+              if(!matched)po.items.forEach((pi,pidx)=>{
                 if(matched)return;
                 const piKey=`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`;
                 if(!(pidx in itemInvD)&&piKey===siKey){itemInvD[pidx]=id2;diklaim.push(pidx);matched=true;}
@@ -263,8 +283,13 @@ function buildLookup(poId){
           }
           const iKey=`${storedNama.toLowerCase().trim()}||${i.hari||''}||${i.deadline||''}`;
           let matched=false;
+          // Pass 0: kode permanen — final kalau ada dan itemnya masih ada di PO.
+          if(i.poItemId){
+            const pidx=po.items.findIndex(pi=>pi.id===i.poItemId);
+            if(pidx>=0&&!(pidx in itemInvD)){itemInvD[pidx]=id2;matched=true;}
+          }
           // Pass 1: composite key match (nama+hari+deadline)
-          po.items.forEach((pi,pidx)=>{
+          if(!matched)po.items.forEach((pi,pidx)=>{
             const piKey=`${pi.nama.toLowerCase().trim()}||${pi.hari||''}||${pi.deadline||''}`;
             if(!(pidx in itemInvD)&&piKey===iKey){itemInvD[pidx]=id2;matched=true;}
           });
@@ -885,6 +910,7 @@ function saveTambahItem(){
   const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
   const newItems=readItemRows('tai-tbody');
   if(!newItems.length){showToast('Isi minimal 1 item!',true);return;}
+  newItems.forEach(it=>{if(!it.id)it.id=_newItemId();});
   po.items.push(...newItems);
   // Catat di revisions
   if(!po.revisions)po.revisions=[];

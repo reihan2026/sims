@@ -116,6 +116,11 @@ function savePO(){
   if(!no||!date||!dapur){showToast('Isi No. PO, tanggal, dan dapur!',true);resetBtn();return;}
   const items=activeTab===0?getManualItems():importedItems;
   if(!items.length){showToast('Tambah minimal 1 item!',true);resetBtn();return;}
+  // Kode permanen per item — lihat js/data.js (backfill) & js/po.js (pemakaian
+  // di findPoItem/buildLookup). Backfill saat load akan menangkap ini juga
+  // kalau terlewat, tapi memberi kode di sini menghindari jeda sebelum item
+  // punya identitas permanennya.
+  items.forEach(it=>{if(!it.id)it.id=_newItemId();});
   autoMaster(dapur,[]);
   const po={id:uid(),no,date,dapur,jenis:document.getElementById('in-jenis')?.value||'bahan_baku',catatan:document.getElementById('in-cat-po').value.trim(),items,revisions:[],created:new Date().toISOString()};
   const pos=getPOs();pos.push(po);setPOs(pos);

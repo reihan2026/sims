@@ -143,7 +143,7 @@ function loadInvVItems(){
       const _histH=getHistoriHargaVendor(item.nama,vendor);
       const suggestBadge=_histH?`<div title="Pakai harga histori" style="font-size:9px;color:var(--t3);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${_histH.harga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">Histori: ${fmtF(_histH.harga)} — ${_histH.vendor}</div>`:'';
       html+=`<tr id="invv-tr-${item._idx}" data-kat="${item.kat||''}">
-        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
+        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-item-id="${item.id||''}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
         <td style="padding:7px 8px" colspan="2">
           <div style="font-weight:500">${item.nama}</div>
           ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
@@ -225,7 +225,10 @@ function saveInvV(){
     const satChanged=satOrig&&satInv&&satOrig.toLowerCase()!==satInv.toLowerCase();
     // harga_vendor saved to PO: only apply konv when satuan genuinely changed AND konv>0
     const hvForPO=satChanged&&konv>0?hv/konv:hv;
-    items.push({idx,nama:cb.dataset.nama,hari:cb.dataset.hari||'',deadline:cb.dataset.deadline||'',qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
+    // poItemId — kode permanen item PO (lihat js/data.js backfill). Item lama
+    // (dibuat sebelum backfill) tidak punya ini; findPoItem tetap jatuh ke
+    // idx/nama+hari seperti sebelumnya untuk kasus itu.
+    items.push({idx,poItemId:cb.dataset.itemId||null,nama:cb.dataset.nama,hari:cb.dataset.hari||'',deadline:cb.dataset.deadline||'',qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
   // All valid — now disable button

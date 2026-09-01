@@ -81,13 +81,17 @@ function loadInvDItems(){
       // ayam fillet dikirim Senin dan Kamis dengan qty beda): qty baris yang
       // salah bisa ikut tertagih ke dapur. Coba kunci penuh (nama+hari+deadline)
       // lalu kunci longgar (nama+hari) dulu sebelum jatuh ke nama saja.
-      invVItem=(linkedInvV.items||[]).find(i=>typeof i.idx==='number'&&i.idx===pidx&&i.nama===item.nama)
+      // Kode permanen dulu (kalau item PO ini sudah punya id — lihat backfill
+      // di data.js), baru rantai lama sebagai fallback untuk invoice yang
+      // dibuat sebelum kode ini ada.
+      invVItem=(item.id&&(linkedInvV.items||[]).find(i=>i.poItemId&&i.poItemId===item.id))
+        ||(linkedInvV.items||[]).find(i=>typeof i.idx==='number'&&i.idx===pidx&&i.nama===item.nama)
         ||(linkedInvV.items||[]).find(i=>itemKey(i)===itemKey(item))
         ||(linkedInvV.items||[]).find(i=>itemKeyLoose(i)===itemKeyLoose(item))
         ||(linkedInvV.items||[]).find(i=>i.nama===item.nama);
     }
     return{
-      _idx:pidx,nama:item.nama,kat:item.kat||'',
+      id:item.id||null,_idx:pidx,nama:item.nama,kat:item.kat||'',
       qty:invVItem?.qty||item.qty,satuan:invVItem?.satuan||item.satuan,
       harga_ref:invVItem?.harga_vendor||item.harga_vendor||0,harga:item.harga_po||0,
       hari:item.hari||'',deadline:item.deadline||'',
@@ -164,13 +168,15 @@ function loadInvDItems(){
       const sub=(item.qty||0)*(item.harga||0);
       const mergedIdxsAttr=item._merged?`data-merged-idxs="${item._srcItems.map(s=>s._idx).join(',')}"`:'';
       const mergedInvvidsAttr=item._merged?`data-merged-invvids="${item._srcItems.map(s=>s.invv_id||'').join(',')}"`:'';
+      const mergedItemIdsAttr=item._merged?`data-merged-item-ids="${item._srcItems.map(s=>s.id||'').join(',')}"`:'';
+      const itemIdAttr=!item._merged?`data-item-id="${item.id||''}"`:'';
       const refDisplay=item._merged&&item._refRange?`${fmtF(item._refMin)}–${fmtF(item.harga_ref)}`:(item.harga_ref?fmtF(item.harga_ref):'—');
       html+=`<tr style="border-bottom:1px solid var(--bd)" data-kat="${item.kat||''}">
         <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invd-cb" id="cb-${rid}"
           data-nama="${(item.nama||'').replace(/"/g,'&quot;')}"
           data-qty="${item.qty||0}" data-sat="${item.satuan||''}"
-          data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}"
-          ${mergedIdxsAttr} ${mergedInvvidsAttr} checked onchange="calcInvDTotal()"></td>
+          data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}" ${itemIdAttr}
+          ${mergedIdxsAttr} ${mergedInvvidsAttr} ${mergedItemIdsAttr} checked onchange="calcInvDTotal()"></td>
         <td style="padding:7px 8px;font-weight:500">${item.nama}${!item._merged&&item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._merged?`<div style="font-size:10px;color:var(--t3);margin-top:1px">Gabungan ${item._srcItems.length} item · <button type="button" onclick="toggleInvDMergeKey('${(item._mergeKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t2);cursor:pointer;line-height:1.6">Pisah</button></div>`:''}${item._dupFirst&&item._dupKey?`<div style="margin-top:2px"><button type="button" onclick="toggleInvDMergeKey('${(item._dupKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--ac);border-radius:var(--r);background:var(--bg);color:var(--ac);cursor:pointer;line-height:1.6">Gabung ${item._dupCount}×</button></div>`:''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
         <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
         <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${refDisplay}</td>
@@ -278,12 +284,17 @@ function saveInvD(){
       const hari=cb.dataset.hari||'';
       const deadline=cb.dataset.deadline||'';
       const invv_id=cb.dataset.invvId||'';
+      const poItemId=cb.dataset.itemId||null;
       const catatan_item=document.getElementById('icat-'+rid)?.value.trim()||'';
       const mergedIdxs=cb.dataset.mergedIdxs;
       const mergedInvvids=(cb.dataset.mergedInvvids||'').split(',');
+      const mergedItemIds=(cb.dataset.mergedItemIds||'').split(',');
       let srcItems=null;
-      if(mergedIdxs&&poId){const po=getPOs().find(p=>p.id===poId);if(po)srcItems=mergedIdxs.split(',').map(Number).map((idx,i)=>{const pi=po.items[idx];return pi?{hari:pi.hari||'',deadline:pi.deadline||'',invv_id:mergedInvvids[i]||''}:null;}).filter(Boolean);}
-      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,catatan_item,...(srcItems?{_src_items:srcItems}:{})});
+      // poItemId per sumber (kode permanen) dicatat berdampingan dengan
+      // hari/deadline yang sudah ada — buildLookup coba id dulu, baru jatuh
+      // ke hari/deadline kalau item ini dari sebelum kode ini ada.
+      if(mergedIdxs&&poId){const po=getPOs().find(p=>p.id===poId);if(po)srcItems=mergedIdxs.split(',').map(Number).map((idx,i)=>{const pi=po.items[idx];return pi?{hari:pi.hari||'',deadline:pi.deadline||'',invv_id:mergedInvvids[i]||'',poItemId:mergedItemIds[i]||pi.id||null}:null;}).filter(Boolean);}
+      items.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,poItemId,catatan_item,...(srcItems?{_src_items:srcItems}:{})});
     });
     if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
     total=items.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);

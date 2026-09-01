@@ -295,18 +295,24 @@ function showInvDDetail(invId){
       // Merged item: find all linked invV, deduplicated
       if(di._src_items&&di._src_items.length){
         const hasInvvId=di._src_items.some(si=>si.invv_id);
+        // Resolusi per-source disimpan supaya pencarian harga di bawah bisa
+        // pakai poItemId milik source-nya sendiri — bukan cuma nama, yang bisa
+        // ambigu kalau item sama muncul di beberapa hari dalam satu invoice.
+        const srcResolved=di._src_items.map(si=>({si,iv:si.invv_id?invVAll.find(iv=>iv.id===si.invv_id):_resolveInvV(diNama,si.hari,si.deadline,'')}));
         let linkedInvVs;
         if(hasInvvId){
           // New format: resolve per-source via stored invv_id, deduplicate
           const seen=new Set();
-          linkedInvVs=di._src_items.map(si=>si.invv_id?invVAll.find(iv=>iv.id===si.invv_id):_resolveInvV(diNama,si.hari,si.deadline,'')).filter(iv=>iv&&!seen.has(iv.id)&&seen.add(iv.id));
+          linkedInvVs=srcResolved.map(r=>r.iv).filter(iv=>iv&&!seen.has(iv.id)&&seen.add(iv.id));
         } else {
           // Old format (no invv_id stored): find all invV for this PO containing this item name
           linkedInvVs=invVAll.filter(iv=>iv.po_id===inv.po_id&&(iv.items||[]).some(i=>(i.nama||'').trim()===diNama));
         }
         linkedInvVs.forEach(ivMatch=>{
           if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
-          const ivItem=(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
+          const srcMatch=srcResolved.find(r=>r.iv&&r.iv.id===ivMatch.id&&r.si.poItemId);
+          const ivItem=(srcMatch&&(ivMatch.items||[]).find(i=>i.poItemId&&i.poItemId===srcMatch.si.poItemId))
+            ||(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
           const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
           vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
         });
@@ -316,13 +322,19 @@ function showInvDDetail(invId){
       const ivMatch=_resolveInvV(diNama,di.hari||'',di.deadline||'',di.invv_id||'');
       if(!ivMatch)return;
       if(!vendorMap[ivMatch.id])vendorMap[ivMatch.id]={iv:ivMatch,items:[]};
-      const ivItemByHari=(ivMatch.items||[]).find(i=>{
-        const nm=(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama);
-        return nm&&di.hari&&(i.hari||'')===(di.hari||'');
-      });
-      const ivItem=ivItemByHari||(ivMatch.items||[]).find(i=>
-        (i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama)
-      );
+      // Kode permanen dulu — final kalau ketemu. Rantai lama (hari lalu nama
+      // saja) tetap jadi fallback untuk invoice dapur yang dibuat sebelum
+      // kode ini ada.
+      let ivItem=di.poItemId?(ivMatch.items||[]).find(i=>i.poItemId&&i.poItemId===di.poItemId):null;
+      if(!ivItem){
+        const ivItemByHari=(ivMatch.items||[]).find(i=>{
+          const nm=(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama);
+          return nm&&di.hari&&(i.hari||'')===(di.hari||'');
+        });
+        ivItem=ivItemByHari||(ivMatch.items||[]).find(i=>
+          (i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama)
+        );
+      }
       const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
       vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
     });

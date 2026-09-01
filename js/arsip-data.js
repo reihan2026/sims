@@ -189,14 +189,22 @@ function renderArsipPeriode(){
   el.innerHTML=html;
 }
 
-function pratinjauArsip(periode){
+async function pratinjauArsip(periode){
   const g=periodeLayakArsip(getPOs(),getInvV(),getInvD()).find(x=>x.periode===periode);
   if(!g){showToast('Periode tidak lagi layak diarsip',true);renderArsipPeriode();return;}
   const r=buildRingkasan(g.pos,g.invvs,g.invds);
   const kb=_arsipKB({po:g.pos,invv:g.invvs,invd:g.invds}),rk=_arsipKB(r);
   const daftarPO=g.pos.map(p=>`<li>${p.no} — ${p.dapur} · ${(p.items||[]).length} item</li>`).join('');
   document.getElementById('arsip-pv-periode').textContent=periode;
+  // Cek apakah periode ini sudah pernah diarsipkan sebagian — supaya jelas
+  // ini akan DIGABUNG dengan yang lama, bukan menimpanya.
+  const existingSnap=await db.collection('sims_arsip').doc(periode).get();
+  const sudahAda=existingSnap.exists?existingSnap.data():null;
+  const catatanGabung=sudahAda?`<div style="padding:9px 11px;background:var(--ibg);border:1px solid var(--ib);border-radius:var(--r);font-size:12px;color:var(--it);margin-bottom:11px">
+      Periode ini sudah punya arsip sebelumnya: <strong>${(sudahAda.po||[]).length} PO</strong> (${(sudahAda.po||[]).map(p=>p.no).join(', ')}). PO baru ini akan <strong>digabung</strong> ke dokumen yang sama, bukan menimpanya.
+    </div>`:'';
   document.getElementById('arsip-pv-body').innerHTML=`
+    ${catatanGabung}
     <div style="padding:9px 11px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);font-size:12px;color:var(--wt);margin-bottom:11px">
       Data dipindah ke dokumen <strong>sims_arsip/${periode}</strong>. Dokumen ditulis dan diverifikasi lebih dulu, baru data dihapus dari dokumen utama — jadi tidak ada yang hilang kalau gagal di tengah.
     </div>
@@ -232,15 +240,28 @@ async function jalankanArsip(){
   const btn=document.getElementById('arsip-pv-btn');
   if(btn){btn.disabled=true;btn.textContent='Mengarsipkan...';}
   try{
-    const ringkas=buildRingkasan(g.pos,g.invvs,g.invds);
-    const payload={po:g.pos,invv:g.invvs,invd:g.invds,periode,arsip_at:new Date().toISOString()};
+    // Baca dokumen arsip yang sudah ada untuk periode ini (kalau ada) — satu
+    // periode bisa diarsipkan lebih dari sekali seiring PO lain baru tutup
+    // buku belakangan. Sebelum ini, .set() langsung menimpa dokumen lama —
+    // insiden nyata: arsip 2026-04 kedua menghapus PO yang sudah diarsipkan
+    // duluan karena tidak pernah membaca isi lama sebelum menulis.
+    const existingSnap=await db.collection('sims_arsip').doc(periode).get();
+    const existing=existingSnap.exists?existingSnap.data():{po:[],invv:[],invd:[]};
+    const gabPo=[...(existing.po||[]),...g.pos];
+    const gabInvv=[...(existing.invv||[]),...g.invvs];
+    const gabInvd=[...(existing.invd||[]),...g.invds];
+
+    const ringkas=buildRingkasan(gabPo,gabInvv,gabInvd);
+    const payload={po:gabPo,invv:gabInvv,invd:gabInvd,periode,arsip_at:new Date().toISOString()};
     const kb=_arsipKB(payload);
 
     await db.collection('sims_arsip').doc(periode).set(payload);
-    // Verifikasi tulisan benar-benar mendarat sebelum menghapus apa pun
+    // Verifikasi terhadap total GABUNGAN (lama + baru) — verifikasi lama
+    // cuma mengecek batch baru, jadi tidak akan pernah ketahuan kalau isi
+    // lama ikut hilang.
     const cek=await db.collection('sims_arsip').doc(periode).get();
     const d=cek.data();
-    if(!cek.exists||(d.po||[]).length!==g.pos.length||(d.invv||[]).length!==g.invvs.length||(d.invd||[]).length!==g.invds.length)
+    if(!cek.exists||(d.po||[]).length!==gabPo.length||(d.invv||[]).length!==gabInvv.length||(d.invd||[]).length!==gabInvd.length)
       throw new Error('Verifikasi gagal — dokumen arsip tidak cocok. Tidak ada data yang dihapus.');
 
     const poIds=new Set(g.pos.map(p=>p.id));
@@ -251,7 +272,7 @@ async function jalankanArsip(){
     _cache.invd=getInvD().filter(x=>!dIds.has(x.id));
     _cache.arsip_ringkas={...getArsipRingkas(),[periode]:ringkas};
     _cache.arsip_idx=[...getArsipIdx().filter(a=>a.periode!==periode),
-      {periode,po_cnt:g.pos.length,invv_cnt:g.invvs.length,invd_cnt:g.invds.length,kb,arsip_at:today()}];
+      {periode,po_cnt:gabPo.length,invv_cnt:gabInvv.length,invd_cnt:gabInvd.length,kb,arsip_at:today()}];
     _rc.invalidate();_lookupCache.clear();
     addLog('arsip_periode','Arsipkan periode','sistem','','',periode+' · '+g.pos.length+' PO · '+kb+' KB');
     setBatch({po:_cache.po,invv:_cache.invv,invd:_cache.invd,arsip_ringkas:_cache.arsip_ringkas,arsip_idx:_cache.arsip_idx});

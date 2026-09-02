@@ -92,6 +92,22 @@ function onInvVEditChange(idx, satPO){
   const subEl=document.getElementById('invv-sub-'+idx);
   if(subEl)subEl.textContent=hv>0&&qtyInv>0?fmtF(sub):'—';
   calcInvVTotal();
+
+  // Qty invoice < qty PO (satuan sama, bukan konversi) → tawarkan split otomatis
+  // saat disimpan, supaya sisa yang belum ada invoice tidak diam-diam dianggap
+  // "sudah tertagih penuh" (lihat splitSisa di saveInvV).
+  const splitWrap=document.getElementById('invv-split-wrap-'+idx);
+  const splitCb=document.getElementById('invv-split-'+idx);
+  if(splitWrap&&splitCb){
+    const sisa=qtyOrig-qtyInv;
+    if(!satChanged&&qtyInv>0&&sisa>0){
+      document.getElementById('invv-split-lbl-'+idx).textContent='Sisa '+sisa+' '+satPO+' belum ada invoice — split jadi baris baru di PO?';
+      splitWrap.style.display='block';
+    } else {
+      splitWrap.style.display='none';
+      splitCb.checked=false;
+    }
+  }
 }
 
 // ===== AUTO-SUGGEST HARGA VENDOR DARI HISTORI =====
@@ -156,6 +172,12 @@ function loadInvVItems(){
             </div>
             <div id="invv-ki-${item._idx}" class="invv-konv-info"></div>
             <div id="invv-sw-${item._idx}" class="invv-sat-warn"></div>
+            <div id="invv-split-wrap-${item._idx}" style="display:none;margin-top:5px;padding:6px 8px;background:var(--ibg);border:1px solid var(--ib);border-radius:var(--r)">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--it)">
+                <input type="checkbox" id="invv-split-${item._idx}">
+                <span id="invv-split-lbl-${item._idx}"></span>
+              </label>
+            </div>
           </div>
         </td>
         <td style="padding:7px 8px;text-align:right"><input type="number" class="invv-hv" data-idx="${item._idx}" value="${useHarga||''}" placeholder="0" min="0" style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px" oninput="updateInvVHarga(this,${item._idx})">${suggestBadge}</td>
@@ -240,10 +262,32 @@ function saveInvV(){
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
   if(po){items.forEach(i=>{
     // Find correct PO item by idx+nama (or fallback to nama-only if idx stale)
-    let poItem=null;
-    if(typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama)poItem=po.items[i.idx];
+    let poItem=null;const idxMatch=typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama;
+    if(idxMatch)poItem=po.items[i.idx];
     else poItem=po.items.find(pi=>pi.nama===i.nama)||null;
     if(poItem&&i.harga_vendor>0){poItem.harga_vendor=(i.harga_vendor_po!=null?i.harga_vendor_po:i.harga_vendor);if(vendor)poItem.vendor=vendor;if(i.konv)poItem.satuan_konv={inv:i.satuan,po:i.satuan_po,konv:i.konv};}
+    // Split otomatis: qty invoice < qty PO dan user centang tawaran split (lihat
+    // onInvVEditChange). Hanya jalan lewat idx+nama exact match — jangan pernah
+    // lewat fallback nama-only, supaya tidak salah split item bernama kembar
+    // (mis. "Minyak Goreng" dua satuan berbeda dalam satu PO). Baris baru selalu
+    // di-push ke akhir array (pola sama seperti Split Item manual di po.js) jadi
+    // idx item lain di PO ini tidak pernah bergeser, walau ada beberapa item
+    // di-split sekaligus dalam satu invoice ini.
+    if(idxMatch&&poItem&&document.getElementById('invv-split-'+i.idx)?.checked){
+      const oldQty=poItem.qty;
+      if(i.qty>0&&i.qty<oldQty){
+        const sisa=oldQty-i.qty;
+        const itemBaru={...poItem,qty:sisa,id:_newItemId(),retur:null,nota_key:poItem.nota_key||null};
+        poItem.qty=i.qty;
+        po.items.push(itemBaru);
+        if(!po.revisions)po.revisions=[];
+        po.revisions.push({tgl:today(),changes:[
+          {nama:poItem.nama,qty_lama:oldQty,qty_baru:i.qty,harga_lama:poItem.harga_po,harga_baru:poItem.harga_po,alasan:'Split otomatis saat buat invoice vendor'},
+          {nama:poItem.nama,qty_lama:0,qty_baru:sisa,harga_lama:poItem.harga_po,harga_baru:poItem.harga_po,alasan:'Split otomatis saat buat invoice vendor — baris baru'}
+        ]});
+        addLog('split_item','Split item (otomatis dari invoice)','item',poId,po?.no,poItem.nama+': '+oldQty+' → '+i.qty+' + '+sisa+' '+poItem.satuan);
+      }
+    }
   });}
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   const inv={id:uid(),no,tgl,vendor,po_id:poId,items,total,ongkir:ongkir||0,jatuh:document.getElementById('invv-jatuh').value,catatan:document.getElementById('invv-cat').value,bayar_status:'belum',payments:[],returs:[],cashbacks:[],edits:[],created_by:getUserProfile().nama||(_currentUser?.email||''),created:new Date().toISOString()};

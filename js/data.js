@@ -6,6 +6,18 @@
 // tampilan di setiap sesi/tab baru kecuali sesi itu sendiri baru saja menulis
 // ke salah satunya (yang mengisi _cache secara lokal, menutupi bug-nya).
 const _cache={po:[],invv:[],invd:[],pov:[],rek:[],vendor_saya:[],master:{dapur:[],vendor:[]},log:[],periode:[],user:{nama:'',initial:''},arsip_ringkas:{},arsip_idx:[],users:{},ctr_invv:0,ctr_invd:0,ctr_pov:0};
+// Ukuran dokumen sims/data yang SESUNGGUHNYA tersimpan di server — wajib
+// kecualikan file_* karena key itu tidak pernah ditulis ke dokumen ini
+// (saveFile menyimpannya ke collection sims_files terpisah, justru supaya
+// tidak kena limit 1MB dokumen ini — lihat saveFile di bawah). Kalau file_*
+// ikut dihitung, sekadar membuka satu lampiran invoice ("Lihat nota") bisa
+// membuat indikator ini melompat ratusan KB dan memicu peringatan palsu,
+// padahal dokumen aslinya di server sama sekali tidak berubah.
+function _docSizeKB(){
+  const o={};
+  for(const k in _cache){if(!k.startsWith('file_'))o[k]=_cache[k];}
+  return Math.round(JSON.stringify(o).length/1024);
+}
 function loadAllData(){
   return new Promise((resolve)=>{
     // Unsubscribe any existing listener first
@@ -96,7 +108,7 @@ function loadAllData(){
 
         // Cek ukuran begitu data dimuat — jangan tunggu sampai ada yang
         // mencoba menyimpan baru ketahuan dokumennya sudah penuh.
-        const sizeKB=Math.round(JSON.stringify(_cache).length/1024);
+        const sizeKB=_docSizeKB();
         if(sizeKB>900)_showSizeWarning(sizeKB);else _hideSizeWarning();
 
         _hideOfflineBanner();
@@ -244,11 +256,15 @@ async function _flushSave(){
   try{
     _ignoreNextSnapshot=true; // our own write — skip the echo snapshot
     await db.collection('sims').doc('data').set(payload,{merge:true});
-    // Hitung TERMASUK file_* — dulu dikecualikan, jadi indikator ini pernah
-    // menunjukkan "933 KB aman" padahal dokumen sesungguhnya (dengan lampiran)
-    // sudah 1.166 KB, lewat batas 1024 KB. Itu sebab kegagalan simpan
-    // kemarin tidak ketahuan sampai sudah terjadi berulang-ulang.
-    const sizeKB=Math.round(JSON.stringify(_cache).length/1024);
+    // _docSizeKB() mengecualikan file_* — lihat definisinya di atas. Riwayat:
+    // indikator ini SEMPAT sengaja dibuat menghitung file_* (2026-08-28) karena
+    // saat itu lampiran memang masih ikut tertulis ke dokumen ini dan
+    // pengecualian lama membuat indikator salah menunjukkan "933 KB aman"
+    // padahal dokumen sungguhan sudah 1.166 KB. Sejak lampiran dipindah ke
+    // collection sims_files terpisah (lihat saveFile), file_* TIDAK PERNAH lagi
+    // masuk ke payload yang ditulis ke sini — menghitungnya di sini jadi salah
+    // arah lagi, kebalikan dari masalah asalnya: false alarm, bukan false safe.
+    const sizeKB=_docSizeKB();
     const sizeColor=sizeKB>900?'var(--dn)':sizeKB>700?'var(--wn)':'var(--ac)';
     _setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB / 1024 KB`,sizeColor);
     setTimeout(()=>_setSaveStatus(`✓ Tersimpan · ~${sizeKB} KB`,sizeKB>700?sizeColor:'var(--t3)'),2000);

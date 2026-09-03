@@ -104,10 +104,20 @@ function loadInvDItems(){
         ||(linkedInvV.items||[]).find(i=>itemKeyLoose(i)===itemKeyLoose(item))
         ||(linkedInvV.items||[]).find(i=>i.nama===item.nama);
     }
+    // Kalau vendor invoice-nya pakai satuan konversi (mis. 22 dus @ 1 dus=6kg),
+    // invVItem.qty/satuan tersimpan dalam satuan INVOICE (22, dus) — bukan
+    // satuan PO (132, kg). Dapur harus tetap ditagih dalam satuan PO, jadi
+    // qty/satuan di sini WAJIB dikonversi balik kalau konv ada; kalau tidak,
+    // qty(22) × harga_po per-kg(56000) kepakai apa adanya dan dapur under-charge
+    // 6× lipat tanpa ada yang sadar — ini insiden nyata yang ditemukan di data
+    // produksi (Anggur Ungu, PO-BB-KLU-280826) sebelum tambalan ini ada.
+    const qtyPO=invVItem?(invVItem.konv?invVItem.qty*invVItem.konv:invVItem.qty):item.qty;
+    const satuanPO=invVItem?(invVItem.konv?(invVItem.satuan_po||invVItem.satuan):invVItem.satuan):item.satuan;
+    const hargaRefPO=invVItem?(invVItem.harga_vendor_po!=null?invVItem.harga_vendor_po:invVItem.harga_vendor):(item.harga_vendor||0);
     return{
       id:item.id||null,_idx:pidx,nama:item.nama,kat:item.kat||'',
-      qty:invVItem?.qty||item.qty,satuan:invVItem?.satuan||item.satuan,
-      harga_ref:invVItem?.harga_vendor||item.harga_vendor||0,harga:item.harga_po||0,
+      qty:qtyPO,satuan:satuanPO,
+      harga_ref:hargaRefPO,harga:item.harga_po||0,
       hari:item.hari||'',deadline:item.deadline||'',
       invv_id:linkedInvV?.id||null,_noInvV:!linkedInvV
     };

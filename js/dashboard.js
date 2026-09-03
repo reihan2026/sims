@@ -314,7 +314,13 @@ function showInvDDetail(invId){
           const ivItem=(srcMatch&&(ivMatch.items||[]).find(i=>i.poItemId&&i.poItemId===srcMatch.si.poItemId))
             ||(ivMatch.items||[]).find(i=>(i.nama||'').trim()===diNama||(typeof i.idx==='number'&&(po.items[i.idx]?.nama||'').trim()===diNama));
           const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
-          vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
+          // qty_vendor harus dalam satuan PO juga — kalau invoice ini pakai
+          // satuan konversi (ivItem.konv), qty tersimpan mentah dalam satuan
+          // invoice (mis. 22 dus), sementara hv di atas sudah per-satuan-PO
+          // (per kg). Mengalikan qty mentah × hv per-PO tanpa konversi balik
+          // salah total (lihat catatan sama di loadInvDItems, js/invoice-dapur.js).
+          const qtyV=ivItem?(ivItem.konv?ivItem.qty*ivItem.konv:ivItem.qty):di.qty;
+          vendorMap[ivMatch.id].items.push({...di,qty_vendor:qtyV,harga_vendor:hv});
         });
         return;
       }
@@ -336,7 +342,8 @@ function showInvDDetail(invId){
         );
       }
       const hv=ivItem?(ivItem.harga_vendor_po!=null?ivItem.harga_vendor_po:ivItem.harga_vendor):0;
-      vendorMap[ivMatch.id].items.push({...di,qty_vendor:ivItem?.qty||di.qty,harga_vendor:hv});
+      const qtyV=ivItem?(ivItem.konv?ivItem.qty*ivItem.konv:ivItem.qty):di.qty;
+      vendorMap[ivMatch.id].items.push({...di,qty_vendor:qtyV,harga_vendor:hv});
     });
 
     const entries=Object.values(vendorMap);

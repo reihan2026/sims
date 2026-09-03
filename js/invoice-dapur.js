@@ -271,6 +271,14 @@ function calcInvDTotal(){
   });
   const el=document.getElementById('invd-total');
   if(el)el.value=total>0?Math.round(total):'';
+  if(_invdAppendTarget){
+    const inv=getInvD().find(d=>d.id===_invdAppendTarget);
+    const infoEl=document.getElementById('invd-append-info');
+    if(inv&&infoEl){
+      const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+      infoEl.textContent=inv.no+' — '+inv.dapur+' · Total saat ini: '+fmtF(inv.total)+(recv>0?' · Sudah diterima: '+fmtF(recv):'')+(total>0?' · Akan jadi: '+fmtF(inv.total+total):'');
+    }
+  }
 }
 function saveInvD(){
   const saveInvDBtn=document.querySelector('#modal-invd .btn.bp');
@@ -367,6 +375,13 @@ function openTambahItemInvD(invdId){
   invDRows=0;_invDMergedKeys=new Set();_invDNameGroups={};
   const mergeBtn=document.getElementById('invd-merge-btn');if(mergeBtn)mergeBtn.style.display='none';
   loadInvDItems();
+  // loadInvDItems mencentang semua item tersedia secara default (cocok untuk
+  // alur "buat invoice baru" — biasanya memang mau ambil semua sisa). Di mode
+  // tambah item, itu berisiko: user bisa tidak sadar menambahkan semua item
+  // sekaligus padahal cuma mau nambah 1-2. Kosongkan dulu, biar dipilih manual.
+  document.querySelectorAll('.invd-cb:checked').forEach(cb=>cb.checked=false);
+  const allCb=document.getElementById('invd-all');if(allCb)allCb.checked=false;
+  calcInvDTotal();
   openModal('modal-invd');
 }
 function saveTambahItemInvD(){

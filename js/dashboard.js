@@ -404,6 +404,7 @@ function showInvDDetail(invId){
     ${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:var(--t2)">Catatan: ${inv.catatan}</div>`:''}
     <div class="inv-det-actions bg" style="margin-top:14px">
       ${inv.terima_status!=='lunas'?`<button class="btn bsm bp btn-full" onclick="closeModal('modal-det-invd');openTerima('${inv.id}')">Rekam terima</button>`:''}
+      ${inv.type!=='passthrough'&&inv.terima_status!=='lunas'?`<button class="btn bsm btn-full" onclick="closeModal('modal-det-invd');openTambahItemInvD('${inv.id}')">+ Tambah item</button>`:''}
       ${inv.type==='passthrough'&&inv.pt_inv_id?`<button class="btn bsm bt btn-full" onclick="closeModal('modal-det-invd');showInvVDetail('${inv.pt_inv_id}')">Lihat invoice vendor</button>`:''}
       <button class="btn bsm" onclick="printInvD('${inv.id}')">🖨 Cetak</button>
       ${po?`<button class="btn bsm bi btn-full" onclick="closeModal('modal-det-invd');showDetail('${po.id}')">Lihat PO →</button>`:''}

@@ -1,7 +1,21 @@
 // ===== INVOICE DAPUR =====
 let invDRows=0;
 let _invDMergedKeys=new Set();let _invDNameGroups={};
+let _invdAppendTarget=null;
 function openNewInvD(poId){
+  // Selalu mulai dari mode "buat baru" — kalau sebelumnya modal ini dipakai
+  // untuk Tambah Item (lihat openTambahItemInvD), pastikan field yang
+  // disembunyikan/dikunci di sana dikembalikan dulu di sini.
+  _invdAppendTarget=null;
+  document.getElementById('invd-modal-title').textContent='Buat Invoice ke Dapur';
+  document.getElementById('invd-append-info').style.display='none';
+  document.getElementById('invd-vendor-wrap').style.display='';
+  document.getElementById('invd-meta-wrap').style.display='';
+  document.getElementById('invd-type-wrap').style.display='';
+  document.getElementById('invd-footer-wrap').style.display='';
+  const _saveBtn=document.getElementById('invd-save-btn');
+  _saveBtn.textContent='Simpan invoice';_saveBtn.onclick=saveInvD;
+  document.getElementById('invd-po').disabled=false;
   document.getElementById('invd-no').value=nextInvNo('d');
   document.getElementById('invd-tgl').value=today();document.getElementById('invd-dapur').value='';document.getElementById('invd-jatuh').value='';document.getElementById('invd-cat').value='';document.getElementById('invd-total').value='';
   document.querySelector('input[name="invd-type"][value="markup"]').checked=true;document.getElementById('invd-pt-wrap').style.display='none';document.getElementById('invd-items-wrap').style.display='block';
@@ -314,6 +328,98 @@ function saveInvD(){
   if(poId)invalidatePO(poId);
   autoMaster(dapur,[]);
   addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
+}
+
+// ===== TAMBAH ITEM KE INVOICE DAPUR YANG SUDAH ADA =====
+// Dipakai kalau ada item PO yang belum sempat ikut ke-invoice ke dapur, dan
+// invoice yang sudah ada belum diterima/lunas — daripada bikin nomor invoice
+// baru cuma untuk 1-2 item. Beda dari "Merge Invoice Dapur" (execMergeInvD),
+// yang menggabungkan invoice yang SUDAH ADA; ini untuk item yang BELUM PERNAH
+// diinvoice sama sekali. Murni menambah ke array invd.items yang sudah ada —
+// tidak menyentuh po.items sama sekali, jadi tidak ada risiko idx bergeser.
+function openTambahItemInvD(invdId){
+  const inv=getInvD().find(d=>d.id===invdId);if(!inv)return;
+  if(inv.type==='passthrough'){showToast('Invoice pass-through tidak punya daftar item terpisah — tidak bisa ditambah item.',true);return;}
+  if(inv.terima_status==='lunas'){showToast('Invoice sudah lunas — tidak bisa ditambah item lagi.',true);return;}
+  const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
+  if(recv>0&&!confirm('Invoice ini sudah ada penerimaan sebagian ('+fmtF(recv)+'). Menambah item akan menambah total tagihan ke dapur. Lanjut?'))return;
+
+  _invdAppendTarget=invdId;
+  document.getElementById('invd-modal-title').textContent='Tambah Item — '+inv.no;
+  document.getElementById('invd-append-info').style.display='block';
+  document.getElementById('invd-append-info').textContent=inv.no+' — '+inv.dapur+' · Total saat ini: '+fmtF(inv.total)+(recv>0?' · Sudah diterima: '+fmtF(recv):'');
+  document.getElementById('invd-vendor-wrap').style.display='none';
+  document.getElementById('invd-meta-wrap').style.display='none';
+  document.getElementById('invd-type-wrap').style.display='none';
+  document.getElementById('invd-footer-wrap').style.display='none';
+  document.getElementById('invd-pt-wrap').style.display='none';
+  document.getElementById('invd-items-wrap').style.display='block';
+  document.querySelector('input[name="invd-type"][value="markup"]').checked=true;
+  const _saveBtn=document.getElementById('invd-save-btn');
+  _saveBtn.textContent='Tambahkan item';_saveBtn.onclick=saveTambahItemInvD;
+
+  // invd-po dipakai loadInvDItems untuk tahu PO & item yang sudah tertagih
+  // (termasuk oleh invoice ini sendiri) — dikunci supaya tidak sengaja diubah.
+  const poSel=document.getElementById('invd-po');
+  poSel.innerHTML=`<option value="${inv.po_id}" selected></option>`;
+  poSel.value=inv.po_id;poSel.disabled=true;
+
+  invDRows=0;_invDMergedKeys=new Set();_invDNameGroups={};
+  const mergeBtn=document.getElementById('invd-merge-btn');if(mergeBtn)mergeBtn.style.display='none';
+  loadInvDItems();
+  openModal('modal-invd');
+}
+function saveTambahItemInvD(){
+  const saveBtn=document.getElementById('invd-save-btn');
+  if(saveBtn.disabled)return;
+  const invdId=_invdAppendTarget;
+  const invs=getInvD();const inv=invs.find(d=>d.id===invdId);
+  if(!inv){showToast('Invoice tidak ditemukan',true);return;}
+  const poId=inv.po_id;
+
+  // Baca item terpilih — sama persis seperti pembacaan item di saveInvD,
+  // supaya format item baru identik dengan yang dibuat lewat alur normal.
+  const newItems=[];
+  document.querySelectorAll('.invd-cb:checked').forEach(cb=>{
+    const rid=cb.id.replace('cb-','');
+    const nama=(cb.dataset.nama||'').trim();
+    if(!nama)return;
+    const qty=parseFloat(cb.dataset.qty)||0;
+    const satuan=cb.dataset.sat||'';
+    const harga_dapur=parseFloat(document.getElementById('h-'+rid)?.value)||0;
+    const hari=cb.dataset.hari||'';
+    const deadline=cb.dataset.deadline||'';
+    const invv_id=cb.dataset.invvId||'';
+    const poItemId=cb.dataset.itemId||null;
+    const catatan_item=document.getElementById('icat-'+rid)?.value.trim()||'';
+    const mergedIdxs=cb.dataset.mergedIdxs;
+    const mergedInvvids=(cb.dataset.mergedInvvids||'').split(',');
+    const mergedItemIds=(cb.dataset.mergedItemIds||'').split(',');
+    let srcItems=null;
+    if(mergedIdxs&&poId){const po=getPOs().find(p=>p.id===poId);if(po)srcItems=mergedIdxs.split(',').map(Number).map((idx,i)=>{const pi=po.items[idx];return pi?{hari:pi.hari||'',deadline:pi.deadline||'',invv_id:mergedInvvids[i]||'',poItemId:mergedItemIds[i]||pi.id||null}:null;}).filter(Boolean);}
+    newItems.push({nama,qty,satuan,harga_dapur,hari,deadline,invv_id,poItemId,catatan_item,...(srcItems?{_src_items:srcItems}:{})});
+  });
+  if(!newItems.length){showToast('Pilih minimal 1 item!',true);return;}
+
+  saveBtn.disabled=true;saveBtn.textContent='Menyimpan...';
+  const failsafe=setTimeout(()=>{saveBtn.disabled=false;saveBtn.textContent='Tambahkan item';},10000);
+  try{
+    const addedTotal=newItems.reduce((s,i)=>s+(i.qty||0)*(i.harga_dapur||0),0);
+    const updatedInv={...inv,items:[...(inv.items||[]),...newItems],total:inv.total+addedTotal};
+    const newInvds=invs.map(d=>d.id===invdId?updatedInv:d);
+    addLog('tambah_item_invd','Tambah item ke invoice dapur','invd',inv.id,inv.no,newItems.length+' item ditambahkan, +'+fmtF(addedTotal));
+    setInvD(newInvds);
+    clearTimeout(failsafe);
+    closeModal('modal-invd');
+    showToast(newItems.length+' item ditambahkan ke '+inv.no+'!');
+    _invdAppendTarget=null;
+    if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
+  }catch(e){
+    clearTimeout(failsafe);
+    console.error('saveTambahItemInvD error:',e);
+    saveBtn.disabled=false;saveBtn.textContent='Tambahkan item';
+    showToast('Gagal: '+e.message,true);
+  }
 }
 
 // ===== TERIMA DARI DAPUR =====

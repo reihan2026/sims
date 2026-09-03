@@ -1041,20 +1041,21 @@
 
 <!-- Invoice ke Dapur -->
 <div class="modal-bg" id="modal-invd"><div class="modal mw">
-  <div class="mh"><span class="mht">Buat Invoice ke Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-invd')">✕</button></div>
+  <div class="mh"><span class="mht" id="invd-modal-title">Buat Invoice ke Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-invd')">✕</button></div>
   <div class="mb">
-    <div class="fg" style="margin-bottom:11px;padding:10px 12px;background:var(--abg);border:1px solid var(--ab);border-radius:var(--r)">
+    <div id="invd-append-info" style="display:none;margin-bottom:11px;padding:10px 12px;background:var(--ibg);border:1px solid var(--ib);border-radius:var(--r);font-size:12px;color:var(--it)"></div>
+    <div id="invd-vendor-wrap" class="fg" style="margin-bottom:11px;padding:10px 12px;background:var(--abg);border:1px solid var(--ab);border-radius:var(--r)">
       <label class="lbl" style="color:var(--at)">Penerbit invoice (vendor mitra)</label>
       <select id="invd-vendor-saya" style="margin-top:3px"><option value="">— Tanpa kop (internal) —</option></select>
       <div style="font-size:10px;color:var(--t3);margin-top:3px">Pilih untuk generate PDF invoice formal dengan kop surat vendor.</div>
     </div>
-    <div class="r4">
+    <div id="invd-meta-wrap" class="r4">
       <div class="fg"><label class="lbl">No. Invoice</label><input type="text" id="invd-no" placeholder="INV-D-001"></div>
       <div class="fg"><label class="lbl">Tanggal</label><input type="date" id="invd-tgl"></div>
       <div class="fg"><label class="lbl">Dapur tujuan</label><input type="text" id="invd-dapur" list="dl-dapur-invd"><datalist id="dl-dapur-invd"></datalist></div>
       <div class="fg"><label class="lbl">Terkait PO</label><select id="invd-po" onchange="loadInvDItems()"><option value="">— Pilih PO —</option></select></div>
     </div>
-    <div class="fg"><label class="lbl">Tipe invoice</label>
+    <div id="invd-type-wrap" class="fg"><label class="lbl">Tipe invoice</label>
       <div style="display:flex;gap:14px;margin-top:4px">
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="invd-type" value="markup" onchange="toggleInvDType()" checked> Buat invoice sendiri (dengan margin)</label>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px"><input type="radio" name="invd-type" value="passthrough" onchange="toggleInvDType()"> Pass-through (terusan invoice vendor)</label>
@@ -1075,13 +1076,15 @@
       <div id="invd-item-boxes" style="overflow-x:auto"></div>
       <div id="invd-items-info" style="font-size:12px;color:var(--t3);padding:8px 0"></div>
     </div>
-    <div class="r2" style="margin-top:11px">
-      <div class="fg"><label class="lbl">Total invoice (Rp)</label><input type="number" id="invd-total" min="0" placeholder="Auto dari item"></div>
-      <div class="fg"><label class="lbl">Jatuh tempo dari dapur</label><input type="date" id="invd-jatuh"></div>
+    <div id="invd-footer-wrap">
+      <div class="r2" style="margin-top:11px">
+        <div class="fg"><label class="lbl">Total invoice (Rp)</label><input type="number" id="invd-total" min="0" placeholder="Auto dari item"></div>
+        <div class="fg"><label class="lbl">Jatuh tempo dari dapur</label><input type="date" id="invd-jatuh"></div>
+      </div>
+      <div class="fg"><label class="lbl">Catatan</label><input type="text" id="invd-cat"></div>
     </div>
-    <div class="fg"><label class="lbl">Catatan</label><input type="text" id="invd-cat"></div>
   </div>
-  <div class="mf"><button class="btn" onclick="closeModal('modal-invd')">Batal</button><button class="btn bp" onclick="saveInvD()">Simpan invoice</button></div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-invd')">Batal</button><button class="btn bp" id="invd-save-btn" onclick="saveInvD()">Simpan invoice</button></div>
 </div></div>
 
 <!-- Terima dari Dapur -->

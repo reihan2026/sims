@@ -184,8 +184,11 @@ function renderLaporanHTML(d){
     .filter(x=>x.lebih>=LEBIH_MIN).sort((a,b)=>b.lebih-a.lebih);
   const lebihTotal=lebihDapur.reduce((s,x)=>s+x.lebih,0)+lebihVendor.reduce((s,x)=>s+x.lebih,0);
 
-  // Overall margin: actual invD revenue - vendor cost (accrual basis)
-  const marginBersih=totalInvD>0?totalInvD-totalModalVendor-totalOngkir+totalCashback:null;
+  // Overall margin: actual invD revenue - vendor cost (accrual basis).
+  // totalModalVendor SUDAH termasuk ongkir (dari iv.total, lihat baris 17) —
+  // jangan dikurangkan lagi di sini. Bug lama: ongkir kesubtract dua kali,
+  // profit under-stated sebesar ongkir tiap invoice yang punya ongkir.
+  const marginBersih=totalInvD>0?totalInvD-totalModalVendor+totalCashback:null;
   const pct=marginBersih!=null&&totalInvD>0?(marginBersih/totalInvD*100).toFixed(1):null;
 
   const sec=(title,content)=>`
@@ -888,7 +891,10 @@ function _lkBuildData(from,to,poIds){
     const modal=ivs.reduce((s,iv)=>s+(iv.total||0),0);
     const ongkir=ivs.reduce((s,iv)=>s+(iv.ongkir||0),0);
     const cashback=ivs.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((sc,c)=>sc+c.jumlah,0),0);
-    const profit=revenue-modal-ongkir+cashback;
+    // modal (iv.total) SUDAH termasuk ongkir — jangan kurangkan ongkir lagi di
+    // sini, itu bug lama (profit under-stated). ongkir tetap dijumlah terpisah
+    // di bawah cuma untuk breakdown tampilan, bukan untuk dikurangkan lagi.
+    const profit=revenue-modal+cashback;
     totalRevenue+=revenue;totalModal+=modal;totalOngkir+=ongkir;totalCashback+=cashback;
     const mk=po.date.substring(0,7);
     if(!monthly[mk])monthly[mk]={revenue:0,modal:0,ongkir:0,cashback:0,profit:0,cnt:0};
@@ -937,7 +943,8 @@ function _lkBuildData(from,to,poIds){
       revenue:p.revenue,modal:p.modal,ongkir:p.ongkir,cashback:p.cashback,profit:p.profit,
       arsip:true,periode}));
   });
-  const totalProfit=totalRevenue-totalModal-totalOngkir+totalCashback;
+  // totalModal sudah termasuk ongkir (dari iv.total) — jangan dikurangkan lagi.
+  const totalProfit=totalRevenue-totalModal+totalCashback;
   const totalMarginPct=totalRevenue>0?(totalProfit/totalRevenue*100):0;
   return{totalRevenue,totalModal,totalOngkir,totalCashback,totalProfit,totalMarginPct,monthly,byVendor,byDapur,byPO,posCount:pos.length+arsipCnt,arsipParsial};
 }

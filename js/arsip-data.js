@@ -65,7 +65,10 @@ function buildRingkasan(pos,invvs,invds){
     const modal=ivs.reduce((s,v)=>s+(v.total||0),0);
     const ongkir=ivs.reduce((s,v)=>s+(v.ongkir||0),0);
     const cashback=ivs.reduce((s,v)=>s+(v.cashbacks||[]).reduce((sc,c)=>sc+c.jumlah,0),0);
-    const profit=revenue-modal-ongkir+cashback;
+    // modal (v.total) SUDAH termasuk ongkir — jangan dikurangkan lagi di sini,
+    // itu bug lama (profit under-stated sebesar ongkir). Sama seperti
+    // js/laporan.js — dua tempat ini dulu punya formula identik yang salah.
+    const profit=revenue-modal+cashback;
     r.revenue+=revenue;r.modal+=modal;r.ongkir+=ongkir;r.cashback+=cashback;r.profit+=profit;r.po_cnt++;
     // Basis Rekap Bulanan — dihitung ulang di sini agar tidak bergantung pada
     // cache render (_rc) yang isinya hanya data hidup.

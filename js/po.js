@@ -13,7 +13,7 @@ function renderDaftar(){
     if(srch&&!po.no.toLowerCase().includes(srch)&&!po.dapur.toLowerCase().includes(srch)&&!po.items.some(i=>(i.vendor||'').toLowerCase().includes(srch)))return false;
     if(fB&&!po.date.startsWith(fB))return false;if(fD&&fmtDapurKode(po.dapur)!==fD)return false;
     const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
-    const allKirim=po.items.every(i=>i.status_kirim==='diterima');
+    const allKirim=aktifItems(po).every(i=>i.status_kirim==='diterima');
     const done=allKirim&&myV.every(v=>v.bayar_status==='lunas')&&myD.every(d=>d.terima_status==='lunas');
     if(fS==='aktif'&&done)return false;if(fS==='selesai'&&!done)return false;
     return true;
@@ -33,9 +33,9 @@ function renderDaftar(){
     const tCB=myV.reduce((s,iv)=>s+(iv.cashbacks||[]).reduce((a,c)=>a+c.jumlah,0),0);
     const m=tInvD>0?tInvD-tInvV-tOngkir+tCB:t.margin;
     const mc=m>0?'mpos':m<0?'mneg':'mzero';
-    const kirimOk=po.items.filter(i=>i.status_kirim==='diterima').length;
+    const kirimOk=aktifItems(po).filter(i=>i.status_kirim==='diterima').length;
     const pct=t.total>0?Math.round(t.wv/t.total*100):0;
-    const vendorNames=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
+    const vendorNames=[...new Set(aktifItems(po).map(i=>i.vendor).filter(Boolean))];
     const allVendorHaveInv=vendorNames.length>0&&vendorNames.every(v=>myV.some(iv=>iv.vendor===v));
     const blmV=myV.filter(v=>v.bayar_status!=='lunas').length;
     const blmD=myD.filter(d=>d.terima_status!=='lunas').length;
@@ -69,8 +69,9 @@ function clonePO(poId){
   // Generate new PO no — append copy suffix
   const newNo=po.no+'-COPY';
   // Clone items — reset all vendor/kirim info, keep structure
-  const newItems=po.items.map(item=>({
+  const newItems=aktifItems(po).map(item=>({
     ...item,
+    id:_newItemId(),
     harga_vendor:0,vendor:'',nota_key:null,
     status_kirim:'belum',tgl_kirim:'',tgl_diterima:'',retur:null
   }));
@@ -346,16 +347,16 @@ function detMetrics(po,t,invVs,invDs){
     <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
     <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${!_tInvV&&t.wv<t.total?'a':''}">${modalVal!==null?fmt(modalVal):'—'}</div><div class="ms">${_tInvV>0?(invVs||[]).length+' inv':t.wv+'/'+t.total+' terisi'}</div></div>
     <div class="met"><div class="ml">Margin bersih</div><div class="mv num ${mBersih===null?'':mBersih>=0?'g':'r'}">${mBersih!==null?fmt(mBersih):'—'}</div><div class="ms">${marginSub}</div></div>
-    <div class="met"><div class="ml">Progres kirim</div><div class="mv">${po.items.filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
+    <div class="met"><div class="ml">Progres kirim</div><div class="mv">${aktifItems(po).filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
   </div>`;
 }
 
 function detNextSteps(id,po,invV,invD){
-  const vendors=[...new Set(po.items.map(i=>i.vendor).filter(Boolean))];
+  const vendors=[...new Set(aktifItems(po).map(i=>i.vendor).filter(Boolean))];
   const {itemInvV}=buildLookup(id);
-  const noVendorItems=po.items.filter((i,idx)=>(!i.vendor||!i.harga_vendor)&&!itemInvV[idx]);
+  const noVendorItems=po.items.filter((i,idx)=>!i.batal&&(!i.vendor||!i.harga_vendor)&&!itemInvV[idx]);
   const anyInvVUnpaid=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id));
-  const notKirim=po.items.filter(i=>i.status_kirim!=='diterima');
+  const notKirim=aktifItems(po).filter(i=>i.status_kirim!=='diterima');
   const hasInvD=invD.length>0;
   const anyInvDUnpaid=invD.filter(d=>d.terima_status!=='lunas');
 
@@ -384,6 +385,7 @@ function detNextSteps(id,po,invV,invD){
 
 function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
   const spekVisible=window._spekVisible===true;
+  const selMode=window._selMode===true;
   const byHari={};po.items.forEach((item,idx)=>{const k=item.hari||'—';if(!byHari[k])byHari[k]=[];byHari[k].push({...item,_idx:idx});});
   let html=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">
     <div style="font-size:11px;color:var(--t3);display:flex;align-items:center;gap:7px">
@@ -391,14 +393,22 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     </div>
     <button class="btn bxs" onclick="window._spekVisible=!window._spekVisible;showDetail('${id}')">${spekVisible?'Hide spek':'Show spek'}</button>
   </div>`;
+  if(selMode)html+=`<div id="sel-actionbar" style="position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 10px;margin-bottom:9px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r)">
+    <span style="font-size:12px;color:var(--wt)"><strong id="sel-count">0</strong> item dipilih</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn bxs" onclick="clearSelItems()">Bersihkan pilihan</button>
+      <button class="btn bxs bd-" id="sel-batal-btn" onclick="openBatalkanMassal('${id}')" disabled>Batalkan terpilih</button>
+    </div>
+  </div>`;
   Object.entries(byHari).forEach(([hari,items])=>{
     const hariId='hari-sec-'+hari.replace(/[^a-z0-9]/gi,'_');
     const dls=items.filter(i=>i.deadline).map(i=>i.deadline).sort();
     const dl=dls[0]||'';const diff=dl?diffDays(dl):null;
     const dlCls=diff===null?'':diff<0?'r':diff===0?'r':diff<=1?'a':'g';
     const _isItemDone=i=>{const idx=i._idx;const ivObj=itemInvV[idx];const idObj=itemInvD[idx];const isPT=itemPassthrough.has(idx);const s3=i.status_kirim==='diterima';return isPT?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3):(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');};
-    const hariDone=items.every(_isItemDone);
-    const hariBelum=hariDone?0:items.filter(i=>!_isItemDone(i)).length;
+    const _aktifHari=items.filter(i=>!i.batal);
+    const hariDone=_aktifHari.length>0&&_aktifHari.every(_isItemDone);
+    const hariBelum=hariDone?0:_aktifHari.filter(i=>!_isItemDone(i)).length;
     html+=`<div style="background:${hariDone?'var(--gbg, #f0fdf4)':'var(--s2)'};padding:5px 10px;border-radius:var(--r);margin:9px 0 4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="toggleHariSec('${hariId}')">
       <span style="font-size:12px;font-weight:600;color:${hariDone?'var(--ac)':'var(--t2)'}">
         ${hariDone?'✓ ':''}${hari}
@@ -411,6 +421,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     </div>
     <div id="${hariId}" style="overflow:hidden;transition:max-height .35s ease;max-height:99999px">`;
     html+=`<div class="det-tbl-wrap" style="margin-bottom:4px"><table class="tbl" style="width:100%"><thead><tr>
+      ${selMode?`<th style="width:26px"><input type="checkbox" title="Pilih semua di ${hari}" onchange="toggleSelHari(this,'${hariId}')"></th>`:''}
       <th>Nama</th><th>Kat</th><th style="white-space:nowrap">Tipe</th><th style="white-space:nowrap">Sat</th><th style="white-space:nowrap">Qty</th><th style="white-space:nowrap">Hrg PO</th>
       ${spekVisible?'<th>Spesifikasi</th>':''}
       <th class="col-vendor">Vendor</th><th style="white-space:nowrap">Hrg Vendor</th><th class="col-margin" style="white-space:nowrap">Margin</th>
@@ -434,8 +445,9 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       const allDone=isPT?(!!ivObj&&ivObj.bayar_status==='lunas'&&s3):(!!ivObj&&ivObj.bayar_status==='lunas'&&s3&&!!idObj&&idObj.terima_status==='lunas');
       const hasWarn=!isPT&&(s2w||s5w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0))||isPT&&(s2w||(!ivObj)||(!s3&&!s3w&&item.deadline&&diffDays(item.deadline)<=0));
       const rowStatus=allDone?'done':hasWarn?'todo':'running';
-      html+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${displayVendor.toLowerCase()}" data-nama="${item.nama.toLowerCase()}">
-        <td style="font-weight:500;min-width:110px">${item.nama}${item.retur?`<br><span style="font-size:9px;color:var(--dn)">Retur: ${fmtF(item.retur.val)}</span>`:''}</td>
+      html+=`<tr data-status="${rowStatus}" data-kat="${item.kat||''}" data-vendor="${displayVendor.toLowerCase()}" data-nama="${item.nama.toLowerCase()}"${item.batal?' style="opacity:.5"':''}>
+        ${selMode?`<td style="text-align:center">${item.batal||!item.id?'':`<input type="checkbox" class="item-sel-cb" data-hari="${hariId}" value="${item.id}" onchange="onSelCbChange(this)">`}</td>`:''}
+        <td style="font-weight:500;min-width:110px">${item.batal?`<s>${item.nama}</s> <span class="tag tno" style="font-size:9px" title="${(item.batal.alasan||'').replace(/"/g,'')} · ${item.batal.tgl||''}">Dibatalkan</span>`:item.nama}${item.retur?`<br><span style="font-size:9px;color:var(--dn)">Retur: ${fmtF(item.retur.val)}</span>`:''}</td>
         <td><select onchange="setItemKat('${id}',${idx},this.value)" style="font-size:10px;padding:2px 4px;width:74px;background:var(--bg);border:1px solid var(--bd);border-radius:3px;color:var(--tx)"><option value="">—</option>${getCats().map(c=>`<option value="${c}" ${item.kat===c?'selected':''}>${c}</option>`).join('')}</select></td>
         <td>${tipeTag(item.tipe_kirim)}</td>
         <td style="white-space:nowrap">${item.satuan}</td>
@@ -446,13 +458,14 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <td style="white-space:nowrap">${displayHargaV?`<span class="num">${fmtF(displayHargaV)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${displayVendor||''}')">+ Isi via invoice</button>`}</td>
         <td class="col-margin ${mc}" style="white-space:nowrap">${im!==null?fmtF(im):'—'}</td>
         <td style="text-align:center">
+          ${item.batal?`<span style="font-size:10px;font-family:var(--mn);color:var(--t3)">Dibatalkan</span>`:`
           <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" title="Lihat detail status & aksi">${statusIcon(allDone,hasWarn)}</button>
           <div style="margin-top:2px"><button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="width:auto;height:auto;border-radius:3px;padding:1px 5px;font-size:9px;font-family:var(--mn);color:${allDone?'var(--ac)':hasWarn?'var(--wn)':'var(--t3)'};text-decoration:underline;text-underline-offset:2px">${allDone?'✓ Selesai':hasWarn?'! Perlu aksi':'· Berjalan'}</button></div>
-          ${nk?`<div style="margin-top:2px"><span class="tag tin" style="cursor:pointer;font-size:9px" onclick="viewNota('${item.nota_key}','${item.nama}')">📎</span></div>`:''}
+          ${nk?`<div style="margin-top:2px"><span class="tag tin" style="cursor:pointer;font-size:9px" onclick="viewNota('${item.nota_key}','${item.nama}')">📎</span></div>`:''}`}
         </td>
         <td>
           <div style="display:flex;align-items:center;gap:4px">
-            <button class="btn bxs bt" onclick="openKirim('${id}',${idx})">Kirim</button>
+            ${item.batal?'':`<button class="btn bxs bt" onclick="openKirim('${id}',${idx})">Kirim</button>`}
             <div class="kbb">
               <button class="kbb-btn" onclick="openKbb('kbb-item-${id}-${idx}',event)">⋯</button>
               <div class="kbb-menu" id="kbb-item-${id}-${idx}">
@@ -460,7 +473,9 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
                 <button onclick="openSplitItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Split item</button>
                 <button onclick="openGantiItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Ganti item</button>
                 <div class="kbb-div"></div>
-                <button class="kd" onclick="hapusItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Hapus</button>
+                ${item.batal
+                  ?`<button onclick="batalkanUndo('${id}','${item.id}');document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Aktifkan lagi</button>`
+                  :`<button class="kd" onclick="hapusItem('${id}',${idx});document.getElementById('kbb-item-${id}-${idx}').classList.remove('open')">Hapus</button>`}
               </div>
             </div>
           </div>
@@ -481,10 +496,11 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
       const statusLabel=allDone2?'✓ Selesai':hasWarn2?'! Perlu aksi':'· Berjalan';
       const statusColor=allDone2?'var(--ac)':hasWarn2?'var(--wn)':'var(--t3)';
       const statusBg=allDone2?'var(--abg)':hasWarn2?'var(--wbg)':'var(--s2)';
-      html+=`<div data-status="${allDone2?'done':hasWarn2?'todo':'running'}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}" style="padding:10px 0;border-bottom:1px solid var(--bd)">
+      html+=`<div data-status="${allDone2?'done':hasWarn2?'todo':'running'}" data-kat="${item.kat||''}" data-vendor="${(item.vendor||'').toLowerCase()}" data-nama="${item.nama.toLowerCase()}" style="padding:10px 0;border-bottom:1px solid var(--bd)${item.batal?';opacity:.5':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">
-          <div style="font-weight:500;font-size:13px;flex:1">${item.nama}</div>
-          <button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="flex-shrink:0;padding:2px 7px;font-size:10px;border-radius:9px;background:${statusBg};color:${statusColor};border:none;cursor:pointer">${statusLabel}</button>
+          ${selMode&&!item.batal&&item.id?`<input type="checkbox" class="item-sel-cb" data-hari="${hariId}" value="${item.id}" onchange="onSelCbChange(this)" style="margin-top:2px;flex-shrink:0">`:''}
+          <div style="font-weight:500;font-size:13px;flex:1">${item.batal?`<s>${item.nama}</s> <span class="tag tno" style="font-size:9px">Dibatalkan</span>`:item.nama}</div>
+          ${item.batal?`<span style="flex-shrink:0;padding:2px 7px;font-size:10px;color:var(--t3)">Dibatalkan</span>`:`<button class="stat-btn" data-stat-trigger onclick="showStatPopup(event,'${id}',${idx})" style="flex-shrink:0;padding:2px 7px;font-size:10px;border-radius:9px;background:${statusBg};color:${statusColor};border:none;cursor:pointer">${statusLabel}</button>`}
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">
           <span style="font-size:11px;color:var(--t3);font-family:var(--mn)">${item.qty} ${item.satuan}</span>
@@ -497,7 +513,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
           <span style="font-size:11px;font-family:var(--mn);font-weight:500;color:${im===null?'var(--t3)':im>=0?'var(--ac)':'var(--dn)'}">${im===null?'—':fmtF(im)}</span>
         </div>
         <div style="display:flex;gap:5px">
-          <button class="btn bxs bt" onclick="openKirim('${id}',${idx})" style="font-size:11px;padding:4px 8px">Kirim</button>
+          ${item.batal?'':`<button class="btn bxs bt" onclick="openKirim('${id}',${idx})" style="font-size:11px;padding:4px 8px">Kirim</button>`}
           <div class="kbb"><button class="kbb-btn" onclick="openKbb('kbb-mob-${id}-${idx}',event)" style="font-size:11px;padding:4px 8px">⋯</button>
             <div class="kbb-menu" id="kbb-mob-${id}-${idx}">
               <button onclick="openItemEdit('${id}',${idx})">Edit</button>
@@ -505,7 +521,9 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
               <button onclick="openGantiItem('${id}',${idx})">Ganti item</button>
               <button onclick="showStatPopup(event,'${id}',${idx})">Lihat status</button>
               <div class="kbb-div"></div>
-              <button class="kd" onclick="hapusItem('${id}',${idx})">Hapus</button>
+              ${item.batal
+                ?`<button onclick="batalkanUndo('${id}','${item.id}')">Aktifkan lagi</button>`
+                :`<button class="kd" onclick="hapusItem('${id}',${idx})">Hapus</button>`}
             </div>
           </div>
         </div>
@@ -532,7 +550,7 @@ function detVendorSummary(id,po,invV,invD){
     });
   });
 
-  const byVendor={};po.items.forEach((item,idx)=>{const v=item.vendor||'(Belum)';if(!byVendor[v])byVendor[v]=[];byVendor[v].push({...item,_idx:idx});});
+  const byVendor={};po.items.forEach((item,idx)=>{if(item.batal)return;const v=item.vendor||'(Belum)';if(!byVendor[v])byVendor[v]=[];byVendor[v].push({...item,_idx:idx});});
   let html='';
   Object.entries(byVendor).forEach(([vname,vitems])=>{
     const vInvV=invV.filter(iv=>iv.vendor===vname);
@@ -638,6 +656,7 @@ function detRevisions(po){
 }
 
 function showDetail(id){
+  if(_currentPoId!==id)window._selMode=false; // mode pilih tidak ikut pindah PO
   _currentPoId=id;
   const po=getPOs().find(p=>p.id===id);if(!po)return;
   setLastPO(id); // pintasan sidebar — nav() di akhir fungsi ini yang merender ulang
@@ -652,6 +671,7 @@ function showDetail(id){
     <button class="btn bsm bt" onclick="openNewInvV('${id}')">+ Invoice Vendor</button>
     <button class="btn bsm bpu" onclick="openNewInvD('${id}')">+ Invoice Dapur</button>
     <button class="btn bsm bi" onclick="openTambahItem('${id}')">+ Tambah Item</button>
+    <button class="btn bsm ${window._selMode?'bd-':''}" onclick="toggleSelMode('${id}')">${window._selMode?'✕ Selesai pilih':'☑ Pilih item'}</button>
     <button class="btn bsm" onclick="clonePO('${id}')">Clone PO</button>
     <button class="btn bsm" onclick="openLaporanPO('${id}')">📄 Laporan</button>`;
 
@@ -661,7 +681,7 @@ function showDetail(id){
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <select id="det-f-stat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua status</option><option value="todo">Perlu aksi</option><option value="done">Selesai</option><option value="running">Berjalan</option></select>
       <select id="det-f-kat" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua kategori</option>${getCats().map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
-      <select id="det-f-vendor" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua vendor</option>${[...new Set(po.items.map(i=>i.vendor).filter(Boolean))].map(v=>`<option value="${v}">${v}</option>`).join('')}</select>
+      <select id="det-f-vendor" onchange="filterDetItems()" style="font-size:11px;padding:3px 6px;width:auto"><option value="">Semua vendor</option>${[...new Set(aktifItems(po).map(i=>i.vendor).filter(Boolean))].map(v=>`<option value="${v}">${v}</option>`).join('')}</select>
       <div style="display:flex;align-items:center;gap:5px">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="opacity:.4;flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" id="det-srch" placeholder="Cari item..." style="font-size:11px;padding:4px 7px;width:130px" oninput="filterDetItems()">
@@ -933,6 +953,138 @@ function saveGantiItem(){
   addLog(namaDiganti?'ganti_item':'edit_item',namaDiganti?'Ganti item':'Edit item','item',poId,po?.no,(namaDiganti?itemLama.nama+' → '+namaGanti:namaGanti)+' · '+alasan);
   closeModal('modal-ganti-item');
   showToast(namaDiganti?`Item diganti: ${itemLama.nama} → ${namaGanti}`:'Item diperbarui!');
+  showDetail(poId);
+}
+
+// ===== BATALKAN ITEM MASSAL (mode pilih di Detail PO) =====
+// Seleksi disimpan lewat item.id (kode permanen), BUKAN idx: menghapus beberapa
+// item sekaligus menggeser idx semua item sesudahnya — persis kelas bug idx-basi
+// yang sudah diperbaiki. Penghapusan dilakukan sekali lewat filter, bukan splice
+// berulang.
+function toggleSelMode(poId){
+  window._selMode=!window._selMode;
+  showDetail(poId);
+}
+// Tabel desktop dan kartu mobile sama-sama dirender (salah satu disembunyikan
+// lewat CSS), jadi tiap item punya DUA checkbox dengan value sama — selalu
+// dedup, dan sinkronkan pasangannya setiap kali salah satu diubah.
+function selectedItemIds(){
+  return [...new Set([...document.querySelectorAll('.item-sel-cb:checked')].map(c=>c.value))];
+}
+function onSelCbChange(cb){
+  document.querySelectorAll(`.item-sel-cb[value="${cb.value}"]`).forEach(c=>{c.checked=cb.checked;});
+  updSelCount();
+}
+function updSelCount(){
+  const n=selectedItemIds().length;
+  const el=document.getElementById('sel-count');if(el)el.textContent=n;
+  const btn=document.getElementById('sel-batal-btn');if(btn)btn.disabled=n===0;
+}
+function toggleSelHari(cb,hariId){
+  document.querySelectorAll(`.item-sel-cb[data-hari="${hariId}"]`).forEach(c=>{c.checked=cb.checked;});
+  updSelCount();
+}
+function clearSelItems(){
+  document.querySelectorAll('.item-sel-cb').forEach(c=>{c.checked=false;});
+  document.querySelectorAll('#det-body thead input[type=checkbox]').forEach(c=>{c.checked=false;});
+  updSelCount();
+}
+
+// Cari invoice vendor/dapur yang merujuk satu item PO. Pass 0 lewat item.id
+// (buildLookup), lalu jatuh ke pencocokan nama seperti hapusItem untuk invoice
+// lama yang belum punya poItemId.
+function invoicesForItem(poId,item,idx){
+  const {itemInvV,itemInvD}=buildLookup(poId);
+  const vs=new Map(),ds=new Map();
+  if(itemInvV[idx])vs.set(itemInvV[idx].id,itemInvV[idx]);
+  if(itemInvD[idx])ds.set(itemInvD[idx].id,itemInvD[idx]);
+  getInvV().filter(iv=>iv.po_id===poId&&(iv.items||[]).some(i=>
+    (i.poItemId&&item.id&&i.poItemId===item.id)||(typeof i.idx==='number'?i.idx===idx:i.nama===item.nama)
+  )).forEach(iv=>vs.set(iv.id,iv));
+  getInvD().filter(d=>d.po_id===poId&&(d.items||[]).some(i=>
+    (i.poItemId&&item.id&&i.poItemId===item.id)||i.nama===item.nama
+  )).forEach(d=>ds.set(d.id,d));
+  return{invV:[...vs.values()],invD:[...ds.values()]};
+}
+
+let _bmPlan=null; // {poId, hapus:[{item,idx}], batal:[{item,idx,refs}]}
+function openBatalkanMassal(poId){
+  const ids=selectedItemIds();
+  if(!ids.length){showToast('Pilih minimal 1 item!',true);return;}
+  const po=getPOs().find(p=>p.id===poId);if(!po)return;
+  const idSet=new Set(ids);
+  const hapus=[],batal=[];
+  po.items.forEach((item,idx)=>{
+    if(!idSet.has(item.id)||item.batal)return;
+    const refs=invoicesForItem(poId,item,idx);
+    if(refs.invV.length||refs.invD.length)batal.push({item,idx,refs});
+    else hapus.push({item,idx});
+  });
+  if(!hapus.length&&!batal.length){showToast('Tidak ada item aktif yang terpilih!',true);return;}
+  _bmPlan={poId,hapus,batal};
+
+  const li=x=>`<div style="font-size:12px;margin:2px 0 2px 12px">• ${x.item.nama} <span style="color:var(--t3);font-family:var(--mn)">${x.item.qty} ${x.item.satuan}</span>${x.refs?` <span style="color:var(--t3)">— ${[...x.refs.invV.map(v=>v.no),...x.refs.invD.map(d=>d.no)].join(', ')}</span>`:''}</div>`;
+  let prev='';
+  if(hapus.length)prev+=`<div style="padding:8px 10px;background:var(--dbg);border:1px solid var(--dbd);border-radius:var(--r);margin-bottom:8px">
+    <div style="font-size:12px;font-weight:600;color:var(--dn);margin-bottom:3px">Dihapus permanen (${hapus.length} item)</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Belum tersentuh invoice mana pun.</div>
+    ${hapus.map(li).join('')}</div>`;
+  if(batal.length)prev+=`<div style="padding:8px 10px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r);margin-bottom:8px">
+    <div style="font-size:12px;font-weight:600;color:var(--wt);margin-bottom:3px">Ditandai dibatalkan (${batal.length} item)</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Sudah ada invoice — item tetap tersimpan supaya invoice tidak menggantung. Isi &amp; total invoice TIDAK berubah.</div>
+    ${batal.map(li).join('')}</div>`;
+  document.getElementById('bm-preview').innerHTML=prev;
+  document.getElementById('bm-alasan').value='';
+  document.getElementById('bm-save-btn').textContent=`Batalkan ${hapus.length+batal.length} item`;
+  openModal('modal-batal-massal');
+}
+
+function saveBatalkanMassal(){
+  if(!_bmPlan)return;
+  const alasan=document.getElementById('bm-alasan').value.trim();
+  if(!alasan){showToast('Isi alasan pembatalan!',true);return;}
+  const {poId,hapus,batal}=_bmPlan;
+  const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
+  const by=getUserProfile().nama;
+  const tgl=today();
+  const changes=[];
+  // Tandai batal — pakai id, bukan idx, karena idx bergeser setelah filter di bawah
+  const batalIds=new Set(batal.map(x=>x.item.id));
+  po.items.forEach(it=>{
+    if(!batalIds.has(it.id))return;
+    it.batal={tgl,alasan,by};
+    changes.push({nama:it.nama,qty_lama:it.qty,qty_baru:it.qty,harga_lama:it.harga_po,harga_baru:it.harga_po,alasan:'Item dibatalkan: '+alasan});
+  });
+  // Hapus permanen
+  const hapusIds=new Set(hapus.map(x=>x.item.id));
+  hapus.forEach(x=>changes.push({nama:x.item.nama,qty_lama:x.item.qty,qty_baru:0,harga_lama:x.item.harga_po,harga_baru:0,alasan:'Item dihapus: '+alasan}));
+  if(hapusIds.size)po.items=po.items.filter(i=>!hapusIds.has(i.id));
+
+  if(!po.revisions)po.revisions=[];
+  po.revisions.push({tgl,changes});
+  setPOs(pos);
+  invalidatePO(poId);
+  addLog('batal_item','Batalkan item','po',poId,po.no,
+    `${hapus.length} dihapus, ${batal.length} ditandai batal · ${alasan}`);
+  _bmPlan=null;
+  window._selMode=false;
+  closeModal('modal-batal-massal');
+  showToast(`${hapus.length+batal.length} item dibatalkan`);
+  showDetail(poId);
+}
+
+function batalkanUndo(poId,itemId){
+  const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po)return;
+  const item=po.items.find(i=>i.id===itemId);if(!item||!item.batal)return;
+  if(!confirm(`Aktifkan lagi item "${item.nama}"? Item akan kembali dihitung di nilai PO, progres kirim, dan laporan.`))return;
+  const alasanLama=item.batal.alasan||'';
+  delete item.batal;
+  if(!po.revisions)po.revisions=[];
+  po.revisions.push({tgl:today(),changes:[{nama:item.nama,qty_lama:item.qty,qty_baru:item.qty,harga_lama:item.harga_po,harga_baru:item.harga_po,alasan:'Pembatalan dibatalkan (sebelumnya: '+alasanLama+')'}]});
+  setPOs(pos);
+  invalidatePO(poId);
+  addLog('batal_item','Aktifkan lagi item','item',poId,po.no,item.nama);
+  showToast(`Item "${item.nama}" aktif lagi`);
   showDetail(poId);
 }
 

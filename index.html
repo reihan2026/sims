@@ -689,6 +689,18 @@
 </div></div>
 
 <!-- Split Item PO -->
+<div class="modal-bg" id="modal-batal-massal"><div class="modal">
+  <div class="mh"><span class="mht">Batalkan Item Terpilih</span><button class="btn bgh bsm" onclick="closeModal('modal-batal-massal')">✕</button></div>
+  <div class="mb">
+    <div id="bm-preview"></div>
+    <div class="fg"><label class="lbl">Alasan pembatalan (wajib)</label><input type="text" id="bm-alasan" placeholder="mis. dapur membatalkan pesanan"></div>
+    <div style="font-size:11px;color:var(--t3)">Invoice vendor/dapur yang sudah ada tidak ikut diubah. Kalau tagihannya juga perlu dikoreksi, lakukan lewat Edit qty/harga atau Retur di invoice terkait.</div>
+  </div>
+  <div class="mf">
+    <button class="btn" onclick="closeModal('modal-batal-massal')">Batal</button>
+    <button class="btn bd-" id="bm-save-btn" onclick="saveBatalkanMassal()">Batalkan item</button>
+  </div>
+</div></div>
 <div class="modal-bg" id="modal-split-item"><div class="modal">
   <div class="mh"><span class="mht">Split Item</span><button class="btn bgh bsm" onclick="closeModal('modal-split-item')">✕</button></div>
   <div class="mb">

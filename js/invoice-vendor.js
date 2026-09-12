@@ -138,7 +138,7 @@ function loadInvVItems(){
   // pencocokan sendiri, lalu menyimpang dari buildLookup dan meloloskan item yang
   // sebenarnya sudah diinvoice (risiko invoice ganda) begitu idx PO bergeser.
   const {itemInvV:coveredBy}=buildLookup(poId);
-  const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>!coveredBy[item._idx]);
+  const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>!item.batal&&!coveredBy[item._idx]);
 
   if(!available.length){
     wrap.innerHTML=`<div style="padding:10px 0;font-size:12px;color:var(--t3)">Semua item PO sudah masuk ke invoice vendor. Gunakan <strong>Edit qty/harga</strong> pada invoice yang sudah ada jika perlu mengubah qty atau harga.</div>`;

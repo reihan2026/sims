@@ -18,7 +18,9 @@ function arsipBatasPeriode(hariIni){
 // PO tutup penuh = semua item diterima, semua invV lunas, semua invD lunas.
 // Hanya PO tutup yang boleh diarsip — yang masih berjalan tetap butuh diedit.
 function poTutupPenuh(po,invvs,invds){
-  const items=po.items||[];
+  // Item yang dibatalkan dikecualikan — kalau tidak, item batal yang
+  // status_kirim-nya bukan 'diterima' akan memblokir arsip PO ini selamanya.
+  const items=aktifItems(po);
   if(!items.length)return false;
   if(!items.every(i=>i.status_kirim==='diterima'))return false;
   const vs=invvs.filter(v=>v.po_id===po.id);
@@ -73,14 +75,14 @@ function buildRingkasan(pos,invvs,invds){
     // Basis Rekap Bulanan — dihitung ulang di sini agar tidak bergantung pada
     // cache render (_rc) yang isinya hanya data hidup.
     let tp=0,tvFilled=0,tpFilled=0;
-    (po.items||[]).forEach(i=>{
+    aktifItems(po).forEach(i=>{
       tp+=(i.qty||0)*(i.harga_po||0);
       if(i.harga_vendor>0){tpFilled+=(i.qty||0)*(i.harga_po||0);tvFilled+=(i.qty||0)*(i.harga_vendor||0);}
     });
     r.tp+=tp;r.tv+=tvFilled;r.margin+=tpFilled-tvFilled-ongkir;
     if(po.dapur)dapurSet.add(po.dapur);
     r.po.push({id:po.id,no:po.no,date:po.date,dapur:po.dapur||'',
-      revenue,modal,ongkir,cashback,profit,n_item:(po.items||[]).length});
+      revenue,modal,ongkir,cashback,profit,n_item:aktifItems(po).length});
 
     ivs.forEach(iv=>{
       const v=iv.vendor||'(tanpa vendor)';
@@ -98,7 +100,7 @@ function buildRingkasan(pos,invvs,invds){
 
     // Konsumsi bahan baku — tiru _getKonsumsiRows (js/laporan.js:458) lalu gabung
     // baris dengan kunci yang sama supaya ringkas.
-    (po.items||[]).forEach(item=>{
+    aktifItems(po).forEach(item=>{
       if(item.status_kirim!=='diterima')return;
       const tgl=item.tgl_diterima||po.date||'';
       const bulan=tgl.substring(0,7);

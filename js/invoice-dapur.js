@@ -85,6 +85,7 @@ function loadInvDItems(){
   // Build source items from po.items by index — preserves ALL items including those with duplicate nama+hari+deadline
   const{itemInvV:_dItemInvV}=buildLookup(poId);
   const sourceItems=po.items.map((item,pidx)=>{
+    if(item.batal)return null;
     const linkedInvV=_dItemInvV[pidx];
     let invVItem=null;
     if(linkedInvV){
@@ -121,7 +122,7 @@ function loadInvDItems(){
       hari:item.hari||'',deadline:item.deadline||'',
       invv_id:linkedInvV?.id||null,_noInvV:!linkedInvV
     };
-  });
+  }).filter(Boolean); // item yang dibatalkan (batal) dikeluarkan di atas
 
   // Filter: count-based — each existing invD item "consumes" one slot per key; remaining slots are shown
   const remaining=new Map(coveredCount);

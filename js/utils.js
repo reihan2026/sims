@@ -27,9 +27,18 @@ function parseDeadline(tgl){
 }
 const diffDays=tgl=>{const p=parseDeadline(tgl);return p?Math.ceil((new Date(p)-new Date(today()))/(864e5)):null;};
 
+// Item PO yang masih aktif — yang ditandai dibatalkan dikecualikan dari semua
+// kalkulasi & progres. Pencocokan PO<->invoice (buildLookup) sengaja TIDAK
+// memakai ini: invoice untuk item batal tetap nyata dan harus tetap cocok.
+const aktifItems=po=>(po&&po.items||[]).filter(i=>!i.batal);
+
 function poTotals(po){
   let tp=0,tv=0,tpAll=0,wv=0;
-  po.items.forEach(i=>{
+  // Item yang dibatalkan (i.batal) tidak ikut dihitung di mana pun — ini
+  // chokepoint utama, jadi daftar PO/detMetrics/dashboard/buildRingkasan
+  // ikut benar tanpa perubahan masing-masing.
+  const aktif=aktifItems(po);
+  aktif.forEach(i=>{
     tpAll+=(i.qty||0)*(i.harga_po||0);
     if(i.harga_vendor>0){
       tp+=(i.qty||0)*(i.harga_po||0);
@@ -40,7 +49,7 @@ function poTotals(po){
   // Use cached ongkir map instead of re-scanning all invV
   _rc._build();
   const totalOngkir=_rc._ongkirMap.get(po.id)||0;
-  return{tp:tpAll,tv,margin:tp-tv-totalOngkir,tpFilled:tp,wv,total:po.items.length,ongkir:totalOngkir};
+  return{tp:tpAll,tv,margin:tp-tv-totalOngkir,tpFilled:tp,wv,total:aktif.length,ongkir:totalOngkir};
 }
 
 // ===== RENDER CACHE =====

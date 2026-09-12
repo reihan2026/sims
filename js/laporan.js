@@ -54,7 +54,7 @@ function buildLaporanData(poId){
   // 12 jerigen @425rb vs 24 botol @42,5rb) — menebak harga dapur dari baris hari
   // lain menghasilkan margin palsu, ke arah positif maupun negatif.
   const _namaHitung={};
-  po.items.forEach(i=>{const n=(i.nama||'').trim();_namaHitung[n]=(_namaHitung[n]||0)+1;});
+  aktifItems(po).forEach(i=>{const n=(i.nama||'').trim();_namaHitung[n]=(_namaHitung[n]||0)+1;});
   const namaGanda=new Set(Object.keys(_namaHitung).filter(n=>_namaHitung[n]>1));
 
   // Items by hari — search directly across all invVs by hari+nama to avoid stale-idx issues
@@ -62,6 +62,7 @@ function buildLaporanData(poId){
   const byHari={};
   const claimedInvVItems=new Set(); // prevent two PO items with same nama from claiming the same invV item
   po.items.forEach((item,idx)=>{
+    if(item.batal)return;
     const h=item.hari||'—';
     if(!byHari[h])byHari[h]=[];
     const nm=item.nama.trim();
@@ -551,7 +552,7 @@ function downloadLaporanExcel(){
   let gM=0,gMar=0,gO=0,gCB=0;
   Object.entries(vendorMap).forEach(([nama,v])=>{
     // Hitung dari PO items langsung — konsisten dengan poTotals
-    const vMar=po.items.reduce((s,pi)=>{
+    const vMar=aktifItems(po).reduce((s,pi)=>{
       if(!(pi.harga_vendor>0))return s;
       if((pi.vendor||'').toLowerCase()!==(nama||'').toLowerCase())return s;
       return s+(pi.harga_po-pi.harga_vendor)*(pi.qty||0);
@@ -577,7 +578,7 @@ function _getKonsumsiRows(fBulan,fDapur,fVendor,fKat,fSatuan){
   const rows=[];
   getPOs().forEach(po=>{
     if(fDapur&&po.dapur!==fDapur)return;
-    (po.items||[]).forEach(item=>{
+    aktifItems(po).forEach(item=>{
       if(item.status_kirim!=='diterima')return;
       const tgl=item.tgl_diterima||po.date||'';
       const bulan=tgl.substring(0,7);

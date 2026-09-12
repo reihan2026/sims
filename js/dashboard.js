@@ -33,6 +33,7 @@ function renderDashboard(){
   const agendaSections=[];
   const kirimTerlambat=[];const kirimHariIni=[];
   pos.forEach(po=>{po.items.forEach((item,idx)=>{
+    if(item.batal)return;
     if(item.status_kirim==='diterima')return;if(!item.deadline)return;
     const diff=diffDays(item.deadline);
     if(diff<0)kirimTerlambat.push({po,item,idx,diff});
@@ -42,14 +43,14 @@ function renderDashboard(){
   if(kirimHariIni.length)agendaSections.push({id:'ag-today',icon:'📦',label:'Kirim hari ini',count:kirimHariIni.length,urgent:false,items:kirimHariIni.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)}</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
   const invVJT=invV.filter(iv=>{if(iv.bayar_status==='lunas')return false;if(isPassthrough(iv.id))return false;if(!iv.jatuh)return false;return diffDays(iv.jatuh)<=0;});
   if(invVJT.length)agendaSections.push({id:'ag-invv',icon:'💳',label:'Invoice vendor jatuh tempo',count:invVJT.length,urgent:true,items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent"><div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}</div>`})});
-  const blmVendorUrgent=[];pos.forEach(po=>{po.items.forEach((item,idx)=>{if(item.vendor&&item.harga_vendor)return;if(item.status_kirim==='diterima')return;const diff=item.deadline?diffDays(item.deadline):null;if(diff!==null&&diff<=2)blmVendorUrgent.push({po,item,idx,diff});});});
+  const blmVendorUrgent=[];pos.forEach(po=>{po.items.forEach((item,idx)=>{if(item.batal)return;if(item.vendor&&item.harga_vendor)return;if(item.status_kirim==='diterima')return;const diff=item.deadline?diffDays(item.deadline):null;if(diff!==null&&diff<=2)blmVendorUrgent.push({po,item,idx,diff});});});
   if(blmVendorUrgent.length)agendaSections.push({id:'ag-harga',icon:'🔍',label:'Harga vendor belum ada (≤2hr)',count:blmVendorUrgent.length,urgent:false,items:blmVendorUrgent.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--wt)">Deadline: ${x.item.deadline}</span></div><button class="btn bxs bt" onclick="openNewInvVForVendor('${x.po.id}','${x.item.vendor||''}')">Buat inv.</button></div>`)});
   const invDJT=invD.filter(id=>{if(id.terima_status==='lunas')return false;if(!id.jatuh)return false;return diffDays(id.jatuh)<=0;});
   if(invDJT.length)agendaSections.push({id:'ag-invd',icon:'🏦',label:'Invoice dapur jatuh tempo',count:invDJT.length,urgent:false,items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item"><div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div><button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam</button></div>`})});
-  const totalBlmV=pos.reduce((s,po)=>s+po.items.filter(i=>(!i.vendor||!i.harga_vendor)&&i.status_kirim!=='diterima').length,0);
+  const totalBlmV=pos.reduce((s,po)=>s+aktifItems(po).filter(i=>(!i.vendor||!i.harga_vendor)&&i.status_kirim!=='diterima').length,0);
   const totalUrgent=agendaSections.filter(s=>s.urgent).reduce((s,x)=>s+x.count,0);
   const totalWarn=agendaSections.filter(s=>!s.urgent).reduce((s,x)=>s+x.count,0)+totalBlmV;
-  const poAktif=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !po.items.every(i=>i.status_kirim==='diterima')||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).length;
+  const poAktif=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !aktifItems(po).every(i=>i.status_kirim==='diterima')||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).length;
 
   const agendaBox=document.getElementById('agenda-box');
   let agHtml=`<div style="padding:10px 13px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
@@ -121,7 +122,7 @@ function renderDashboard(){
 
   // Metrics
   let ttlM=0,blmBV=0,blmTD=0,blmVnd=0;
-  pos.forEach(po=>{const t=poTotals(po);ttlM+=t.margin;blmVnd+=po.items.filter(i=>!(i.harga_vendor>0)&&i.status_kirim!=='diterima').length;});
+  pos.forEach(po=>{const t=poTotals(po);ttlM+=t.margin;blmVnd+=aktifItems(po).filter(i=>!(i.harga_vendor>0)&&i.status_kirim!=='diterima').length;});
   invV.forEach(iv=>{const n=invVNet(iv);if(iv.bayar_status!=='lunas'&&!isPassthrough(iv.id))blmBV+=n.sisa;});
   invD.forEach(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);blmTD+=id.total-r;});
 

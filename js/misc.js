@@ -272,10 +272,11 @@ function loadBulkItems(){
   const wrap=document.getElementById('bulk-items-wrap');
   if(!poId){wrap.innerHTML='<div style="padding:10px;color:var(--t3)">Pilih PO dulu</div>';return;}
   const po=getPOs().find(p=>p.id===poId);
-  if(!po||!po.items.length){wrap.innerHTML='<div style="padding:10px;color:var(--t3)">Tidak ada item</div>';return;}
+  if(!po||!aktifItems(po).length){wrap.innerHTML='<div style="padding:10px;color:var(--t3)">Tidak ada item</div>';return;}
   let html='<table style="width:100%;border-collapse:collapse">';
   html+='<thead><tr style="background:var(--s2)"><th style="padding:5px 8px;width:30px"></th><th style="padding:5px 8px;text-align:left;font-size:10px;color:var(--t3)">Item</th><th style="padding:5px 8px;font-size:10px;color:var(--t3)">Status saat ini</th><th style="padding:5px 8px;font-size:10px;color:var(--t3)">Hari kirim</th></tr></thead><tbody>';
   po.items.forEach((item,idx)=>{
+    if(item.batal)return; // item dibatalkan tidak bisa diupdate status kirimnya
     const sc=item.status_kirim==='diterima'?'tok':item.status_kirim==='dikirim'?'ttl':'tgr';
     html+=`<tr style="border-bottom:1px solid var(--bd)">
       <td style="padding:5px 8px;text-align:center"><input type="checkbox" class="bulk-item-cb" data-idx="${idx}" checked></td>
@@ -287,7 +288,7 @@ function loadBulkItems(){
   html+='</tbody></table>';
   wrap.innerHTML=html;
   document.getElementById('bulk-all-cb').checked=true;
-  document.getElementById('bulk-count-info').textContent=po.items.length+' item';
+  document.getElementById('bulk-count-info').textContent=aktifItems(po).length+' item';
 }
 function saveBulkKirim(){
   const poId=document.getElementById('bulk-po-sel').value;

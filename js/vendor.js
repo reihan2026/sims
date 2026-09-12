@@ -25,8 +25,11 @@ function bpovVendorChange(){
 
 function bpovRenderItems(po,vendorNama){
   const el=document.getElementById('bpov-items');
-  if(!po.items.length){el.innerHTML='<div class="empty">PO ini tidak punya item</div>';return;}
+  if(!aktifItems(po).length){el.innerHTML='<div class="empty">PO ini tidak punya item</div>';return;}
+  // idx tetap idx asli di po.items — checkbox id 'bpov-item-<idx>' dibaca ulang
+  // lewat idx yang sama di saveBPOV, jadi item batal cukup tidak dirender.
   el.innerHTML=po.items.map((item,idx)=>{
+    if(item.batal)return'';
     const precheck=vendorNama&&item.vendor===vendorNama;
     const deadline=item.deadline?` · deadline ${item.deadline}`:'';
     const kat=item.kat?`<span class="tag tgr" style="font-size:9px">${item.kat}</span> `:'';
@@ -43,7 +46,7 @@ function bpovRenderItems(po,vendorNama){
   // Filter kategori — hanya berguna kalau PO punya lebih dari satu kategori
   const katF=document.getElementById('bpov-kat-filter');
   if(katF){
-    const kats=[...new Set(po.items.map(i=>i.kat).filter(Boolean))].sort();
+    const kats=[...new Set(aktifItems(po).map(i=>i.kat).filter(Boolean))].sort();
     katF.innerHTML='<option value="">Semua kategori</option>'+kats.map(k=>`<option value="${k}">${k}</option>`).join('');
     katF.style.display=kats.length>1?'':'none';
     katF.value='';

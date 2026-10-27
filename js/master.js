@@ -131,8 +131,6 @@ function fmtDapurKode(val){const o=getDapurInfo(val);return o.kode||val;}
 function updateDL(){
   const m=getMaster();
   ['dl-dapur','dl-dapur-invd'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=m.dapur.map(d=>{const o=typeof d==='string'?{kode:'',nama:d,tlp:''}:d;return`<option value="${o.kode||o.nama}">${o.kode?o.kode+' — '+o.nama:o.nama}</option>`;}).join('');});
-  const vnames=m.vendor.map(v=>v.nama);
-  ['dl-vendor-invv'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=vnames.map(v=>`<option value="${v}">`).join('');});
 }
 function autoMaster(dapur,vendors){
   const m=getMaster();

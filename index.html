@@ -805,7 +805,7 @@
     <div class="r4">
       <div class="fg"><label class="lbl">No. Invoice Vendor</label><input type="text" id="invv-no" placeholder="INV-V-001"></div>
       <div class="fg"><label class="lbl">Tanggal invoice</label><input type="date" id="invv-tgl"></div>
-      <div class="fg"><label class="lbl">Vendor</label><input type="text" id="invv-vendor" list="dl-vendor-invv" oninput="loadInvVItems()"><datalist id="dl-vendor-invv"></datalist></div>
+      <div class="fg"><label class="lbl">Vendor</label><div class="ac-wrap"><input type="text" id="invv-vendor" autocomplete="off" placeholder="Ketik nama vendor..." oninput="acVendorInvV(this);loadInvVItems()" onfocus="acVendorInvV(this)" onkeydown="acKey(event,'ac-vendor-invv')" onblur="setTimeout(()=>acHide('ac-vendor-invv'),150)"><div id="ac-vendor-invv" class="ac-list"></div></div></div>
       <div class="fg"><label class="lbl">Terkait PO</label><select id="invv-po" onchange="loadInvVItems()"><option value="">— Pilih PO —</option></select></div>
     </div>
     <div class="fg"><label class="lbl">Item &amp; harga vendor</label>

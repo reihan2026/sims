@@ -242,3 +242,45 @@ function renderBackBtn(){
   const title=btn.nextElementSibling;
   if(title)title.style.marginRight='auto';
 }
+
+// ===== AUTOCOMPLETE (pengganti <datalist>) =====
+// Datalist bawaan browser tidak konsisten (Safari/iPad sering tidak memfilter
+// saat mengetik), jadi saran dirender sendiri: cocok di mana saja dalam nama,
+// tidak peka huruf besar/kecil.
+const _acState={};
+function _acEsc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function acShow(input,listId,names,onPick){
+  const list=document.getElementById(listId);if(!list)return;
+  const q=input.value.trim().toLowerCase();
+  let rows=[...new Set(names.filter(Boolean))];
+  if(q){
+    rows=rows.map(n=>{const l=n.toLowerCase();const i=l.indexOf(q);if(i<0)return null;
+      const rank=i===0?0:(/\s/.test(l[i-1])?1:2);return{n,i,rank};}).filter(Boolean)
+      .sort((a,b)=>a.rank-b.rank||a.n.localeCompare(b.n));
+  }else rows=rows.sort((a,b)=>a.localeCompare(b)).map(n=>({n,i:-1}));
+  rows=rows.slice(0,50);
+  _acState[listId]={input,rows,on:-1,onPick};
+  if(!rows.length){list.innerHTML='<div class="ac-empty">Tidak ada vendor yang cocok</div>';list.classList.add('open');return;}
+  list.innerHTML=rows.map((r,k)=>{
+    const txt=r.i<0?_acEsc(r.n):_acEsc(r.n.slice(0,r.i))+'<b>'+_acEsc(r.n.slice(r.i,r.i+q.length))+'</b>'+_acEsc(r.n.slice(r.i+q.length));
+    return `<div class="ac-item" data-k="${k}" onmousedown="event.preventDefault();acPick('${listId}',${k})">${txt}</div>`;}).join('');
+  list.classList.add('open');
+}
+function acHide(listId){const list=document.getElementById(listId);if(list){list.classList.remove('open');list.innerHTML='';}delete _acState[listId];}
+function acPick(listId,k){
+  const st=_acState[listId];if(!st||!st.rows[k])return;
+  st.input.value=st.rows[k].n;const cb=st.onPick;acHide(listId);if(cb)cb(st.input.value);
+}
+function acKey(e,listId){
+  const st=_acState[listId];const list=document.getElementById(listId);
+  if(!st||!list||!list.classList.contains('open'))return;
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();if(!st.rows.length)return;
+    st.on=e.key==='ArrowDown'?Math.min(st.on+1,st.rows.length-1):Math.max(st.on-1,0);
+    list.querySelectorAll('.ac-item').forEach((el,k)=>el.classList.toggle('on',k===st.on));
+    const cur=list.querySelector('.ac-item.on');if(cur)cur.scrollIntoView({block:'nearest'});
+  }else if(e.key==='Enter'){
+    if(st.on>=0){e.preventDefault();acPick(listId,st.on);}
+  }else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acHide(listId);}
+}
+function acVendorInvV(input){acShow(input,'ac-vendor-invv',getMaster().vendor.map(v=>v.nama),()=>loadInvVItems());}

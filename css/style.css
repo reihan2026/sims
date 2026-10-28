@@ -213,3 +213,5 @@ input[type=checkbox],input[type=radio]{width:auto}
 .ac-item:hover,.ac-item.on{background:var(--bg)}
 .ac-item b{color:var(--ac)}
 .ac-empty{padding:9px 11px;font-size:12px;color:var(--t3)}
+
+body.no-kirim .kirim-ui{display:none!important}

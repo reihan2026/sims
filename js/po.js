@@ -347,7 +347,7 @@ function detMetrics(po,t,invVs,invDs){
     <div class="met"><div class="ml">Nilai PO</div><div class="mv num">${fmt(t.tp)}</div></div>
     <div class="met"><div class="ml">Modal vendor</div><div class="mv num ${!_tInvV&&t.wv<t.total?'a':''}">${modalVal!==null?fmt(modalVal):'—'}</div><div class="ms">${_tInvV>0?(invVs||[]).length+' inv':t.wv+'/'+t.total+' terisi'}</div></div>
     <div class="met"><div class="ml">Margin bersih</div><div class="mv num ${mBersih===null?'':mBersih>=0?'g':'r'}">${mBersih!==null?fmt(mBersih):'—'}</div><div class="ms">${marginSub}</div></div>
-    <div class="met"><div class="ml">Progres kirim</div><div class="mv">${aktifItems(po).filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
+    <div class="met kirim-ui"><div class="ml">Progres kirim</div><div class="mv">${aktifItems(po).filter(i=>i.status_kirim==='diterima').length}/${t.total}</div><div class="ms">item diterima</div></div>
   </div>`;
 }
 
@@ -364,7 +364,7 @@ function detNextSteps(id,po,invV,invD){
   if(noVendorItems.length)rows.push({label:`${noVendorItems.length} item belum ada vendor/harga: ${noVendorItems.slice(0,3).map(i=>i.nama).join(', ')}${noVendorItems.length>3?' +lainnya':''}`,action:`<button class="btn bxs bt" onclick="openNewInvV('${id}')">+ Buat invoice vendor</button>`});
   vendors.filter(v=>!invV.some(iv=>iv.vendor===v)).forEach(v=>rows.push({label:`Vendor "${v}" belum ada invoice`,action:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${v}')">+ Invoice untuk ${v}</button>`}));
   anyInvVUnpaid.forEach(iv=>rows.push({label:`${iv.no} (${iv.vendor}) belum dibayar — sisa ${fmtF(invVNet(iv).sisa)}`,action:!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar ${iv.no}</button>`:null}));
-  if(notKirim.length){
+  if(notKirim.length&&lacakKirim()){
     const urgent=notKirim.filter(i=>i.deadline&&diffDays(i.deadline)<=0);
     rows.push(urgent.length
       ?{urgent:true,label:`${urgent.length} item terlambat/deadline hari ini: ${urgent.map(i=>i.nama).join(', ')}`,action:`<button class="btn bxs bt" onclick="document.querySelector('#det-body .tbl')?.scrollIntoView({behavior:'smooth'})">Lihat tabel ↓</button>`}
@@ -465,7 +465,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         </td>
         <td>
           <div style="display:flex;align-items:center;gap:4px">
-            ${item.batal?'':`<button class="btn bxs bt" onclick="openKirim('${id}',${idx})">Kirim</button>`}
+            ${item.batal?'':`<button class="btn bxs bt kirim-ui" onclick="openKirim('${id}',${idx})">Kirim</button>`}
             <div class="kbb">
               <button class="kbb-btn" onclick="openKbb('kbb-item-${id}-${idx}',event)">⋯</button>
               <div class="kbb-menu" id="kbb-item-${id}-${idx}">
@@ -513,7 +513,7 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
           <span style="font-size:11px;font-family:var(--mn);font-weight:500;color:${im===null?'var(--t3)':im>=0?'var(--ac)':'var(--dn)'}">${im===null?'—':fmtF(im)}</span>
         </div>
         <div style="display:flex;gap:5px">
-          ${item.batal?'':`<button class="btn bxs bt" onclick="openKirim('${id}',${idx})" style="font-size:11px;padding:4px 8px">Kirim</button>`}
+          ${item.batal?'':`<button class="btn bxs bt kirim-ui" onclick="openKirim('${id}',${idx})" style="font-size:11px;padding:4px 8px">Kirim</button>`}
           <div class="kbb"><button class="kbb-btn" onclick="openKbb('kbb-mob-${id}-${idx}',event)" style="font-size:11px;padding:4px 8px">⋯</button>
             <div class="kbb-menu" id="kbb-mob-${id}-${idx}">
               <button onclick="openItemEdit('${id}',${idx})">Edit</button>
@@ -1138,6 +1138,28 @@ function saveTambahItem(){
 }
 
 // ===== STATUS KIRIM PER ITEM =====
+// Pelacakan kirim dimatikan → item yang SUDAH punya invoice vendor (lunas
+// atau belum — sebagian vendor kirim sebelum dibayar) dianggap diterima
+// begitu deadline-nya terlewati; tanggal diterima = deadline. Item tanpa
+// deadline memakai tanggal invoice. Dipanggil dari saveData (setiap simpan
+// invv/po) dan sekali setelah data dimuat (firebase.js), karena pemicunya
+// waktu, bukan aksi pengguna. Tidak pernah membalik ke "belum" — koreksi
+// manual tetap lewat popup status item.
+function syncTerimaOtomatis(){
+  if(lacakKirim())return 0;
+  _lookupCache.clear();let n=0;const tdy=today();
+  getPOs().forEach(po=>{
+    const {itemInvV}=buildLookup(po.id);
+    po.items.forEach((item,idx)=>{
+      if(item.batal||item.status_kirim==='diterima')return;
+      const iv=itemInvV[idx];if(!iv)return;
+      const tgl=item.deadline||iv.tgl;if(!tgl||tgl>=tdy)return;
+      item.status_kirim='diterima';item.tgl_kirim=item.tgl_kirim||tgl;item.tgl_diterima=tgl;item.auto_terima=true;n++;
+    });
+  });
+  if(n){_lookupCache.clear();_rc.invalidate();}
+  return n;
+}
 function openKirim(poId,idx){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
   document.getElementById('ki-po-id').value=poId;document.getElementById('ki-idx').value=idx;
@@ -1285,7 +1307,7 @@ function showStatPopup(event,poId,idx){
         ?`<button class="btn bxs bp" onclick="closeStatPopup();openBayarInvV('${ivObj.id}')">Rekam bayar</button>`
         :s1?`<span style="font-size:11px;color:var(--tl)">Pass-through — dibayar via dapur</span>`:'',
       !s1?'Selesaikan langkah 1 dulu':'',navInvV)
-   +sRow(s3,s3w,'3. Kirim ke dapur',d3,
+   +sRow(s3,s3w,lacakKirim()?'3. Kirim ke dapur':'3. Diterima dapur (otomatis setelah deadline)',d3,
       `<button class="btn bxs bt" onclick="closeStatPopup();openKirim('${poId}',${idx})">Update status kirim</button>`)
    +sRow(s4,false,'4. Invoice dapur',d4,
       isPT?''

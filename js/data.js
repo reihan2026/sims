@@ -99,6 +99,7 @@ function loadAllData(){
         }
 
         _rc.invalidate();
+        if(typeof applyKirimMode==='function')applyKirimMode();
 
         // Save to localStorage for offline fallback
         try{localStorage.setItem('sims_cache',JSON.stringify({data:{po:_cache.po,invv:_cache.invv,invd:_cache.invd,rek:_cache.rek,master:_cache.master},saved:new Date().toISOString()}));}catch(e){}
@@ -228,6 +229,10 @@ let _logShowAll=false;
 
 function saveData(keys){
   if(!_currentUser)return;
+  // Pelacakan kirim dimatikan → item ber-invoice vendor yang deadline-nya
+  // lewat ikut "diterima". Dijalankan di sini (satu titik) supaya invoice
+  // yang dibuat lewat jalur mana pun (form, scan, split, edit) ikut terjaring.
+  if(keys&&(keys.includes('invv')||keys.includes('po'))&&typeof syncTerimaOtomatis==='function'&&syncTerimaOtomatis()>0&&!keys.includes('po'))keys=[...keys,'po'];
   // Mark keys as dirty
   (keys||Object.keys(_cache)).forEach(k=>{
     if(k.startsWith('file_'))return;// files handled separately

@@ -284,3 +284,20 @@ function acKey(e,listId){
   }else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acHide(listId);}
 }
 function acVendorInvV(input){acShow(input,'ac-vendor-invv',getMaster().vendor.map(v=>v.nama),()=>loadInvVItems());}
+
+// ===== PENGATURAN: LACAK PENGIRIMAN =====
+// master.lacak_kirim===false → centang status kirim disembunyikan dan item
+// otomatis "diterima" setelah deadline bila sudah ada invoice vendor (lihat syncTerimaOtomatis
+// di po.js). Status kirim TETAP diisi karena arsip, status Selesai, cashback
+// pass-through, dan laporan konsumsi bergantung padanya.
+function lacakKirim(){const m=getMaster();return !m||m.lacak_kirim!==false;}
+function applyKirimMode(){document.body.classList.toggle('no-kirim',!lacakKirim());}
+function toggleLacakKirim(on){
+  const cb=document.getElementById('set-lacak-kirim');
+  if(!on&&!confirm('Matikan pelacakan pengiriman?\n\nItem yang sudah punya invoice vendor (lunas atau belum) akan otomatis ditandai "diterima dapur" begitu deadline-nya lewat (tanggal diterima = deadline), termasuk yang sudah ada sekarang. Berlaku untuk semua pengguna.')){if(cb)cb.checked=true;return;}
+  const m=getMaster();m.lacak_kirim=on;
+  const n=on?0:syncTerimaOtomatis();
+  saveData(n?['master','po']:['master']);_rc.invalidate();applyKirimMode();
+  addLog('pengaturan','Pengaturan','master','','Lacak pengiriman',on?'Dinyalakan':'Dimatikan · '+n+' item otomatis diterima');
+  showToast(on?'Pelacakan pengiriman dinyalakan':'Pelacakan pengiriman dimatikan'+(n?' — '+n+' item ditandai diterima':''));
+}

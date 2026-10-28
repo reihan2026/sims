@@ -176,7 +176,7 @@
 <!-- DETAIL PO -->
 <div id="page-detail-po" class="page">
   <div class="ph det-metrics-wrap" style="position:static">
-    <div><button class="btn bsm bw" onclick="openBulkKirim(_currentPoId)" style="margin-bottom:3px">⚡ Bulk status</button><div class="ph-t" id="det-t"></div><div class="ph-s" id="det-s"></div></div>
+    <div><button class="btn bsm bw kirim-ui" onclick="openBulkKirim(_currentPoId)" style="margin-bottom:3px">⚡ Bulk status</button><div class="ph-t" id="det-t"></div><div class="ph-s" id="det-s"></div></div>
     <div class="bg" id="det-act"></div>
   </div>
   <div class="pc" id="det-body"></div>
@@ -201,7 +201,7 @@
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor / item..." id="srch-invv" oninput="renderInvV()">
       <select id="f-invv-stat" onchange="renderInvV()"><option value="">Semua status bayar</option><option value="belum">Belum dibayar</option><option value="lunas">Lunas</option></select>
-      <select id="f-invv-kirim" onchange="renderInvV()"><option value="">Semua status kirim</option><option value="belum">Belum dikirim</option><option value="sebagian">Sebagian dikirim</option><option value="semua">Semua diterima</option></select>
+      <select id="f-invv-kirim" class="kirim-ui" onchange="renderInvV()"><option value="">Semua status kirim</option><option value="belum">Belum dikirim</option><option value="sebagian">Sebagian dikirim</option><option value="semua">Semua diterima</option></select>
       <select id="f-invv-bln" onchange="filterInvVBln()"><option value="">Semua bulan</option></select>
       <select id="f-invv-po" onchange="renderInvV()"><option value="">Semua PO</option></select>
     </div>
@@ -211,7 +211,7 @@
     <span id="invv-sel-count" style="font-weight:600;font-size:13px">0 dipilih</span>
     <span style="flex:1"></span>
     <button class="btn bsm bp" onclick="openBulkBayarInvV()">Rekam bayar</button>
-    <button class="btn bsm bt" onclick="openBulkKirimInvV()">Update kirim</button>
+    <button class="btn bsm bt kirim-ui" onclick="openBulkKirimInvV()">Update kirim</button>
     <button class="btn bsm" onclick="toggleInvVSelMode()">Batal</button>
   </div>
 </div>
@@ -283,6 +283,14 @@
         <div class="fg"><label class="lbl">Inisial (2-3 huruf)</label><input type="text" id="user-initial" placeholder="misal: BD / ST" maxlength="3" oninput="saveUserProfile()"></div>
       </div>
       <div style="font-size:11px;color:var(--in);margin-top:4px" id="user-status"></div>
+    </div>
+    <div class="card">
+      <div class="ct">Pengaturan</div>
+      <label style="display:flex;gap:9px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" id="set-lacak-kirim" onchange="toggleLacakKirim(this.checked)" style="margin-top:3px">
+        <div><div style="font-weight:600">Lacak pengiriman barang</div>
+        <div style="font-size:12px;color:var(--t2);margin-top:2px">Nyala: status kirim tiap item dicentang manual (belum / dikirim / diterima). Mati: tombol & centang kirim disembunyikan, dan item yang sudah punya invoice vendor otomatis dianggap <strong>diterima dapur</strong> begitu deadline-nya lewat (sudah dibayar atau belum). Berlaku untuk semua pengguna.</div></div>
+      </label>
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;flex-wrap:wrap;gap:6px">

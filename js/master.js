@@ -1,6 +1,7 @@
 // ===== MASTER DATA =====
 function renderMaster(){
   renderKats();
+  const _lk=document.getElementById('set-lacak-kirim');if(_lk)_lk.checked=lacakKirim();
   const m=getMaster();const reks=getReks();
   document.getElementById('dapur-list').innerHTML=m.dapur.length?m.dapur.map((d,i)=>{const o=typeof d==='string'?{kode:'',nama:d,alamat:'',tlp:''}:d;return`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${o.kode?`<span style="font-family:var(--mn);color:var(--ac);margin-right:6px">${o.kode}</span>`:''}${o.nama}</div>${o.alamat?`<div style="font-size:11px;color:var(--t3)">${o.alamat}</div>`:''}${o.tlp?`<div style="font-size:11px;color:var(--t3)">${o.tlp}</div>`:''}</div><div class="bg"><button class="btn bxs bi" onclick="openEditDapur(${i})">Edit</button><button class="btn bxs bd-" onclick="rmDapur(${i})">Hapus</button></div></div>`;}).join(''):'<div class="empty" style="padding:10px">Kosong</div>';
   document.getElementById('master-rek-list').innerHTML=reks.length?reks.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bd)"><div><div style="font-size:13px;font-weight:500">${r.nama}</div><div style="font-size:10px;color:var(--t3)">${r.pj||''}${r.no?' · '+r.no:''}</div></div><button class="btn bxs bd-" onclick="delRek('${r.id}')">Hapus</button></div>`).join(''):'<div class="empty" style="padding:10px">Belum ada rekening</div>';

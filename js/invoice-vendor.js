@@ -809,7 +809,7 @@ function renderInvV(){
   const invs=getInvV();/* summary computed after filter */
   const srch=(document.getElementById('srch-invv')?.value||'').toLowerCase();
   const fS=document.getElementById('f-invv-stat')?.value||'';
-  const fK=document.getElementById('f-invv-kirim')?.value||'';
+  const fK=lacakKirim()?(document.getElementById('f-invv-kirim')?.value||''):'';
   const fB=document.getElementById('f-invv-bln')?.value||'';
   const fP=document.getElementById('f-invv-po')?.value||'';
   const pos=getPOs();
@@ -860,18 +860,18 @@ function renderInvV(){
     // Build per-item kirim status
     const ks=getKirimStatus(iv);
     const ksTag=ks==='semua'
-      ?'<span class="tag tok" style="margin-left:3px">Semua diterima</span>'
+      ?'<span class="tag tok kirim-ui" style="margin-left:3px">Semua diterima</span>'
       :ks==='sebagian'
-        ?'<span class="tag twn" style="margin-left:3px">Sebagian dikirim</span>'
+        ?'<span class="tag twn kirim-ui" style="margin-left:3px">Sebagian dikirim</span>'
         :ks==='belum'
-          ?'<span class="tag tgr" style="margin-left:3px">Belum dikirim</span>'
+          ?'<span class="tag tgr kirim-ui" style="margin-left:3px">Belum dikirim</span>'
           :'';
 
     // Per-item kirim detail
     const invItems=iv.items||[];
     let kirimDetail='';
     if(po&&invItems.length){
-      kirimDetail='<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">';
+      kirimDetail='<div class="kirim-ui" style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px">';
       invItems.forEach(i=>{
         const poItem=findPoItem(po,i);
         const sk=poItem?.status_kirim||'belum';
@@ -917,7 +917,7 @@ function renderInvV(){
         <div class="kbb">
           <button class="kbb-btn" onclick="openKbb('kbb-invv-${iv.id}',event)">⋯</button>
           <div class="kbb-menu" id="kbb-invv-${iv.id}">
-            <button onclick="openKirimInvV('${iv.id}')">Update kirim</button>
+            <button class="kirim-ui" onclick="openKirimInvV('${iv.id}')">Update kirim</button>
             <button onclick="openEditInvV('${iv.id}')">Edit qty/harga</button>
             ${!n.ongkir?`<button onclick="openOngkir('${iv.id}')">+ Ongkos kirim</button>`:''}
             ${!isPTCB&&(vObj?.cashback||hasCashback(iv.vendor))&&!cbTotal?`<button onclick="openCashback('${iv.id}')">+ Cashback</button>`:''}

@@ -773,7 +773,8 @@ function saveItemEdit(){
   if(!satSynced)setPOs(pos);
   closeModal('modal-item');
   const _invvNo=document.getElementById('item-edit-warn').dataset.invvNo||'';
-  if(item.qty!==oldQty&&_invvNo)showToast('Qty PO diperbarui. Jangan lupa update qty di invoice vendor '+_invvNo+' juga.',true);
+  if(item.qty>oldQty&&_invvNo)showToast('Qty PO naik. Tambahan '+(Math.round((item.qty-oldQty)*1000)/1000)+' '+item.satuan+' bisa ditagih lewat invoice vendor baru — item muncul sebagai "Sisa".');
+  else if(item.qty!==oldQty&&_invvNo)showToast('Qty PO diperbarui. Jangan lupa update qty di invoice vendor '+_invvNo+' juga.',true);
   else showToast('Item diperbarui!');
   showDetail(poId);
 }

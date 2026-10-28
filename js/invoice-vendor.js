@@ -98,7 +98,7 @@ function onInvVEditChange(idx, satPO){
   // "sudah tertagih penuh" (lihat splitSisa di saveInvV).
   const splitWrap=document.getElementById('invv-split-wrap-'+idx);
   const splitCb=document.getElementById('invv-split-'+idx);
-  if(splitWrap&&splitCb){
+  if(splitWrap&&splitCb&&!cb.dataset.sisaSudah){
     const sisa=qtyOrig-qtyInv;
     if(!satChanged&&qtyInv>0&&sisa>0){
       document.getElementById('invv-split-lbl-'+idx).textContent='Sisa '+sisa+' '+satPO+' belum ada invoice — split jadi baris baru di PO?';
@@ -139,6 +139,20 @@ function loadInvVItems(){
   // sebenarnya sudah diinvoice (risiko invoice ganda) begitu idx PO bergeser.
   const {itemInvV:coveredBy}=buildLookup(poId);
   const available=po.items.map((item,idx)=>({...item,_idx:idx})).filter(item=>!item.batal&&!coveredBy[item._idx]);
+  // Item yang sudah diinvoice tapi qty PO-nya kemudian dinaikkan (mis. 2kg →
+  // 4kg) → tawarkan SISA-nya. Saat disimpan, baris PO di-split (lihat
+  // sisa_sudah di saveInvV): baris asli = qty yang sudah diinvoice (tetap
+  // tertaut ke invoice lama), baris baru = sisa → tertaut ke invoice ini.
+  // Item invoice berkonversi satuan dilewati: qty-nya tidak bisa dibandingkan
+  // langsung dengan qty PO.
+  po.items.forEach((item,idx)=>{
+    const iv=coveredBy[idx];if(item.batal||!iv)return;
+    const its=(iv.items||[]).filter(i=>findPoItem(po,i)===item);
+    if(!its.length||its.some(i=>i.konv||(i.satuan||'').toLowerCase()!==(item.satuan||'').toLowerCase()))return;
+    const sudah=its.reduce((s,i)=>s+(parseFloat(i.qty)||0),0);
+    const sisa=Math.round(((item.qty||0)-sudah)*1000)/1000;
+    if(sudah>0&&sisa>0)available.push({...item,qty:sisa,_idx:idx,_sudah:sudah,_covNo:iv.no});
+  });
 
   if(!available.length){
     wrap.innerHTML=`<div style="padding:10px 0;font-size:12px;color:var(--t3)">Semua item PO sudah masuk ke invoice vendor. Gunakan <strong>Edit qty/harga</strong> pada invoice yang sudah ada jika perlu mengubah qty atau harga.</div>`;
@@ -159,11 +173,12 @@ function loadInvVItems(){
       const _histH=getHistoriHargaVendor(item.nama,vendor);
       const suggestBadge=_histH?`<div title="Pakai harga histori" style="font-size:9px;color:var(--t3);cursor:pointer;margin-top:2px" onclick="this.closest('tr').querySelector('.invv-hv').value=${_histH.harga};updateInvVHarga(this.closest('tr').querySelector('.invv-hv'),${item._idx})">Histori: ${fmtF(_histH.harga)} — ${_histH.vendor}</div>`:'';
       html+=`<tr id="invv-tr-${item._idx}" data-kat="${item.kat||''}">
-        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-item-id="${item.id||''}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
+        <td style="padding:7px 8px;text-align:center"><input type="checkbox" class="invv-cb" data-idx="${item._idx}" data-item-id="${item.id||''}" data-nama="${item.nama}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-qty="${item.qty}" data-sat="${item.satuan}" data-hv="${useHarga}" data-hpo="${item.harga_po||0}" data-qty-orig="${item.qty}" data-sat-orig="${item.satuan}" data-konv="" ${item._sudah?`data-sisa-sudah="${item._sudah}"`:''} ${shouldCheck?'checked':''} onchange="calcInvVTotal()"></td>
         <td style="padding:7px 8px" colspan="2">
           <div style="font-weight:500">${item.nama}</div>
           ${item.spek?`<div style="font-size:10px;color:var(--t3)">${item.spek}</div>`:''}
           <div id="invv-qty-display-${item._idx}" style="font-size:11px;font-family:var(--mn);color:var(--t2);margin-top:2px">${item.qty} ${item.satuan}</div>
+          ${item._sudah?`<div style="font-size:10px;color:var(--it);margin-top:2px">Sisa — ${item._sudah} ${item.satuan} sudah di ${item._covNo}</div>`:''}
           <div class="invv-edit-panel" id="invv-ep-${item._idx}">
             <div class="invv-edit-row">
               <div class="fg"><label>Qty invoice</label><input type="number" id="invv-eq-${item._idx}" value="${item.qty}" min="0" step="any" style="font-size:12px;padding:4px 6px;width:100%;font-family:var(--mn)" oninput="onInvVEditChange(${item._idx},'${item.satuan}')"></div>
@@ -250,7 +265,7 @@ function saveInvV(){
     // poItemId — kode permanen item PO (lihat js/data.js backfill). Item lama
     // (dibuat sebelum backfill) tidak punya ini; findPoItem tetap jatuh ke
     // idx/nama+hari seperti sebelumnya untuk kasus itu.
-    items.push({idx,poItemId:cb.dataset.itemId||null,nama:cb.dataset.nama,hari:cb.dataset.hari||'',deadline:cb.dataset.deadline||'',qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false});
+    items.push({idx,poItemId:cb.dataset.itemId||null,nama:cb.dataset.nama,hari:cb.dataset.hari||'',deadline:cb.dataset.deadline||'',qty:qtyInv,satuan:satInv,satuan_po:satOrig||satInv,harga_vendor:hv,harga_vendor_po:hvForPO,konv:satChanged&&konv>0?konv:null,sat_changed:satChanged||false,sisa_sudah:parseFloat(cb.dataset.sisaSudah)||0});
   });
   if(!items.length){showToast('Pilih minimal 1 item!',true);return;}
   // All valid — now disable button
@@ -260,6 +275,29 @@ function saveInvV(){
   try{
   const total=parseFloat(document.getElementById('invv-total').value)||0;
   const pos=getPOs();const po=pos.find(p=>p.id===poId);
+  // Baris "sisa" (qty PO dinaikkan setelah diinvoice, lihat loadInvVItems):
+  // split dulu baris PO-nya, lalu item invoice ini ditautkan ke baris baru.
+  // Kalau kondisi sudah berubah (qty PO tidak lagi > yang sudah diinvoice),
+  // item dibuang dari invoice — jangan sampai tertaut ke baris lama = dobel.
+  let sisaGagal=0;
+  if(po)for(let k=items.length-1;k>=0;k--){
+    const i=items[k];const sudah=i.sisa_sudah;delete i.sisa_sudah;if(!sudah)continue;
+    const asal=po.items[i.idx];
+    if(!asal||asal.nama!==i.nama||!(asal.qty>sudah)){items.splice(k,1);sisaGagal++;continue;}
+    const oldQty=asal.qty;const sisa=Math.round((oldQty-sudah)*1000)/1000;
+    const itemBaru={...asal,qty:sisa,id:_newItemId(),retur:null,status_kirim:'belum',tgl_kirim:'',tgl_diterima:'',nota_key:asal.nota_key||null};
+    delete itemBaru.auto_terima;
+    asal.qty=sudah;po.items.push(itemBaru);
+    i.idx=po.items.length-1;i.poItemId=itemBaru.id;
+    if(!po.revisions)po.revisions=[];
+    po.revisions.push({tgl:today(),changes:[
+      {nama:asal.nama,qty_lama:oldQty,qty_baru:sudah,harga_lama:asal.harga_po,harga_baru:asal.harga_po,alasan:'Split otomatis — sisa qty ditagih di invoice baru'},
+      {nama:asal.nama,qty_lama:0,qty_baru:sisa,harga_lama:asal.harga_po,harga_baru:asal.harga_po,alasan:'Split otomatis — sisa qty ditagih di invoice baru (baris baru)'}
+    ]});
+    addLog('split_item','Split item (sisa qty)','item',poId,po.no,asal.nama+': '+oldQty+' → '+sudah+' + '+sisa+' '+asal.satuan);
+  }
+  if(sisaGagal)showToast(sisaGagal+' item sisa dilewati — qty PO sudah berubah. Buka ulang form invoice.',true);
+  if(!items.length){resetBtn();return;}
   if(po){items.forEach(i=>{
     // Find correct PO item by idx+nama (or fallback to nama-only if idx stale)
     let poItem=null;const idxMatch=typeof i.idx==='number'&&po.items[i.idx]&&po.items[i.idx].nama===i.nama;

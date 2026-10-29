@@ -1141,7 +1141,7 @@ function saveTambahItem(){
 // ===== STATUS KIRIM PER ITEM =====
 // Pelacakan kirim dimatikan → item yang SUDAH punya invoice vendor (lunas
 // atau belum — sebagian vendor kirim sebelum dibayar) dianggap diterima
-// begitu deadline-nya terlewati; tanggal diterima = deadline. Item tanpa
+// begitu deadline-nya terlewati; tanggal diterima = deadline (YYYY-MM-DD). Item tanpa
 // deadline memakai tanggal invoice. Dipanggil dari saveData (setiap simpan
 // invv/po) dan sekali setelah data dimuat (firebase.js), karena pemicunya
 // waktu, bukan aksi pengguna. Tidak pernah membalik ke "belum" — koreksi
@@ -1154,7 +1154,9 @@ function syncTerimaOtomatis(){
     po.items.forEach((item,idx)=>{
       if(item.batal||item.status_kirim==='diterima')return;
       const iv=itemInvV[idx];if(!iv)return;
-      const tgl=item.deadline||iv.tgl;if(!tgl||tgl>=tdy)return;
+      // Deadline PO umumnya teks ("Selasa, 27 Oktober 2026") — WAJIB lewat
+      // parseDeadline, perbandingan string mentah dengan YYYY-MM-DD selalu salah.
+      const tgl=parseDeadline(item.deadline)||parseDeadline(iv.tgl);if(!tgl||tgl>=tdy)return;
       item.status_kirim='diterima';item.tgl_kirim=item.tgl_kirim||tgl;item.tgl_diterima=tgl;item.auto_terima=true;n++;
     });
   });

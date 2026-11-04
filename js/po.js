@@ -603,7 +603,7 @@ function detInvV(id,invV){
           <span class="${n.sisa>0?'r':'g'}">Sisa: ${fmtF(n.sisa)}</span>
           ${cbTotal>0?`<span style="color:var(--pu)">CB: +${fmtF(cbTotal)}</span>`:''}
         </div>
-        <div style="font-size:10px;color:var(--t3);margin-top:3px">Item: ${(iv.items||[]).map(i=>`${i.nama} (${i.qty} ${i.satuan})`).join(', ')}</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px">Item: ${groupInvVItems(iv.items).map(i=>`${i.nama} (${i.qty} ${i.satuan})`).join(', ')}</div>
       </div>
       <div class="bg">
         ${iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)?`<button class="btn bsm bp" onclick="openBayarInvV('${iv.id}')">Rekam bayar</button>`:iv.bayar_status!=='lunas'?'<span class="tag ttl" style="font-size:10px">Pass-through</span>':''}

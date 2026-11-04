@@ -239,12 +239,12 @@ function showInvVDetail(invId){
     </div>
     <div class="ct">Item dalam invoice</div>
     <div class="inv-det-tbl" style="overflow-x:auto"><table class="tbl"><thead><tr><th>Nama item</th><th>Qty</th><th>Sat</th><th style="text-align:right">Hrg vendor</th><th style="text-align:right">Subtotal</th></tr></thead>
-    <tbody>${(inv.items||[]).map(i=>`<tr><td style="font-weight:500">${i.nama}</td><td class="num">${i.qty}</td><td>${i.satuan||''}</td><td class="num" style="text-align:right">${fmtF(i.harga_vendor||0)}</td><td class="num" style="text-align:right">${fmtF((i.qty||0)*(i.harga_vendor||0))}</td></tr>`).join('')}</tbody>
+    <tbody>${groupInvVItems(inv.items).map(i=>`<tr><td style="font-weight:500">${i.nama}${i._n>1?`<div style="font-size:10px;color:var(--t3);font-weight:400">${invVGrpLbl(i)}</div>`:''}</td><td class="num">${i.qty}</td><td>${i.satuan||''}</td><td class="num" style="text-align:right">${fmtF(i.harga_vendor||0)}</td><td class="num" style="text-align:right">${fmtF((i.qty||0)*(i.harga_vendor||0))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="4" style="text-align:right;font-weight:600;padding:8px">Total</td><td class="num" style="text-align:right;font-weight:600;padding:8px">${fmtF(inv.total)}</td></tr></tfoot>
     </table></div>
     <div class="inv-det-rows" style="display:none">
-      ${(inv.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--bd)">
-        <div><div style="font-weight:500;font-size:13px">${i.nama}</div><div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:1px">${i.qty} ${i.satuan||''} × ${fmtF(i.harga_vendor||0)}</div></div>
+      ${groupInvVItems(inv.items).map(i=>`<div style="display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--bd)">
+        <div><div style="font-weight:500;font-size:13px">${i.nama}</div>${i._n>1?`<div style="font-size:10px;color:var(--t3)">${invVGrpLbl(i)}</div>`:''}<div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:1px">${i.qty} ${i.satuan||''} × ${fmtF(i.harga_vendor||0)}</div></div>
         <div style="font-family:var(--mn);font-size:13px;flex-shrink:0;padding-left:8px">${fmtF((i.qty||0)*(i.harga_vendor||0))}</div>
       </div>`).join('')}
       <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:600;font-size:13px">

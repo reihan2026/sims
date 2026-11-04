@@ -201,7 +201,7 @@ function loadInvVItems(){
       </tr>`;
     });
   });
-  html+='</tbody></table></div>';wrap.innerHTML=html;
+  html+='</tbody></table></div><div id="invv-nota-sum" style="display:none;margin-top:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--bd);border-radius:var(--r)"></div>';wrap.innerHTML=html;
   const srchBar=document.getElementById('srch-invv-item');
   if(srchBar){srchBar.style.display='';srchBar.value='';}
   const katFilter=document.getElementById('kat-invv-filter');
@@ -235,13 +235,35 @@ function filterInvVItems(){
 }
 function updateInvVHarga(input,idx){
   const hv=parseFloat(input.value)||0;const cb=document.querySelector(`.invv-cb[data-idx="${idx}"]`);
-  if(cb){cb.dataset.hv=hv;const sub=(parseFloat(cb.dataset.qty)||0)*hv;const el=document.getElementById('invv-sub-'+idx);if(el)el.textContent=hv>0?fmtF(sub):'—';}
+  const setRow=(c,h)=>{c.dataset.hv=h;const sub=(parseFloat(c.dataset.qty)||0)*h;const el=document.getElementById('invv-sub-'+c.dataset.idx);if(el)el.textContent=h>0?fmtF(sub):'—';};
+  if(cb){
+    const lama=cb.dataset.hv;setRow(cb,hv);
+    // Item yang sama di hari lain (nama+satuan sama, tanpa konversi) ikut harga
+    // baru — nota vendor biasanya satu harga untuk semua. Hanya baris yang
+    // harganya masih sama dengan harga LAMA baris ini, supaya harga yang sengaja
+    // dibedakan per hari tidak tertimpa.
+    if(!cb.dataset.konv)document.querySelectorAll('.invv-cb').forEach(c=>{
+      if(c===cb||c.dataset.konv||c.dataset.nama!==cb.dataset.nama||(c.dataset.sat||'').toLowerCase()!==(cb.dataset.sat||'').toLowerCase()||c.dataset.hv!==lama)return;
+      const hEl=document.querySelector(`.invv-hv[data-idx="${c.dataset.idx}"]`);if(hEl)hEl.value=input.value;setRow(c,hv);
+    });
+  }
   calcInvVTotal();
 }
 function calcInvVTotal(){
   let total=0;document.querySelectorAll('.invv-cb:checked').forEach(cb=>{const hvEl=document.querySelector(`.invv-hv[data-idx="${cb.dataset.idx}"]`);const hv=hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0;total+=(parseFloat(cb.dataset.qty)||0)*hv;});
   const ongkir=parseFloat(document.getElementById('invv-ongkir')?.value)||0;
   document.getElementById('invv-total').value=Math.round(total+ongkir);
+  // Ringkasan sesuai nota: baris PO harian digabung (lihat groupInvVItems)
+  // supaya bisa langsung dicocokkan dengan nota vendor.
+  const sumEl=document.getElementById('invv-nota-sum');
+  if(sumEl){
+    const sel=[...document.querySelectorAll('.invv-cb:checked')].map(cb=>{const hvEl=document.querySelector(`.invv-hv[data-idx="${cb.dataset.idx}"]`);return{nama:cb.dataset.nama,satuan:cb.dataset.sat,qty:parseFloat(cb.dataset.qty)||0,harga_vendor:hvEl?parseFloat(hvEl.value)||0:parseFloat(cb.dataset.hv)||0,konv:cb.dataset.konv||'',hari:cb.dataset.hari};});
+    const g=groupInvVItems(sel);
+    if(g.some(x=>x._n>1)){
+      sumEl.innerHTML='<div style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;margin-bottom:4px">Ringkasan sesuai nota</div>'+g.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--bd);font-size:12px"><span>${x.nama} — <span style="font-family:var(--mn)">${x.qty} ${x.satuan} × ${fmtF(x.harga_vendor)}</span>${x._n>1?` <span style="font-size:10px;color:var(--t3)">(${invVGrpLbl(x)})</span>`:''}</span><span style="font-family:var(--mn);white-space:nowrap">${fmtF(x.qty*x.harga_vendor)}</span></div>`).join('');
+      sumEl.style.display='block';
+    }else{sumEl.style.display='none';sumEl.innerHTML='';}
+  }
 }
 function saveInvV(){
   const saveBtn=document.getElementById('invv-save-btn');

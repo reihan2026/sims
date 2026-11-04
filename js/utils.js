@@ -301,3 +301,26 @@ function toggleLacakKirim(on){
   addLog('pengaturan','Pengaturan','master','','Lacak pengiriman',on?'Dinyalakan':'Dimatikan · '+n+' item otomatis diterima');
   showToast(on?'Pelacakan pengiriman dinyalakan':'Pelacakan pengiriman dimatikan'+(n?' — '+n+' item ditandai diterima':''));
 }
+
+// ===== TAMPILAN ITEM INVOICE VENDOR "SESUAI NOTA" =====
+// PO dibuat per hari (mis. Beras 160kg × 5 hari) tapi nota vendor sering satu
+// baris (Beras 800kg). Data tetap disimpan per baris PO — wajib, karena
+// invoice dapur ditagih harian & buildLookup memetakan 1 baris PO ↔ 1 invV —
+// jadi penggabungan HANYA untuk tampilan/cetak: item dengan nama+satuan+harga
+// (+konversi) sama digabung, qty dijumlah.
+function groupInvVItems(items){
+  const out=[];const map=new Map();
+  (items||[]).forEach(i=>{
+    const k=baseNama(i.nama)+'||'+(i.satuan||'').toLowerCase()+'||'+(parseFloat(i.harga_vendor)||0)+'||'+(i.konv||'');
+    let g=map.get(k);
+    if(!g){g={nama:baseNama(i.nama),satuan:i.satuan||'',harga_vendor:parseFloat(i.harga_vendor)||0,qty:0,_n:0,_hari:[]};map.set(k,g);out.push(g);}
+    g.qty+=parseFloat(i.qty)||0;g._n++;
+    const h=(i.hari||'').split(',')[0].trim();if(h&&!g._hari.includes(h))g._hari.push(h);
+  });
+  out.forEach(g=>{g.qty=Math.round(g.qty*1000)/1000;});
+  return out;
+}
+function invVGrpLbl(g){
+  if(g._n<2)return'';
+  return g._hari.length===g._n?g._n+' hari: '+g._hari.map(h=>h.slice(0,3)).join(', '):g._n+' baris PO';
+}

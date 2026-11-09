@@ -112,12 +112,18 @@ function loadInvDItems(){
     // qty(22) × harga_po per-kg(56000) kepakai apa adanya dan dapur under-charge
     // 6× lipat tanpa ada yang sadar — ini insiden nyata yang ditemukan di data
     // produksi (Anggur Ungu, PO-BB-KLU-280826) sebelum tambalan ini ada.
-    const qtyPO=invVItem?(invVItem.konv?invVItem.qty*invVItem.konv:invVItem.qty):item.qty;
+    const qtyInvV=invVItem?(invVItem.konv?invVItem.qty*invVItem.konv:invVItem.qty):item.qty;
     const satuanPO=invVItem?(invVItem.konv?(invVItem.satuan_po||invVItem.satuan):invVItem.satuan):item.satuan;
+    // Dapur ditagih sesuai pesanannya: kalau invoice vendor LEBIH BESAR dari
+    // qty PO (pembulatan karung, atau PO direvisi turun & selisihnya dicatat
+    // sebagai retur di nota lain), pakai qty PO. Vendor kirim kurang → tetap
+    // qty invoice vendor. Satuan beda tanpa konversi → tidak dibandingkan.
+    const capped=!!invVItem&&(satuanPO||'').toLowerCase()===(item.satuan||'').toLowerCase()&&(parseFloat(item.qty)||0)>0&&(parseFloat(item.qty)||0)<qtyInvV;
+    const qtyPO=capped?parseFloat(item.qty):qtyInvV;
     const hargaRefPO=invVItem?(invVItem.harga_vendor_po!=null?invVItem.harga_vendor_po:invVItem.harga_vendor):(item.harga_vendor||0);
     return{
       id:item.id||null,_idx:pidx,nama:item.nama,kat:item.kat||'',
-      qty:qtyPO,satuan:satuanPO,
+      qty:qtyPO,satuan:satuanPO,_qtyInvV:capped?Math.round(qtyInvV*1000)/1000:null,
       harga_ref:hargaRefPO,harga:item.harga_po||0,
       hari:item.hari||'',deadline:item.deadline||'',
       invv_id:linkedInvV?.id||null,_noInvV:!linkedInvV
@@ -203,7 +209,7 @@ function loadInvDItems(){
           data-hv="${item.harga_ref||0}" data-hari="${item.hari||''}" data-deadline="${item.deadline||''}" data-invv-id="${item.invv_id||''}" ${itemIdAttr}
           ${mergedIdxsAttr} ${mergedInvvidsAttr} ${mergedItemIdsAttr} checked onchange="calcInvDTotal()"></td>
         <td style="padding:7px 8px;font-weight:500">${item.nama}${!item._merged&&item.deadline?'<div style="font-size:10px;color:var(--t3)">Deadline: '+item.deadline+'</div>':''}${item._merged?`<div style="font-size:10px;color:var(--t3);margin-top:1px">Gabungan ${item._srcItems.length} item · <button type="button" onclick="toggleInvDMergeKey('${(item._mergeKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t2);cursor:pointer;line-height:1.6">Pisah</button></div>`:''}${item._dupFirst&&item._dupKey?`<div style="margin-top:2px"><button type="button" onclick="toggleInvDMergeKey('${(item._dupKey||'').replace(/'/g,'\\\'')}')" style="font-size:10px;padding:0 5px;border:1px solid var(--ac);border-radius:var(--r);background:var(--bg);color:var(--ac);cursor:pointer;line-height:1.6">Gabung ${item._dupCount}×</button></div>`:''}${item._noInvV?'<div style="font-size:10px;color:var(--wt);margin-top:2px">⚠ Belum ada invoice vendor</div>':''}<input type="text" id="icat-${rid}" placeholder="Catatan item (opsional)…" style="display:block;margin-top:4px;width:100%;font-size:11px;font-weight:normal;padding:2px 5px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg);color:var(--t1)"></td>
-        <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}</td>
+        <td style="padding:7px 8px;text-align:center;font-family:var(--mn);white-space:nowrap">${item.qty} ${item.satuan}${!item._merged&&item._qtyInvV!=null?`<div style="font-size:10px;color:var(--t3)" title="Qty dibatasi ke qty PO">Inv. vendor: ${item._qtyInvV} ${item.satuan}</div>`:''}</td>
         <td style="padding:7px 8px;font-family:var(--mn);font-size:11px;color:var(--t3)">${refDisplay}</td>
         <td style="padding:7px 8px"><input type="number" class="invd-h" id="h-${rid}" value="${item.harga||''}" min="0"
           style="width:110px;text-align:right;font-family:var(--mn);font-size:12px;padding:3px 6px"

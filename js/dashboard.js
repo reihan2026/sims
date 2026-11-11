@@ -20,14 +20,7 @@ function renderDashboard(){
   const today2=today();
   const keluarHariIni=invV.filter(iv=>iv.jatuh===today2&&iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)).reduce((s,iv)=>s+invVNet(iv).sisa,0);
   const masukHariIni=invD.filter(id=>id.jatuh===today2&&id.terima_status!=='lunas').reduce((s,id)=>{const r=(id.payments||[]).reduce((a,p)=>a+p.jumlah,0);return s+id.total-r;},0);
-  const cfEl=document.getElementById('cf-today-bar');
-  if(keluarHariIni>0||masukHariIni>0){
-    cfEl.innerHTML=`<div class="cf-today"><span style="font-weight:600;color:var(--it)">Cashflow hari ini:</span>
-      ${keluarHariIni>0?`<span>Harus bayar ke vendor: <strong class="num r">${fmtF(keluarHariIni)}</strong></span>`:''}
-      ${masukHariIni>0?`<span>Tagihan jatuh tempo ke dapur: <strong class="num g">${fmtF(masukHariIni)}</strong></span>`:''}
-      <span style="margin-left:auto;font-size:11px;color:var(--it)">Berdasarkan jatuh tempo invoice hari ini</span>
-    </div>`;
-  } else cfEl.innerHTML='';
+  const cfEl=document.getElementById('cf-today-bar');if(cfEl)cfEl.innerHTML=''; // pindah ke kpi-strip
 
   // ===== AGENDA / DASHBOARD METRICS BARU =====
   const agendaSections=[];
@@ -39,52 +32,31 @@ function renderDashboard(){
     if(diff<0)kirimTerlambat.push({po,item,idx,diff});
     else if(diff===0)kirimHariIni.push({po,item,idx});
   });});
-  if(kirimTerlambat.length)agendaSections.push({id:'ag-late',icon:'⚠',label:'Pengiriman terlambat',count:kirimTerlambat.length,urgent:true,items:kirimTerlambat.map(x=>`<div class="agenda-item ai-urgent"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Deadline: ${x.item.deadline} (${Math.abs(x.diff)}h lalu)</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
-  if(kirimHariIni.length)agendaSections.push({id:'ag-today',icon:'📦',label:'Kirim hari ini',count:kirimHariIni.length,urgent:false,items:kirimHariIni.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)}</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
+  if(kirimTerlambat.length)agendaSections.push({id:'ag-late',tag:'LEWAT',tc:'or',label:'Pengiriman terlambat',count:kirimTerlambat.length,urgent:true,items:kirimTerlambat.map(x=>`<div class="agenda-item ai-urgent"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Deadline: ${x.item.deadline} (${Math.abs(x.diff)}h lalu)</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
+  if(kirimHariIni.length)agendaSections.push({id:'ag-today',tag:'HARI INI',tc:'bl',label:'Kirim hari ini',count:kirimHariIni.length,urgent:false,items:kirimHariIni.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no} — ${x.po.dapur}</span><br><span style="font-size:11px;font-family:var(--mn)">${x.item.qty} ${x.item.satuan} ${catBadge(x.item.kat)}</span></div><button class="btn bxs bt" onclick="openKirim('${x.po.id}',${x.idx})">Update</button></div>`)});
   const invVJT=invV.filter(iv=>{if(iv.bayar_status==='lunas')return false;if(isPassthrough(iv.id))return false;if(!iv.jatuh)return false;return diffDays(iv.jatuh)<=0;});
-  if(invVJT.length)agendaSections.push({id:'ag-invv',icon:'💳',label:'Invoice vendor jatuh tempo',count:invVJT.length,urgent:true,items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent"><div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}</div>`})});
+  if(invVJT.length)agendaSections.push({id:'ag-invv',tag:'BAYAR',tc:'or',label:'Invoice vendor jatuh tempo',count:invVJT.length,urgent:true,items:invVJT.map(iv=>{const n=invVNet(iv);return`<div class="agenda-item ai-urgent"><div><strong>${iv.no}</strong> — ${iv.vendor}<br><span style="font-size:11px;font-family:var(--mn);color:var(--dn)">Sisa: ${fmtF(n.sisa)} · Jt: ${iv.jatuh}</span></div>${!isPassthrough(iv.id)?`<button class="btn bxs bp" onclick="openBayarInvV('${iv.id}')">Bayar</button>`:`<span class="tag ttl" style="font-size:9px">Pass-through</span>`}</div>`})});
   const blmVendorUrgent=[];pos.forEach(po=>{po.items.forEach((item,idx)=>{if(item.batal)return;if(item.vendor&&item.harga_vendor)return;if(item.status_kirim==='diterima')return;const diff=item.deadline?diffDays(item.deadline):null;if(diff!==null&&diff<=2)blmVendorUrgent.push({po,item,idx,diff});});});
-  if(blmVendorUrgent.length)agendaSections.push({id:'ag-harga',icon:'🔍',label:'Harga vendor belum ada (≤2hr)',count:blmVendorUrgent.length,urgent:false,items:blmVendorUrgent.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--wt)">Deadline: ${x.item.deadline}</span></div><button class="btn bxs bt" onclick="openNewInvVForVendor('${x.po.id}','${x.item.vendor||''}')">Buat inv.</button></div>`)});
+  if(blmVendorUrgent.length)agendaSections.push({id:'ag-harga',tag:'HARGA',tc:'',label:'Harga vendor belum ada (≤2hr)',count:blmVendorUrgent.length,urgent:false,items:blmVendorUrgent.map(x=>`<div class="agenda-item ai-warn"><div><strong>${x.item.nama}</strong> <span style="font-size:11px;color:var(--t2)">${x.po.no}</span><br><span style="font-size:11px;font-family:var(--mn);color:var(--wt)">Deadline: ${x.item.deadline}</span></div><button class="btn bxs bt" onclick="openNewInvVForVendor('${x.po.id}','${x.item.vendor||''}')">Buat inv.</button></div>`)});
   const invDJT=invD.filter(id=>{if(id.terima_status==='lunas')return false;if(!id.jatuh)return false;return diffDays(id.jatuh)<=0;});
-  if(invDJT.length)agendaSections.push({id:'ag-invd',icon:'🏦',label:'Invoice dapur jatuh tempo',count:invDJT.length,urgent:false,items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item"><div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div><button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam</button></div>`})});
+  if(invDJT.length)agendaSections.push({id:'ag-invd',tag:'TAGIH',tc:'bl',label:'Invoice dapur jatuh tempo',count:invDJT.length,urgent:false,items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item"><div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div><button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam</button></div>`})});
   const totalBlmV=pos.reduce((s,po)=>s+aktifItems(po).filter(i=>(!i.vendor||!i.harga_vendor)&&i.status_kirim!=='diterima').length,0);
   const totalUrgent=agendaSections.filter(s=>s.urgent).reduce((s,x)=>s+x.count,0);
   const totalWarn=agendaSections.filter(s=>!s.urgent).reduce((s,x)=>s+x.count,0)+totalBlmV;
   const poAktif=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !aktifItems(po).every(i=>i.status_kirim==='diterima')||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).length;
 
   const agendaBox=document.getElementById('agenda-box');
-  let agHtml=`<div style="padding:10px 13px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-    <span style="font-size:12px;font-weight:600;color:var(--t2)">Ringkasan hari ini</span>
-    <span style="font-size:11px;color:var(--t3)">${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'short'})}</span>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:0 13px 10px">
-    <div style="background:var(--s2);border-radius:var(--r);padding:10px 12px;text-align:center">
-      <div style="font-size:22px;font-weight:700;color:var(--tx)">${poAktif}</div>
-      <div style="font-size:10px;color:var(--t3);margin-top:2px">PO aktif</div>
-    </div>
-    ${totalUrgent>0?`<div style="background:#fff0f0;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #fdd">
-      <div style="font-size:22px;font-weight:700;color:var(--dn)">${totalUrgent}</div>
-      <div style="font-size:10px;color:var(--dn);margin-top:2px">Perlu segera</div>
-    </div>`:`<div style="background:#f0faf0;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #cec">
-      <div style="font-size:22px;font-weight:700;color:var(--ac)">✓</div>
-      <div style="font-size:10px;color:var(--ac);margin-top:2px">Tidak ada urgent</div>
-    </div>`}
-    ${totalWarn>0?`<div style="background:#fffbe6;border-radius:var(--r);padding:10px 12px;text-align:center;border:1px solid #ffe">
-      <div style="font-size:22px;font-weight:700;color:var(--wt)">${totalWarn}</div>
-      <div style="font-size:10px;color:var(--wt);margin-top:2px">Perlu perhatian</div>
-    </div>`:''}
-    ${totalBlmV>0?`<div style="background:var(--s2);border-radius:var(--r);padding:10px 12px;text-align:center">
-      <div style="font-size:22px;font-weight:700;color:var(--t2)">${totalBlmV}</div>
-      <div style="font-size:10px;color:var(--t3);margin-top:2px">Item blm ada vendor</div>
-    </div>`:''}
+  const totalItem=agendaSections.reduce((a,x)=>a+x.count,0)+(totalBlmV>0?1:0);
+  let agHtml=`<div class="ag-hdr"><span class="ag-hdr-t">Perlu tindakan</span>
+    <span class="ag-cnt">${totalUrgent>0?`<span style="color:var(--ot);font-weight:600">${totalUrgent} mendesak</span> · `:''}${totalWarn} perlu perhatian</span>
   </div>`;
-
+  if(!agendaSections.length&&!totalBlmV)agHtml+=`<div class="ag-empty">Tidak ada yang perlu ditindaklanjuti hari ini.</div>`;
   if(agendaSections.length||totalBlmV>0){
-    agHtml+=`<div style="border-top:1px solid var(--bd)">`;
+    agHtml+=`<div>`;
     agendaSections.forEach(sec=>{
       agHtml+=`<div>
         <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${sec.id}')" style="display:flex;justify-content:space-between;align-items:center">
-          <span>${sec.icon} ${sec.label} <span style="font-size:11px;font-weight:700;color:${sec.urgent?'var(--dn)':'var(--wt)'}">(${sec.count})</span></span>
+          <span><span class="atag ${sec.tc}">${sec.tag}</span>${sec.label} <span class="ag-cnt">${sec.count}</span></span>
           <span id="${sec.id}-arrow" style="font-size:10px;color:var(--t3)">▼</span>
         </div>
         <div class="agenda-sec-body collapsed" id="${sec.id}" style="max-height:0">
@@ -96,7 +68,7 @@ function renderDashboard(){
       const sid='ag-blmv';
       agHtml+=`<div>
         <div class="agenda-sec-hdr" onclick="toggleAgendaSec('${sid}')" style="display:flex;justify-content:space-between;align-items:center">
-          <span>📋 Item belum ada vendor / harga <span style="font-size:11px;font-weight:700;color:var(--t3)">(${totalBlmV})</span></span>
+          <span><span class="atag">VENDOR</span>Item belum ada vendor / harga <span class="ag-cnt">${totalBlmV}</span></span>
           <span id="${sid}-arrow" style="font-size:10px;color:var(--t3)">▼</span>
         </div>
         <div class="agenda-sec-body collapsed" id="${sid}" style="max-height:0">
@@ -131,27 +103,39 @@ function renderDashboard(){
   const overdueInvV=invV.filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)&&iv.jatuh&&iv.jatuh<tgl).length;
   const overdueInvD=invD.filter(id=>id.terima_status!=='lunas'&&id.jatuh&&id.jatuh<tgl).length;
 
+  const _lewat=(n,teks)=>n?` · <span style="color:var(--dn);font-weight:600">${n} lewat jt</span>`:'';
   document.getElementById('dash-met').innerHTML=`
-    <div class="met"><div class="ml">Estimasi margin</div><div class="mv num ${ttlM>=0?'g':'r'}">${fmt(ttlM)}</div><div class="ms">dari ${pos.length} PO</div></div>
-    <div class="met"><div class="ml">Tagihan vendor</div><div class="mv num r">${fmt(blmBV)}</div><div class="ms">belum dibayar${overdueInvV?` · <span style="color:var(--dn);font-weight:600">${overdueInvV} LEWAT JT</span>`:''}</div></div>
-    <div class="met"><div class="ml">Piutang dapur</div><div class="mv num a">${fmt(blmTD)}</div><div class="ms">belum diterima${overdueInvD?` · <span style="color:var(--dn);font-weight:600">${overdueInvD} LEWAT JT</span>`:''}</div></div>
-    <div class="met"><div class="ml">Harga belum diisi</div><div class="mv num ${blmVnd>0?'a':''}">${blmVnd}</div><div class="ms">item dari vendor</div></div>`;
+    <div class="kpi wide"><div class="kpi-l">Keluar hari ini · ke vendor</div><div class="kpi-v" style="color:var(--or)">${fmtF(keluarHariIni)}</div><div class="kpi-s">jatuh tempo hari ini</div></div>
+    <div class="kpi wide"><div class="kpi-l">Masuk hari ini · dari dapur</div><div class="kpi-v" style="color:var(--bl)">${fmtF(masukHariIni)}</div><div class="kpi-s">jatuh tempo hari ini</div></div>
+    <div class="kpi"><div class="kpi-l">Estimasi margin</div><div class="kpi-v ${ttlM>=0?'':'r'}">${fmt(ttlM)}</div><div class="kpi-s">dari ${pos.length} PO</div></div>
+    <div class="kpi"><div class="kpi-l">Tagihan vendor</div><div class="kpi-v">${fmt(blmBV)}</div><div class="kpi-s">belum dibayar${_lewat(overdueInvV)}</div></div>
+    <div class="kpi"><div class="kpi-l">Piutang dapur</div><div class="kpi-v">${fmt(blmTD)}</div><div class="kpi-s">belum diterima${_lewat(overdueInvD)}</div></div>
+    <div class="kpi"><div class="kpi-l">Harga belum diisi</div><div class="kpi-v" style="${blmVnd>0?'color:var(--ot)':''}">${blmVnd} item</div><div class="kpi-s">dari vendor</div></div>`;
 
-  // Attention
-  const att=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !myV.length||!myD.length||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
-  document.getElementById('dash-att').innerHTML=att.length?att.map(po=>{
-    const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
-    const bV=myV.filter(v=>v.bayar_status!=='lunas').length;const bD=myD.filter(d=>d.terima_status!=='lunas').length;
-    return`<div style="padding:6px 0;border-bottom:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:5px">
-      <div><span style="font-weight:600;font-size:12px">${po.no}</span><span style="font-size:11px;color:var(--t2);margin-left:5px">${po.dapur}</span>
-        <div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">
-          ${!myV.length?'<span class="tag tno">Belum ada inv vendor</span>':bV?`<span class="tag tno">${bV} inv vendor blm bayar</span>`:'<span class="tag tok">Vendor lunas</span>'}
-          ${!myD.length?'<span class="tag tno">Belum ada inv dapur</span>':bD?`<span class="tag twn">${bD} inv dapur blm terima</span>`:'<span class="tag tok">Dapur lunas</span>'}
-        </div>
-      </div>
-      <button class="btn bsm" onclick="showDetail('${po.id}')">Detail</button>
-    </div></div>`;
-  }).join(''):'<div class="empty">Semua PO sudah selesai ✓</div>';
+  // PO aktif — belum semua barang diterima, atau invoice belum ada / belum lunas
+  const _poBuka=po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
+    return !aktifItems(po).every(i=>i.status_kirim==='diterima')||!myV.length||!myD.length||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');};
+  const attAll=pos.filter(_poBuka).sort((a,b)=>b.date.localeCompare(a.date));
+  const att=attAll.slice(0,8);
+  const cntEl=document.getElementById('dash-att-cnt');if(cntEl)cntEl.textContent=attAll.length+' PO';
+  const _st=(list,blm,kosong,lunas,belum)=>!list.length?`<span class="tag tno" style="white-space:nowrap">${kosong}</span>`:blm?`<span class="tag twn" style="white-space:nowrap">${blm} ${belum}</span>`:`<span class="tag tok" style="white-space:nowrap">${lunas}</span>`;
+  document.getElementById('dash-att').innerHTML=att.length?`<div style="overflow-x:auto"><table class="tbl" style="min-width:640px">
+    <thead><tr><th style="padding-left:16px">No. PO</th><th>Tanggal</th><th class="kirim-ui">Barang diterima</th><th>Inv. vendor</th><th>Inv. dapur</th><th></th></tr></thead><tbody>
+    ${att.map(po=>{
+      const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);
+      const bV=myV.filter(v=>v.bayar_status!=='lunas').length;const bD=myD.filter(d=>d.terima_status!=='lunas').length;
+      const its=aktifItems(po);const ok=its.filter(i=>i.status_kirim==='diterima').length;
+      const late=its.some(i=>i.status_kirim!=='diterima'&&i.deadline&&diffDays(i.deadline)<0);
+      const pct=its.length?Math.round(ok/its.length*100):0;
+      return`<tr>
+        <td style="padding-left:16px"><span class="num" style="font-weight:600;white-space:nowrap">${po.no}</span><div style="font-size:11px;color:var(--t2)">${po.dapur||''}</div></td>
+        <td class="num" style="white-space:nowrap">${po.date||''}</td>
+        <td class="kirim-ui"><div class="po-prog"><div class="po-prog-bar"><div class="${pct===100?'done':late?'late':''}" style="width:${pct}%"></div></div><span class="num" style="font-size:11px;white-space:nowrap">${ok}/${its.length}</span></div></td>
+        <td>${_st(myV,bV,'Belum ada','Lunas','belum bayar')}</td>
+        <td>${_st(myD,bD,'Belum ada','Lunas','belum terima')}</td>
+        <td style="text-align:right;padding-right:16px"><button class="btn bsm" onclick="showDetail('${po.id}')">Detail</button></td>
+      </tr>`;}).join('')}
+    </tbody></table></div>`:'<div class="empty" style="padding:16px">Semua PO sudah selesai ✓</div>';
 
   // Invoice vendor pending
   const blmBayar=invV.filter(v=>v.bayar_status!=='lunas').sort((a,b)=>a.tgl.localeCompare(b.tgl)).slice(0,5);
@@ -186,24 +170,34 @@ function renderDashboard(){
     monthly[k].ongkir+=r.ongkir||0;monthly[k].cashback+=r.cashback||0;monthly[k].cnt+=r.po_cnt||0;
   });
   const monthKeys=Object.keys(monthly).sort().reverse();
-  document.getElementById('dash-monthly').innerHTML=monthKeys.slice(0,5).map((k,i)=>{
-    const mo=monthly[k];
+  // Grafik profit bersih per bulan (5 bulan terakhir, urut kronologis).
+  // Rumus angka tidak diubah dari versi daftar sebelumnya; rinciannya di tooltip.
+  const _mk=monthKeys.slice(0,5).reverse();
+  const _mb=_mk.map(k=>{const mo=monthly[k];return mo.margin-mo.ongkir+mo.cashback;});
+  const _max=Math.max(1,..._mb.map(Math.abs));
+  // Rincian per bulan di bawah grafik (terbaru di atas) — isi sama dengan rekap
+  // lama, supaya tetap terbaca di HP (tooltip grafik tidak ada tanpa kursor).
+  // Panah tren membandingkan margin bersih dengan margin bersih bulan sebelumnya.
+  const _rekapList=`<div style="margin-top:12px">${monthKeys.slice(0,5).map((k,i)=>{
+    const mo=monthly[k];const mb=mo.margin-mo.ongkir+mo.cashback;
+    const pct=mo.tp>0?(mb/mo.tp*100).toFixed(1):null;
+    const pk=monthKeys[i+1];const pmb=pk?monthly[pk].margin-monthly[pk].ongkir+monthly[pk].cashback:null;
+    const trend=pmb===null?'':mb>pmb?'↑':mb<pmb?'↓':'';
+    const isCur=k===thisMonth;
     const bln=new Date(k+'-01').toLocaleDateString('id-ID',{year:'numeric',month:'short'});
-    const isCurrent=k===thisMonth;
-    const marginBersih=mo.margin-mo.ongkir+mo.cashback;
-    const pct=mo.tp>0?(marginBersih/mo.tp*100).toFixed(1):null;
-    const prev=monthKeys[i+1]?monthly[monthKeys[i+1]]:null;
-    const trend=prev?(marginBersih>prev.margin?'↑':'↓'):null;
-    return`<div style="padding:7px 0;border-bottom:1px solid var(--bd)${isCurrent?';background:var(--s2);padding:7px 8px;border-radius:var(--r);margin-bottom:2px':''}">
-      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
-        <span style="font-weight:${isCurrent?'600':'400'}">${bln}${isCurrent?' <span style="font-size:9px;color:var(--in);font-weight:400">Bulan ini</span>':''} <span style="font-size:10px;color:var(--t3)">${mo.cnt} PO</span></span>
-        <span class="num ${marginBersih>=0?'g':'r'}" style="font-weight:600">${fmt(marginBersih)}${trend?` <span style="color:${trend==='↑'?'var(--ac)':'var(--dn)'}">${trend}</span>`:''}</span>
+    return`<div style="padding:7px 0;border-top:1px solid var(--bd)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px">
+        <span style="font-weight:${isCur?'600':'400'}">${bln}${isCur?' <span style="font-size:10px;color:var(--blt)">Bulan ini</span>':''} <span style="font-size:11px;color:var(--t3)">${mo.cnt} PO</span></span>
+        <span class="num ${mb>=0?'':'r'}" style="font-weight:600;white-space:nowrap">${fmt(mb)}${trend?` <span style="color:${trend==='↑'?'var(--ac)':'var(--dn)'}">${trend}</span>`:''}</span>
       </div>
-      <div style="font-size:10px;color:var(--t3);font-family:var(--mn);margin-top:2px">
-        Nilai PO: ${fmt(mo.tp)} · Modal: ${fmt(mo.tv)}${pct?' · <span class="num '+( parseFloat(pct)>=0?'g':'r')+'">'+pct+'%</span>':''}${mo.ongkir?' · Ongkir: -'+fmt(mo.ongkir):''}${mo.cashback?' · CB: +'+fmt(mo.cashback):''}
-      </div>
-    </div>`;
-  }).join('')||'<div class="empty">Belum ada data</div>';
+      <div style="font-size:11px;color:var(--t3);font-family:var(--mn);margin-top:2px">Nilai PO: ${fmt(mo.tp)} · Modal: ${fmt(mo.tv)}${pct?' · '+pct+'%':''}${mo.ongkir?' · Ongkir: -'+fmt(mo.ongkir):''}${mo.cashback?' · CB: +'+fmt(mo.cashback):''}</div>
+    </div>`;}).join('')}</div>`;
+  document.getElementById('dash-monthly').innerHTML=_mk.length?`<div class="chart-bars">${_mk.map((k,i)=>{
+    const mo=monthly[k];const mb=_mb[i];const pct=mo.tp>0?(mb/mo.tp*100).toFixed(1):null;
+    const tip=`Nilai PO: ${fmt(mo.tp)} · Modal: ${fmt(mo.tv)}${pct?' · Margin '+pct+'%':''}${mo.ongkir?' · Ongkir: -'+fmt(mo.ongkir):''}${mo.cashback?' · CB: +'+fmt(mo.cashback):''} · ${mo.cnt} PO`;
+    return`<div class="chart-col" title="${tip}"><span class="chart-val" style="${mb<0?'color:var(--dn)':''}">${fmt(mb).replace('Rp ','')}</span><div class="chart-bar ${mb<0?'neg':k===thisMonth?'cur':''}" style="height:${Math.round(Math.abs(mb)/_max*80)}%"></div></div>`;
+  }).join('')}</div><div class="chart-lbls">${_mk.map(k=>`<span style="${k===thisMonth?'font-weight:600;color:var(--blt)':''}">${new Date(k+'-01').toLocaleDateString('id-ID',{month:'short'})}<br><span style="font-size:10px;color:var(--t3)">${monthly[k].cnt} PO</span></span>`).join('')}</div>${_rekapList}`
+    :'<div class="empty">Belum ada data</div>';
   // Recent activity
   const recentLogs=getLog().slice(0,8);
   document.getElementById('dash-log').innerHTML=recentLogs.length?recentLogs.map(l=>`

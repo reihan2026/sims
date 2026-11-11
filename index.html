@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIMS — Sistem Internal Manajemen Suplai</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=c2e76c8a">
+<link rel="stylesheet" href="css/style.css?v=929842fe">
 </head>
 <body>
 <!-- LOGIN SCREEN -->
@@ -81,16 +81,16 @@
   <div class="pc">
     <div id="cf-today-bar"></div>
     <div id="backup-reminder" style="display:none;margin-bottom:10px;padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:var(--r);font-size:12px;color:var(--wt)"></div>
-    <div class="agenda" id="agenda-box"></div>
-    <div class="mg" id="dash-met"></div>
-    <div class="r2">
-      <div class="card"><div class="ct">PO aktif</div><div id="dash-att"></div></div>
-      <div>
+    <div class="kpi-strip" id="dash-met"></div>
+    <div class="dash-grid">
+      <div class="dash-main"><div class="agenda" id="agenda-box"></div></div>
+      <div class="dash-side">
+        <div class="card"><div class="ct">Profit per bulan</div><div id="dash-monthly"></div></div>
         <div class="card"><div class="ct">Invoice vendor belum dibayar</div><div id="dash-invv"></div></div>
-        <div class="card"><div class="ct">Rekap bulanan</div><div id="dash-monthly"></div></div>
         <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div class="ct" style="margin:0">Aktivitas terakhir</div><button class="btn bxs" onclick="nav('master')">Lihat semua →</button></div><div id="dash-log"></div></div>
       </div>
     </div>
+    <div class="card" style="padding:0;overflow:hidden"><div style="display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid var(--bd)"><div style="font-size:14px;font-weight:700">PO aktif</div><span class="ag-cnt" id="dash-att-cnt"></span></div><div id="dash-att"></div></div>
   </div>
 </div>
 
@@ -1262,7 +1262,7 @@
 <script src="js/invoice-vendor.js?v=0e054234"></script>
 <script src="js/invoice-dapur.js?v=67b7591a"></script>
 <script src="js/cashflow.js?v=b1c31989"></script>
-<script src="js/dashboard.js?v=dcb025f3"></script>
+<script src="js/dashboard.js?v=8ba84a0d"></script>
 <script src="js/misc.js?v=c1594b42"></script>
 <script src="js/laporan.js?v=bf695ba4"></script>
 <script src="js/vendor.js?v=0999ba9d"></script>

@@ -224,7 +224,6 @@ body.no-kirim .kirim-ui{display:none!important}
 /* Menu samping gelap */
 .sidebar{background:var(--nv);border-right-color:var(--nv);color:var(--nvt)}
 .slogo{border-bottom-color:var(--nvb)}.slogo-t{color:#fff}.slogo-s{color:var(--nvm)}
-.slogo>div:nth-child(3){color:var(--nvm)!important}
 .nsec{color:var(--nvm)}
 .ni{color:var(--nvt)}.ni:hover{background:var(--nv2);color:#fff}.ni.active{background:var(--nv3);color:#fff;font-weight:600}
 .gsearch-wrap{border-bottom-color:var(--nvb)}

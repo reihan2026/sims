@@ -214,7 +214,7 @@ function renderLaporanHTML(d){
         <div style="margin-top:4px"><span style="font-size:11px;background:${po.jenis==='operasional'?'#ede9fe':'#dcfce7'};color:${po.jenis==='operasional'?'#7c3aed':'#16a34a'};padding:2px 8px;border-radius:9px">${po.jenis==='operasional'?'Operasional':'Bahan Baku'}</span></div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:11px;color:#999">SIMS · v5.0</div>
+        <div style="font-size:11px;color:#999">SIMS</div>
         <div style="font-size:11px;color:#999;margin-top:2px">Dicetak: ${new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</div>
       </div>
     </div>`;

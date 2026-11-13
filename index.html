@@ -196,7 +196,7 @@
 
 <!-- INVOICE VENDOR -->
 <div id="page-inv-vendor" class="page">
-  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm" id="invv-pilih-btn" onclick="toggleInvVSelMode()">☑ Pilih</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
+  <div class="ph"><div><div class="ph-t">Invoice Vendor</div><div class="ph-s">Invoice masuk dari vendor</div></div><div class="bg"><button class="btn bsm" onclick="openRekapInvV()" title="Rekap invoice belum dibayar per vendor (ikut filter bulan/PO/cari)">Rekap belum dibayar</button><button class="btn bsm" id="invv-pilih-btn" onclick="toggleInvVSelMode()">☑ Pilih</button><button class="btn bp bsm" onclick="openNewInvV('')">+ Buat Invoice Vendor</button></div></div>
   <div class="pc"><div class="mg" id="invv-met"></div>
     <div class="fbar">
       <input type="text" placeholder="Cari no. invoice / vendor / item..." id="srch-invv" oninput="renderInvV()">
@@ -964,6 +964,11 @@
 </div></div>
 
 <!-- Bulk rekam bayar beberapa invoice vendor -->
+<div class="modal-bg" id="modal-rekap-invv"><div class="modal" style="max-width:640px">
+  <div class="mh"><div><span class="mht">Rekap Invoice Vendor Belum Dibayar</span><div id="rekap-invv-sub" style="font-size:11px;color:var(--t3);margin-top:2px"></div></div><button class="btn bgh bsm" onclick="closeModal('modal-rekap-invv')">✕</button></div>
+  <div class="mb" id="rekap-invv-body"></div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-rekap-invv')">Tutup</button><button class="btn" id="rekap-invv-print" onclick="printRekapInvV()">Cetak / PDF</button><button class="btn bp" id="rekap-invv-copy" onclick="salinRekapInvV()">Salin untuk WhatsApp</button></div>
+</div></div>
 <div class="modal-bg" id="modal-bulk-bayar-invv"><div class="modal">
   <div class="mh"><span class="mht">Rekam Bayar Beberapa Invoice</span><button class="btn bgh bsm" onclick="closeModal('modal-bulk-bayar-invv')">✕</button></div>
   <div class="mb">
@@ -1259,7 +1264,7 @@
 <script src="js/master.js?v=084aed35"></script>
 <script src="js/po-form.js?v=c778fbe4"></script>
 <script src="js/po.js?v=c133415a"></script>
-<script src="js/invoice-vendor.js?v=f3961197"></script>
+<script src="js/invoice-vendor.js?v=1b4621a2"></script>
 <script src="js/invoice-dapur.js?v=d0e63dbd"></script>
 <script src="js/cashflow.js?v=b1c31989"></script>
 <script src="js/dashboard.js?v=2268fba9"></script>

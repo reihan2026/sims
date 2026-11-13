@@ -865,6 +865,7 @@ function filterInvDBln(){
   renderInvD();
 }
 
+let _invvRekapBase=null;
 function renderInvV(){
   const invs=getInvV();/* summary computed after filter */
   const srch=(document.getElementById('srch-invv')?.value||'').toLowerCase();
@@ -892,14 +893,16 @@ function renderInvV(){
     return'belum';
   };
 
-  let filtered=invs.filter(iv=>{
+  // _invvRekapBase: hasil semua filter KECUALI status bayar — dipakai openRekapInvV
+  // supaya rekap belum dibayar tetap mengikuti filter bulan/PO/cari/kirim.
+  _invvRekapBase=invs.filter(iv=>{
     if(srch&&!iv.no.toLowerCase().includes(srch)&&!iv.vendor.toLowerCase().includes(srch)&&!(iv.items||[]).some(i=>(i.nama||'').toLowerCase().includes(srch)))return false;
-    if(fS&&iv.bayar_status!==fS)return false;
     if(fB&&!iv.tgl.startsWith(fB))return false;
     if(fP&&iv.po_id!==fP)return false;
     if(fK){const ks=getKirimStatus(iv);if(ks!==fK)return false;}
     return true;
-  }).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
+  });
+  let filtered=_invvRekapBase.filter(iv=>!fS||iv.bayar_status===fS).sort((a,b)=>(b.tgl||'').localeCompare(a.tgl||''));
 
   // Hitung summary dari hasil filter
   {let _bB=0,_ln=0,_tt=0;
@@ -1164,3 +1167,77 @@ function delInvV(id){
   showToast('Invoice dihapus — harga vendor direset');
 }
 
+
+// ===== REKAP INVOICE VENDOR BELUM DIBAYAR =====
+// Hanya membaca data. Mengikuti filter halaman (cari, kirim, bulan, PO);
+// filter status bayar diabaikan. Pass-through tidak ikut (dibayar dapur).
+let _rekapInvVTeks='';
+function _rekapInvVData(){
+  if(!_invvRekapBase)renderInvV();
+  const pos=getPOs();
+  const list=(_invvRekapBase||[]).filter(iv=>iv.bayar_status!=='lunas'&&!isPassthrough(iv.id)&&invVNet(iv).sisa>0);
+  const byV=new Map();
+  list.forEach(iv=>{const k=iv.vendor||'(tanpa vendor)';if(!byV.has(k))byV.set(k,[]);byV.get(k).push(iv);});
+  const vendors=[...byV.entries()].map(([vendor,invs])=>{
+    invs.sort((a,b)=>((a.jatuh||'9999')+a.tgl).localeCompare((b.jatuh||'9999')+b.tgl));
+    return{vendor,invs:invs.map(iv=>({iv,n:invVNet(iv),po:pos.find(p=>p.id===iv.po_id),items:groupInvVItems(iv.items)})),
+      sisa:invs.reduce((s,iv)=>s+invVNet(iv).sisa,0)};
+  }).sort((a,b)=>b.sisa-a.sisa);
+  return{vendors,total:vendors.reduce((s,v)=>s+v.sisa,0),count:list.length};
+}
+function _rekapInvVFilterLbl(){
+  const parts=[];
+  const b=document.getElementById('f-invv-bln');if(b&&b.value)parts.push(b.options[b.selectedIndex].text);
+  const p=document.getElementById('f-invv-po');if(p&&p.value)parts.push(p.options[p.selectedIndex].text.split(' — ')[0]);
+  const k=document.getElementById('f-invv-kirim');if(lacakKirim()&&k&&k.value)parts.push(k.options[k.selectedIndex].text);
+  const q=(document.getElementById('srch-invv')?.value||'').trim();if(q)parts.push('cari "'+q+'"');
+  return parts.join(' · ');
+}
+function _rp(n){return Math.round(n||0).toLocaleString('id-ID');}
+function _tglPendek(t){return t?t.slice(8,10)+'/'+t.slice(5,7):'';}
+function openRekapInvV(){
+  const d=_rekapInvVData();const tdy=today();const fl=_rekapInvVFilterLbl();
+  const tglLbl=new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('rekap-invv-sub').textContent=`Per ${tglLbl}${fl?' · '+fl:''} · tanpa pass-through`;
+  const body=document.getElementById('rekap-invv-body');
+  if(!d.count){
+    body.innerHTML='<div class="empty" style="padding:14px">Tidak ada invoice vendor yang belum dibayar'+(fl?' untuk filter ini':'')+'.</div>';
+    _rekapInvVTeks='';document.getElementById('rekap-invv-copy').disabled=true;document.getElementById('rekap-invv-print').disabled=true;
+    openModal('modal-rekap-invv');return;
+  }
+  document.getElementById('rekap-invv-copy').disabled=false;document.getElementById('rekap-invv-print').disabled=false;
+  let h=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 12px;background:var(--s2);border-radius:var(--r);margin-bottom:12px"><span style="font-size:12px;color:var(--t2)">${d.count} invoice · ${d.vendors.length} vendor</span><span style="font-family:var(--mn);font-weight:700;font-size:15px">${fmtF(d.total)}</span></div>`;
+  let t=`*REKAP INVOICE VENDOR BELUM DIBAYAR*\nPer ${tglLbl}${fl?'\nFilter: '+fl:''}\nTotal: *Rp ${_rp(d.total)}* (${d.count} invoice, ${d.vendors.length} vendor)\n`;
+  d.vendors.forEach((v,vi)=>{
+    h+=`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:2px solid var(--tx);font-weight:700"><span>${v.vendor}</span><span style="font-family:var(--mn)">${fmtF(v.sisa)}</span></div>`;
+    t+=`\n*${vi+1}. ${v.vendor}* — Rp ${_rp(v.sisa)}\n`;
+    v.invs.forEach(({iv,n,po,items})=>{
+      const lewat=iv.jatuh&&iv.jatuh<tdy;
+      h+=`<div style="padding:8px 0;border-bottom:1px solid var(--bd)">
+        <div style="display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:12px"><strong>${iv.no}</strong><span style="color:var(--t3);font-family:var(--mn);font-size:11px">${iv.tgl}${iv.jatuh?' · Jt '+iv.jatuh:''}</span>${lewat?'<span class="tag tno" style="font-size:9px">Lewat jatuh tempo</span>':''}${po?`<span style="color:var(--t2);font-size:11px">${po.no}</span>`:''}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px">${items.map(i=>`<tr><td style="padding:2px 0">${i.nama}${i._n>1?` <span style="color:var(--t3);font-size:10px">(${invVGrpLbl(i)})</span>`:''}</td><td style="padding:2px 6px;text-align:right;font-family:var(--mn);white-space:nowrap">${i.qty} ${i.satuan} × ${_rp(i.harga_vendor)}</td><td style="padding:2px 0;text-align:right;font-family:var(--mn);white-space:nowrap">${_rp(i.qty*i.harga_vendor)}</td></tr>`).join('')}</table>
+        <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 12px;font-size:11px;margin-top:4px;font-family:var(--mn)"><span>Total ${_rp(iv.total)}</span>${n.retur>0?`<span style="color:var(--dn)">Retur −${_rp(n.retur)}</span>`:''}${n.paid>0?`<span>Dibayar −${_rp(n.paid)}</span>`:''}<strong class="r">Sisa ${_rp(n.sisa)}</strong></div>
+      </div>`;
+      t+=`• ${iv.no} · ${_tglPendek(iv.tgl)}${iv.jatuh?' · Jt '+_tglPendek(iv.jatuh):''}${lewat?' ⚠️ lewat jatuh tempo':''}\n${po?'  '+po.no+'\n':''}`;
+      items.forEach(i=>{t+=`  - ${i.nama}${i._n>1?' ('+invVGrpLbl(i)+')':''} ${i.qty} ${i.satuan} × ${_rp(i.harga_vendor)} = ${_rp(i.qty*i.harga_vendor)}\n`;});
+      const adj=[];if(n.retur>0)adj.push('Retur −'+_rp(n.retur));if(n.paid>0)adj.push('Dibayar −'+_rp(n.paid));
+      t+=`  ${adj.length?'Total '+_rp(iv.total)+' · '+adj.join(' · ')+' · ':''}*Sisa Rp ${_rp(n.sisa)}*\n`;
+    });
+    h+='</div>';
+  });
+  body.innerHTML=h;_rekapInvVTeks=t.trim();
+  openModal('modal-rekap-invv');
+}
+function salinRekapInvV(){
+  if(!_rekapInvVTeks)return;
+  const ok=()=>showToast('Rekap disalin — tempel di WhatsApp');
+  const fallback=()=>{const ta=document.createElement('textarea');ta.value=_rekapInvVTeks;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');ok();}catch(e){showToast('Gagal menyalin',true);}ta.remove();};
+  if(navigator.clipboard&&window.isSecureContext)navigator.clipboard.writeText(_rekapInvVTeks).then(ok,fallback);else fallback();
+}
+function printRekapInvV(){
+  const sub=document.getElementById('rekap-invv-sub').textContent;
+  const body=`<div class="w"><div class="h"><div><div class="t">REKAP INVOICE VENDOR BELUM DIBAYAR</div><div class="m">${sub}</div></div><div style="text-align:right"><div style="font-weight:600;font-size:14px">SIMS</div></div></div>${document.getElementById('rekap-invv-body').innerHTML}</div>`;
+  const css=PRINT_CSS+':root{--s2:#F2F2F0;--bd:#DDD;--tx:#111;--t2:#555;--t3:#888;--dn:#8B2020;--mn:monospace;--r:4px}.tag{display:inline-block;padding:1px 5px;border:1px solid #8B2020;color:#8B2020;border-radius:3px}.r{color:#8B2020}';
+  const w=window.open('','_blank','width=820,height=720');w.document.write(`<!DOCTYPE html><html><head><title>Rekap invoice vendor belum dibayar</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);w.document.close();
+}

@@ -1,6 +1,6 @@
 // ===== INVOICE VENDOR =====
 function openNewInvV(poId){openNewInvVForVendor(poId,'');}
-function openNewInvVForVendor(poId,vendor){
+function openNewInvVForVendor(poId,vendor,itemId,itemIdx){
   document.getElementById('invv-no').value=nextInvNo('v');
   document.getElementById('invv-tgl').value=today();document.getElementById('invv-vendor').value=vendor||'';
   document.getElementById('invv-jatuh').value='';document.getElementById('invv-cat').value='';document.getElementById('invv-file').value='';document.getElementById('invv-total').value='';
@@ -12,7 +12,7 @@ function openNewInvVForVendor(poId,vendor){
   const sb=document.getElementById('srch-invv-item');if(sb){sb.style.display='none';sb.value='';}
   const katF=document.getElementById('kat-invv-filter');if(katF){katF.style.display='none';katF.value='';}
   const pos=getPOs();document.getElementById('invv-po').innerHTML='<option value="">— Pilih PO —</option>'+pos.map(p=>`<option value="${p.id}" ${p.id===poId?'selected':''}>${p.no} — ${p.dapur}</option>`).join('');
-  updateDL();if(poId)loadInvVItems();openModal('modal-invv');
+  updateDL();if(poId){loadInvVItems();fokusItemInvoice('.invv-cb',itemId,itemIdx);calcInvVTotal();}openModal('modal-invv');
 }
 
 // ===== EDIT QTY/SATUAN INVOICE VENDOR =====

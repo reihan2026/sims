@@ -2,7 +2,7 @@
 let invDRows=0;
 let _invDMergedKeys=new Set();let _invDNameGroups={};
 let _invdAppendTarget=null;
-function openNewInvD(poId){
+function openNewInvD(poId,itemId,itemIdx){
   // Selalu mulai dari mode "buat baru" — kalau sebelumnya modal ini dipakai
   // untuk Tambah Item (lihat openTambahItemInvD), pastikan field yang
   // disembunyikan/dikunci di sana dikembalikan dulu di sini.
@@ -35,7 +35,7 @@ function openNewInvD(poId){
   // Populate vendor saya dropdown
   const vsEl=document.getElementById('invd-vendor-saya');
   if(vsEl){const vs=getVendorSaya();vsEl.innerHTML='<option value="">— Tanpa kop (internal) —</option>'+vs.map(v=>`<option value="${v.id}">${v.nama}</option>`).join('');}
-  updateDL();if(poId)loadInvDItems();openModal('modal-invd');
+  updateDL();if(poId){loadInvDItems();fokusItemInvoice('.invd-cb',itemId,itemIdx);const _all=document.getElementById('invd-all');if(_all&&itemId!==undefined)_all.checked=[...document.querySelectorAll('.invd-cb')].every(c=>c.checked);calcInvDTotal();}openModal('modal-invd');
 }
 function toggleInvDType(){
   const pt=document.querySelector('input[name="invd-type"]:checked').value==='passthrough';

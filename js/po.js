@@ -454,8 +454,8 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
         <td class="num" style="white-space:nowrap">${item.qty}</td>
         <td class="num" style="white-space:nowrap">${fmtF(item.harga_po)}</td>
         ${spekVisible?`<td style="font-size:11px;color:var(--t2);max-width:150px;word-break:break-word">${item.spek||'—'}</td>`:''}
-        <td class="col-vendor" style="font-size:12px">${displayVendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','')">+ Isi via invoice</button>`}</td>
-        <td style="white-space:nowrap">${displayHargaV?`<span class="num">${fmtF(displayHargaV)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${displayVendor||''}')">+ Isi via invoice</button>`}</td>
+        <td class="col-vendor" style="font-size:12px">${displayVendor||`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','','${item.id||''}',${idx})">+ Isi via invoice</button>`}</td>
+        <td style="white-space:nowrap">${displayHargaV?`<span class="num">${fmtF(displayHargaV)}</span>`:`<button class="btn bxs bt" onclick="openNewInvVForVendor('${id}','${displayVendor||''}','${item.id||''}',${idx})">+ Isi via invoice</button>`}</td>
         <td class="col-margin ${mc}" style="white-space:nowrap">${im!==null?fmtF(im):'—'}</td>
         <td style="text-align:center">
           ${item.batal?`<span style="font-size:10px;font-family:var(--mn);color:var(--t3)">Dibatalkan</span>`:`
@@ -1303,7 +1303,7 @@ function showStatPopup(event,poId,idx){
   const navInvD=!isPT&&s4?`<button class="btn bxs bi" onclick="closeStatPopup();showInvDDetail('${idObj.id}')">Lihat invoice →</button>`:'';
   document.getElementById('stat-popup-body').innerHTML=
     sRow(s1,false,'1. Invoice vendor',d1,
-      `<button class="btn bxs bt" onclick="closeStatPopup();openNewInvVForVendor('${poId}','${item.vendor||''}')">+ Buat invoice vendor</button>`,
+      `<button class="btn bxs bt" onclick="closeStatPopup();openNewInvVForVendor('${poId}','${item.vendor||''}','${item.id||''}',${idx})">+ Buat invoice vendor</button>`,
       '',navInvV)
    +sRow(s2,s2w,'2. Bayar vendor',d2,
       s1&&!isPT&&!isPassthrough(ivObj.id)
@@ -1315,7 +1315,7 @@ function showStatPopup(event,poId,idx){
    +sRow(s4,false,'4. Invoice dapur',d4,
       isPT?''
         :s4?''
-        :s1?`<button class="btn bxs bpu" onclick="closeStatPopup();openNewInvD('${poId}')">+ Buat invoice dapur</button>`:'',
+        :s1?`<button class="btn bxs bpu" onclick="closeStatPopup();openNewInvD('${poId}','${item.id||''}',${idx})">+ Buat invoice dapur</button>`:'',
       '',navInvD)
    +sRow(s5,s5w,'5. Terima dari dapur',d5,
       isPT?''

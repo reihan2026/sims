@@ -324,3 +324,19 @@ function invVGrpLbl(g){
   if(g._n<2)return'';
   return g._hari.length===g._n?g._n+' hari: '+g._hari.map(h=>h.slice(0,3)).join(', '):g._n+' baris PO';
 }
+
+// Modal invoice dibuka dari tombol di baris item PO → centang item itu saja,
+// beri sorotan, dan gulir ke barisnya. Cocokkan lewat id item permanen;
+// item lama tanpa id dicocokkan lewat index PO (data-idx / data-merged-idxs).
+function fokusItemInvoice(cbSel,itemId,idx){
+  if(!itemId&&(idx==null||idx===''))return;
+  const cbs=[...document.querySelectorAll(cbSel)];
+  const cocok=cb=>itemId
+    ?(cb.dataset.itemId===itemId||(cb.dataset.mergedItemIds||'').split(',').includes(itemId))
+    :(cb.dataset.idx===String(idx)||(cb.dataset.mergedIdxs||'').split(',').includes(String(idx)));
+  const target=cbs.filter(cocok);
+  if(!target.length)return;
+  cbs.forEach(cb=>{cb.checked=target.includes(cb);});
+  target.forEach(cb=>{const tr=cb.closest('tr');if(tr)tr.style.background='var(--ibg)';});
+  const tr=target[0].closest('tr');if(tr)setTimeout(()=>tr.scrollIntoView({block:'center'}),50);
+}

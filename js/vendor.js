@@ -408,6 +408,13 @@ async function printInvDFormal(invId){
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
   if(!vs){showToast('Vendor tidak ditemukan!',true);return;}
+  // Jendela cetak WAJIB dibuka sinkron saat tombol diklik. Dulu dibuka setelah
+  // await (muat logo kop dari Firestore + resize) → Safari/HP/Chrome (kalau
+  // lambat) menganggapnya pop-up tak diminta dan memblokirnya, tombol terasa mati.
+  const w=window.open('','_blank','width=820,height=800');
+  if(!w){showToast('Jendela cetak diblokir browser — izinkan pop-up untuk SIMS lalu coba lagi',true);return;}
+  w.document.write('<!DOCTYPE html><html><head><title>Menyiapkan invoice…</title></head><body style="font-family:sans-serif;padding:24px;color:#6B6560">Menyiapkan invoice…</body></html>');
+  try{
   const po=getPOs().find(p=>p.id===inv.po_id);
   const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
   const sisa=inv.total-recv;
@@ -505,9 +512,11 @@ async function printInvDFormal(invId){
   </div>`:'';
   const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
-  const w=window.open('','_blank','width=820,height=800');
-  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.print();<\/script></body></html>`);
+  if(w.closed)return;
+  w.document.open();
+  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
   w.document.close();
+  }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

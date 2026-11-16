@@ -282,6 +282,7 @@ body.no-kirim .kirim-ui{display:none!important}
 /* Konten utama boleh menyusut di bawah lebar isinya (tabel lebar tetap scroll di kotaknya) */
 .main{min-width:0}
 
-/* Lapisan cetak invoice di HP (lihat _tampilkanCetakOverlay, vendor.js) */
-body.printing-overlay{overflow:hidden}
-@media print{body.printing-overlay{overflow:visible}body.printing-overlay>*:not(#print-host){display:none!important}}
+/* Tampilan cetak invoice di HP (lihat _tampilkanCetakOverlay, vendor.js):
+   saat aktif, semua isi SIMS disembunyikan di layar & cetak — invoice jadi isi halaman biasa */
+body.printing-overlay>*:not(#print-host){display:none!important}
+body.printing-overlay{background:#fff}

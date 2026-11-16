@@ -406,36 +406,39 @@ function _resizeImageForPrint(dataUrl,maxW,maxH){
 
 // HP / aplikasi layar utama: jangan buka jendela baru. Di mode standalone jendela
 // baru menutupi SIMS tanpa tombol kembali (user terpaksa kill app). Invoice
-// ditampilkan sebagai lapisan layar penuh di halaman ini, CSS-nya diisolasi di
-// shadow DOM; saat print, semua elemen lain disembunyikan (style.css @media print).
+// ditampilkan sebagai ISI HALAMAN BIASA (bukan lapisan fixed — Safari iOS macet
+// menyiapkan pratinjau cetak dari elemen fixed+overflow): elemen SIMS lain
+// disembunyikan sementara lewat class body (style.css), CSS invoice diisolasi di
+// shadow DOM. Cetak hanya dari ketukan tombol (print() otomatis tanpa ketukan
+// tertahan di iOS sampai lapisan ditutup).
 function _cetakDiHalaman(){
   try{return matchMedia('(pointer:coarse)').matches||navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;}catch(e){return false;}
 }
+let _cetakScrollY=0;
 function _tutupCetakOverlay(){
-  const h=document.getElementById('print-host');if(h)h.remove();
-  document.body.classList.remove('printing-overlay');
+  const h=document.getElementById('print-host');if(!h)return;
+  h.remove();document.body.classList.remove('printing-overlay');
+  window.scrollTo(0,_cetakScrollY);
 }
 window.addEventListener('popstate',_tutupCetakOverlay);
 function _tampilkanCetakOverlay(css,body){
   _tutupCetakOverlay();
+  _cetakScrollY=window.scrollY||0;
   const host=document.createElement('div');host.id='print-host';
   const root=host.attachShadow({mode:'open'});
   const cssScoped=css.replace(/(^|\})\s*body\s*\{/,'$1.pbody{');
   root.innerHTML=`<style>
-    :host{all:initial;display:block;position:fixed;inset:0;z-index:2147483000;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
+    :host{all:initial;display:block;background:#fff;min-height:100vh}
     ${cssScoped}
     .pbar{position:sticky;top:0;z-index:1;display:flex;gap:8px;justify-content:space-between;align-items:center;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:#1A1814}
     .pbar button{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:44px;padding:0 16px;border-radius:8px;border:none;cursor:pointer}
     .pb-back{background:#fff;color:#1A1814}.pb-print{background:#2D5A3D;color:#fff}
-    @media print{.pbar{display:none}:host{position:static;overflow:visible}}
+    @media print{.pbar{display:none}:host{min-height:0}}
   </style><div class="pbar"><button type="button" class="pb-back">← Kembali</button><button type="button" class="pb-print">🖨 Cetak / PDF</button></div><div class="pbody">${body}</div>`;
   root.querySelector('.pb-back').onclick=_tutupCetakOverlay;
   root.querySelector('.pb-print').onclick=()=>window.print();
   document.body.appendChild(host);document.body.classList.add('printing-overlay');
-  // Cetak otomatis setelah logo termuat; kalau browser menolak (bukan dari
-  // ketukan langsung), user masih bisa ketuk tombol Cetak / PDF.
-  const imgs=[...root.querySelectorAll('img')];
-  Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r;}))).then(()=>setTimeout(()=>{try{if(document.getElementById('print-host')===host)window.print();}catch(e){}},150));
+  window.scrollTo(0,0);
 }
 
 async function printInvDFormal(invId){

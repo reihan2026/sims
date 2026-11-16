@@ -404,6 +404,40 @@ function _resizeImageForPrint(dataUrl,maxW,maxH){
   });
 }
 
+// HP / aplikasi layar utama: jangan buka jendela baru. Di mode standalone jendela
+// baru menutupi SIMS tanpa tombol kembali (user terpaksa kill app). Invoice
+// ditampilkan sebagai lapisan layar penuh di halaman ini, CSS-nya diisolasi di
+// shadow DOM; saat print, semua elemen lain disembunyikan (style.css @media print).
+function _cetakDiHalaman(){
+  try{return matchMedia('(pointer:coarse)').matches||navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;}catch(e){return false;}
+}
+function _tutupCetakOverlay(){
+  const h=document.getElementById('print-host');if(h)h.remove();
+  document.body.classList.remove('printing-overlay');
+}
+window.addEventListener('popstate',_tutupCetakOverlay);
+function _tampilkanCetakOverlay(css,body){
+  _tutupCetakOverlay();
+  const host=document.createElement('div');host.id='print-host';
+  const root=host.attachShadow({mode:'open'});
+  const cssScoped=css.replace(/(^|\})\s*body\s*\{/,'$1.pbody{');
+  root.innerHTML=`<style>
+    :host{all:initial;display:block;position:fixed;inset:0;z-index:2147483000;background:#fff;overflow:auto;-webkit-overflow-scrolling:touch}
+    ${cssScoped}
+    .pbar{position:sticky;top:0;z-index:1;display:flex;gap:8px;justify-content:space-between;align-items:center;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:#1A1814}
+    .pbar button{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:44px;padding:0 16px;border-radius:8px;border:none;cursor:pointer}
+    .pb-back{background:#fff;color:#1A1814}.pb-print{background:#2D5A3D;color:#fff}
+    @media print{.pbar{display:none}:host{position:static;overflow:visible}}
+  </style><div class="pbar"><button type="button" class="pb-back">← Kembali</button><button type="button" class="pb-print">🖨 Cetak / PDF</button></div><div class="pbody">${body}</div>`;
+  root.querySelector('.pb-back').onclick=_tutupCetakOverlay;
+  root.querySelector('.pb-print').onclick=()=>window.print();
+  document.body.appendChild(host);document.body.classList.add('printing-overlay');
+  // Cetak otomatis setelah logo termuat; kalau browser menolak (bukan dari
+  // ketukan langsung), user masih bisa ketuk tombol Cetak / PDF.
+  const imgs=[...root.querySelectorAll('img')];
+  Promise.all(imgs.map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r;}))).then(()=>setTimeout(()=>{try{if(document.getElementById('print-host')===host)window.print();}catch(e){}},150));
+}
+
 async function printInvDFormal(invId){
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
@@ -411,9 +445,10 @@ async function printInvDFormal(invId){
   // Jendela cetak WAJIB dibuka sinkron saat tombol diklik. Dulu dibuka setelah
   // await (muat logo kop dari Firestore + resize) → Safari/HP/Chrome (kalau
   // lambat) menganggapnya pop-up tak diminta dan memblokirnya, tombol terasa mati.
-  const w=window.open('','_blank','width=820,height=800');
-  if(!w){showToast('Jendela cetak diblokir browser — izinkan pop-up untuk SIMS lalu coba lagi',true);return;}
-  w.document.write('<!DOCTYPE html><html><head><title>Menyiapkan invoice…</title></head><body style="font-family:sans-serif;padding:24px;color:#6B6560">Menyiapkan invoice…</body></html>');
+  const diHalaman=_cetakDiHalaman();
+  const w=diHalaman?null:window.open('','_blank','width=820,height=800');
+  if(!diHalaman&&!w){showToast('Jendela cetak diblokir browser — izinkan pop-up untuk SIMS lalu coba lagi',true);return;}
+  if(w)w.document.write('<!DOCTYPE html><html><head><title>Menyiapkan invoice…</title></head><body style="font-family:sans-serif;padding:24px;color:#6B6560">Menyiapkan invoice…</body></html>');
   try{
   const po=getPOs().find(p=>p.id===inv.po_id);
   const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
@@ -512,11 +547,12 @@ async function printInvDFormal(invId){
   </div>`:'';
   const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
+  if(diHalaman){_tampilkanCetakOverlay(css,body);return;}
   if(w.closed)return;
   w.document.open();
   w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><style>${css}</style></head><body>${body}<script>window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
   w.document.close();
-  }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
+  }catch(e){console.error('printInvDFormal:',e);try{if(w)w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

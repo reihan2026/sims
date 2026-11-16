@@ -340,3 +340,13 @@ function fokusItemInvoice(cbSel,itemId,idx){
   target.forEach(cb=>{const tr=cb.closest('tr');if(tr)tr.style.background='var(--ibg)';});
   const tr=target[0].closest('tr');if(tr)setTimeout(()=>tr.scrollIntoView({block:'center'}),50);
 }
+
+// Setelah simpan dari modal: segarkan halaman yang SEDANG dibuka, jangan pindah.
+// Dulu pakai "if(_currentPoId)showDetail(...)" — _currentPoId tetap terisi setelah
+// keluar dari Detail PO, jadi simpan dari list Invoice Vendor/Dapur/Dashboard
+// melempar user ke PO yang terakhir dibuka.
+function segarkanHalamanAktif(){
+  if(_currentPage==='detail-po'){if(_currentPoId)showDetail(_currentPoId);return;}
+  if(_currentPage==='po-baru')return; // nav('po-baru') mereset form
+  nav(_currentPage);
+}

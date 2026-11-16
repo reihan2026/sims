@@ -370,7 +370,7 @@ function saveInvV(){
     showToast('Invoice vendor disimpan!');
     addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
     try{
-      if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvV();
+      segarkanHalamanAktif();
     }catch(e){console.error('render after saveInvV:',e);}
   };
   const file=document.getElementById('invv-file').files[0];
@@ -409,7 +409,7 @@ function gantiFileInvV(invId){
         if(iv){iv.file_key=nk;setInvV(invs);}
         addLog('ganti_file','Ganti file invoice','invv',invId,'','');
         showToast('File berhasil diganti!');
-        if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+        segarkanHalamanAktif();
       }catch(err){showToast('Gagal upload: '+err.message,true);}
     };
     r.onerror=()=>showToast('Gagal baca file',true);
@@ -444,7 +444,7 @@ function saveEditInvD(){
   setInvD(invs);
   addLog('edit_invd','Edit invoice dapur','invd',invId,no,'');
   closeModal('modal-edit-invd');showToast('Invoice dapur diperbarui!');
-  if(_currentPoId)showDetail(_currentPoId);else renderInvD();
+  segarkanHalamanAktif();
 }
 
 // ===== REVISI INVOICE VENDOR =====
@@ -571,7 +571,7 @@ function saveEditInvV(){
   if(_statusLama==='lunas'&&inv.bayar_status!=='lunas')
     showToast('Invoice direvisi. Tagihan naik '+fmtF(_netBaru.sisa)+' dari yang sudah dibayar — statusnya kembali BELUM LUNAS, rekam sisa pembayarannya.',true);
   else showToast('Invoice vendor direvisi!');
-  if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  segarkanHalamanAktif();
 }
 
 // ===== BAYAR INVOICE VENDOR =====
@@ -616,7 +616,7 @@ function saveBayarInvV(){
   if(totalPaid>=netTotal)inv.bayar_status='lunas';
   const cbJml=parseFloat(document.getElementById('bayar-cb-jml').value)||0;
   if(cbJml>0){if(!inv.cashbacks)inv.cashbacks=[];inv.cashbacks.push({id:uid(),jumlah:cbJml,tgl:document.getElementById('bayar-cb-tgl').value,rek_id:rekId,catatan:'Cashback saat bayar'});}
-  addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPage==='inv-vendor')renderInvV();else if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  addLog('bayar_invv','Bayar vendor','invv',inv.id,inv.no,fmtF(jml)+' ke '+inv.vendor);setInvV(invs);closeModal('modal-bayar-invv');showToast('Pembayaran direkam!');if(_currentPage==='inv-vendor')renderInvV();else segarkanHalamanAktif();
 }
 
 function uploadInvVFile(invId){
@@ -634,7 +634,7 @@ function uploadInvVFile(invId){
         const invs=getInvV();const iv=invs.find(v=>v.id===invId);
         if(iv){iv.file_key=nk;setInvV(invs);}
         showToast('File berhasil diupload!');
-        if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+        segarkanHalamanAktif();
       }catch(err){showToast('Gagal upload: '+err.message,true);}
     };
     r.onerror=()=>showToast('Gagal baca file',true);
@@ -654,7 +654,7 @@ function openOngkir(invId){
   setInvV(invVs);
   addLog('catat_ongkir','Catat ongkir','invv',invId,iv.no,ongkir?fmtF(ongkir):'dihapus');
   showToast(ongkir?`Ongkir ${fmtF(ongkir)} disimpan — mengurangi margin`:'Ongkir dihapus');
-  if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+  segarkanHalamanAktif();
 }
 
 function openCashback(invId,fromDetail){
@@ -710,7 +710,7 @@ function saveCashback(){
     addLog('catat_cashback','Catat cashback','invv',inv.id,inv.no,fmtF(jml)+' dari '+inv.vendor);
   }
   setInvV(invs);closeModal('modal-cashback');showToast(cbId?'Cashback diperbarui!':'Cashback dicatat!');
-  if(fromDetail){showInvVDetail(invId);}else if(_currentPoId){showDetail(_currentPoId);}else{showDetail(inv.po_id);}
+  segarkanHalamanAktif();if(fromDetail)showInvVDetail(invId);
 }
 
 // ===== RETUR =====
@@ -728,7 +728,7 @@ function saveRetur(){
   const ket=document.getElementById('retur-ket').value;
   inv.returs.push({id:uid(),val,tgl:document.getElementById('retur-tgl').value,ket});
   const n=invVNet(inv);if(n.paid>=n.netTotal&&n.netTotal>0)inv.bayar_status='lunas';
-  addLog('catat_retur','Catat retur','invv',inv.id,inv.no,fmtF(val)+' · '+ket);setInvV(invs);closeModal('modal-retur');showToast('Retur dicatat — tagihan berkurang '+fmtF(val));if(_currentPoId)showDetail(_currentPoId);else showDetail(inv.po_id);
+  addLog('catat_retur','Catat retur','invv',inv.id,inv.no,fmtF(val)+' · '+ket);setInvV(invs);closeModal('modal-retur');showToast('Retur dicatat — tagihan berkurang '+fmtF(val));segarkanHalamanAktif();
 }
 
 // ===== KONVERSI INVOICE VENDOR KE PASS-THROUGH =====
@@ -849,7 +849,7 @@ function saveKonversiPT(){
   addLog('konversi_pt','Konversi pass-through','invv',invVId,iv.no,alasan+(hapusCount?' · '+hapusCount+' bayar dihapus':''));
   closeModal('modal-konversi-pt');
   showToast(`Invoice dikonversi ke pass-through${hapusCount?' — '+hapusCount+' pembayaran lama dihapus':''}.`);
-  if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+  segarkanHalamanAktif();
 }
 
 
@@ -1163,7 +1163,7 @@ function delInvV(id){
   setInvV(getInvV().filter(v=>v.id!==id));
   const _ptInvD=getInvD().find(d=>d.type==='passthrough'&&d.pt_inv_id===id);
   if(_ptInvD)setInvD(getInvD().filter(d=>d.id!==_ptInvD.id));
-  if(_currentPoId)showDetail(_currentPoId);else renderInvV();
+  segarkanHalamanAktif();
   showToast('Invoice dihapus — harga vendor direset');
 }
 

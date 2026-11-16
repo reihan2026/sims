@@ -352,7 +352,7 @@ function saveInvD(){
   setBatch({invd:invs,ctr_invd:_cache.ctr_invd});
   if(poId)invalidatePO(poId);
   autoMaster(dapur,[]);
-  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
+  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');segarkanHalamanAktif();
 }
 
 // ===== TAMBAH ITEM KE INVOICE DAPUR YANG SUDAH ADA =====
@@ -445,7 +445,7 @@ function saveTambahItemInvD(){
     closeModal('modal-invd');
     showToast(newItems.length+' item ditambahkan ke '+inv.no+'!');
     _invdAppendTarget=null;
-    if(_currentPoId)showDetail(_currentPoId);else if(poId)showDetail(poId);else renderInvD();
+    segarkanHalamanAktif();
   }catch(e){
     clearTimeout(failsafe);
     console.error('saveTambahItemInvD error:',e);
@@ -516,7 +516,7 @@ function saveTerima(){
     } else showToast('Penerimaan direkam!');
   }
   addLog('terima_invd','Terima dari dapur','invd',inv.id,inv.no,fmtF(jml)+' dari '+inv.dapur);
-  closeModal('modal-terima');if(_currentPage==='inv-dapur')renderInvD();else if(_currentPoId)showDetail(_currentPoId);else if(inv.po_id)showDetail(inv.po_id);else renderInvD();
+  closeModal('modal-terima');segarkanHalamanAktif();
 }
 
 function delPaymentInvD(invId,payRef){
@@ -529,7 +529,7 @@ function delPaymentInvD(invId,payRef){
   if(recv<inv.total)inv.terima_status='belum';
   setInvD(invs);
   addLog('hapus_payment_invd','Hapus pembayaran','invd',invId,inv.no,fmtF(inv.total-recv)+' sisa');
-  if(_currentPage==='inv-dapur')renderInvD();else if(_currentPoId)showDetail(_currentPoId);
+  segarkanHalamanAktif();
 }
 
 // ===== RENDER INVOICE DAPUR =====
@@ -677,7 +677,7 @@ function execMergeInvD(){
   setInvD(newInvds);
   closeModal('modal-merge-invd');
   showToast(`${selected.length} invoice berhasil di-merge → ${base.no}`);
-  if(_currentPoId)showDetail(_currentPoId);else renderInvD();
+  segarkanHalamanAktif();
 }
 
 function delInvD(id){

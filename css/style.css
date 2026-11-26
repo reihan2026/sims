@@ -281,3 +281,5 @@ body.no-kirim .kirim-ui{display:none!important}
 .po-prog-bar>div.done{background:var(--tx)}.po-prog-bar>div.late{background:var(--or)}
 /* Konten utama boleh menyusut di bawah lebar isinya (tabel lebar tetap scroll di kotaknya) */
 .main{min-width:0}
+
+#kopra-root .btn:disabled{opacity:.4;cursor:not-allowed}

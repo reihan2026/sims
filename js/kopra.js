@@ -195,11 +195,14 @@ function _kVerifikasi(batchRows,list){
     cek.push({ok:x.remark===r.remark,msg:'Remark'+(x.remark===r.remark?'':': "'+x.remark+'"')});
     const prodOk=!x.product||(r.tipe==='IBU'?/inhouse/i.test(x.product):/online|domestic|skn|rtgs|bi-?fast/i.test(x.product));
     cek.push({ok:prodOk,msg:'Jenis'+(prodOk?'':': '+x.product)});
-    const stOk=x.status==='Transaction is successfully submitted'&&(x.error===''||x.error==='-');
+    // "Valid" = file lolos validasi Kopra (transfer list diunduh sebelum approve);
+    // "Transaction is successfully submitted" = sudah disubmit. Keduanya diterima.
+    const stNorm=_kNorm(x.status);
+    const stOk=(stNorm==='valid'||stNorm==='transaction is successfully submitted')&&(x.error===''||x.error==='-');
     cek.push({ok:stOk,msg:'Status'+(stOk?'':': '+x.status+(x.error&&x.error!=='-'?' ('+x.error+')':''))});
     const namaOk=_kNormNama(x.host)===_kNormNama(r.nama);
     const hard=cek.every(c=>c.ok);
-    return{ref:r.ref,row:r.row,host:x.host,ok:hard&&namaOk,namaOk,hardOk:hard,cek};
+    return{ref:r.ref,row:r.row,host:x.host,ok:hard&&namaOk,namaOk,hardOk:hard,cek,belumSubmit:stNorm==='valid'};
   });
   const refs=new Set(batchRows.map(r=>r.ref));
   const extra=list.filter(x=>!refs.has(x.ref)).map(x=>({ref:x.ref,host:x.host,amount:x.amount}));
@@ -607,7 +610,9 @@ function _kHtmlVerif(){
   let body='';
   if(V&&V.mode==='file'){
     const allOk=V.r.countOk&&!V.r.extra.length&&V.r.res.every(x=>x.ok||(x.hardOk&&!x.namaOk&&V.konf.has(x.row)));
+    const nValid=V.r.res.filter(x=>x.belumSubmit).length;
     body=`<div style="font-size:12px;margin-bottom:6px">File: ${_ke(V.file)} · ${V.r.res.filter(x=>x.ok).length}/${b.n} cocok${V.r.countOk?'':' · <span style="color:var(--dn)">jumlah baris file beda dengan batch</span>'}</div>
+    ${nValid?`<div style="font-size:12px;color:var(--wt);margin-bottom:6px">⚠ ${nValid} baris masih berstatus "Valid" di Kopra (belum disubmit) — isi file sudah cocok, pastikan transaksinya di-approve di Kopra.</div>`:''}
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th></th><th>Ref</th><th>Baris</th><th>Nama Host</th><th>Cek</th></tr></thead><tbody>
     ${V.r.res.map(x=>{const r=b.rows.find(y=>y.row===x.row);return `<tr><td>${x.ok?'✅':(x.hardOk&&!x.namaOk&&V.konf.has(x.row)?'☑️':'❌')}</td><td style="font-family:var(--mn);font-size:11px">${_ke(x.ref)}</td><td>${x.row}</td>
       <td>${_ke(x.host||'—')}${x.namaOk===false?`<div style="font-size:11px;color:var(--wt)">beda dengan "${_ke(r.nama)}"${x.hardOk?` <label><input type="checkbox" ${V.konf.has(x.row)?'checked':''} onchange="kopraKonfNama(${x.row},this.checked)"> nama benar</label>`:''}</div>`:''}</td>

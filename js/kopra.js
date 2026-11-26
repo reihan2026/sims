@@ -9,7 +9,7 @@
 // URL + token disimpan di sims/kopra, TIDAK di kode (repo publik).
 
 // ----- Konstanta & default -----
-const KOPRA_STATUS={dl:'Diunduh',ver:'Terverifikasi',sheet:'Status sheet diperbarui',rekon:'Direkonsiliasi',batal:'Dibatalkan'};
+const KOPRA_STATUS={dl:'Diunduh',ver:'Terverifikasi',sheet:'Status sheet diperbarui',sebagian:'Sebagian direkonsiliasi',rekon:'Direkonsiliasi',batal:'Dibatalkan'};
 const KOPRA_DEFAULT_SETTINGS={
   gas_url:'',gas_token:'',tab:'Monitoring VA',
   kolom:{tanggal:'Tanggal',ket:'Keterangan',kategori:'Kategori',nominal:'Nominal',bank:'Bank Penerima',biaya:'Biaya Admin',rek:'Nomor Rekening',nama:'Nama Penerima',status:'Status Maker/ Yayasan'},
@@ -265,6 +265,7 @@ async function renderKopra(){
     return;
   }
   if(!_kIsOwner()){root.innerHTML='<div class="card"><div class="empty">Halaman Export Kopra hanya untuk akun pemilik.</div></div>';return;}
+  if(!_kp.doc.menunggu_v1){try{await _kMigrasiMenunggu();}catch(e){console.warn('[Kopra] migrasi menunggu:',e);}}
   if(_kp.batch){_kRenderBatch(root);return;}
   _kRenderMain(root);
 }
@@ -310,6 +311,7 @@ function _kRenderMain(root){
         <button class="btn bxs" onclick="kopraPilihRentang()">Pakai rentang</button></div>`
     :'<div style="font-size:12px;color:var(--t3)">Klik "Baca sheet" untuk mengambil baris dari tab '+_ke(S.tab)+'.</div>'}
   </div>
+  ${_kHtmlMenunggu()}
   ${_kp.sel?_kHtmlPreview():''}
   ${_kHtmlRiwayat()}
   ${_kHtmlSetting()}`;
@@ -402,7 +404,7 @@ function _kIsOperasional(r,S){
 }
 function _kRowsInVerifiedBatch(){
   const m={};
-  (_kp.doc.batches_idx||[]).forEach(b=>{if([KOPRA_STATUS.ver,KOPRA_STATUS.sheet,KOPRA_STATUS.rekon].includes(b.status))(b.rows||[]).forEach(r=>{m[r]=b.file||b.id;});});
+  (_kp.doc.batches_idx||[]).forEach(b=>{if([KOPRA_STATUS.ver,KOPRA_STATUS.sheet,KOPRA_STATUS.sebagian,KOPRA_STATUS.rekon].includes(b.status))(b.rows||[]).forEach(r=>{m[r]=b.file||b.id;});});
   return m;
 }
 
@@ -483,7 +485,7 @@ function _kUnduh(file,txt){
 }
 
 function _kStatusTag(s){
-  const c={[KOPRA_STATUS.dl]:'twn',[KOPRA_STATUS.ver]:'tin',[KOPRA_STATUS.sheet]:'tin',[KOPRA_STATUS.rekon]:'tok',[KOPRA_STATUS.batal]:'tno'}[s]||'';
+  const c={[KOPRA_STATUS.dl]:'twn',[KOPRA_STATUS.ver]:'tin',[KOPRA_STATUS.sheet]:'tin',[KOPRA_STATUS.sebagian]:'twn',[KOPRA_STATUS.rekon]:'tok',[KOPRA_STATUS.batal]:'tno'}[s]||'';
   return `<span class="tag ${c}">${_ke(s)}</span>`;
 }
 function _kHtmlRiwayat(){
@@ -591,7 +593,7 @@ async function _kSimpanBatch(patch,logArgs){
   await _kSaveDoc();
   if(logArgs)addLog(...logArgs);
 }
-const _kRank={[KOPRA_STATUS.batal]:-1,[KOPRA_STATUS.dl]:0,[KOPRA_STATUS.ver]:1,[KOPRA_STATUS.sheet]:2,[KOPRA_STATUS.rekon]:3};
+const _kRank={[KOPRA_STATUS.batal]:-1,[KOPRA_STATUS.dl]:0,[KOPRA_STATUS.ver]:1,[KOPRA_STATUS.sheet]:2,[KOPRA_STATUS.sebagian]:2.5,[KOPRA_STATUS.rekon]:3};
 function _kNextStatus(b,s){return _kRank[s]>(_kRank[b.status]||0)?s:b.status;}
 
 function _kRenderBatch(root){
@@ -717,6 +719,8 @@ function _kJarak(a,b){if(!a||!b)return 999;return Math.abs((new Date(a)-new Date
 // Jendela tanggal invoice: 21 hari sebelum s/d 7 hari sesudah transfer — nominal
 // yang sama sering berulang (mis. tempe 140 papan), jangan cocokkan ke invoice lama.
 function _kDalamJendela(invTgl,tgl){if(!invTgl||!tgl)return true;const d=(new Date(invTgl)-new Date(tgl))/864e5;return d>=-21&&d<=7;}
+function _kDekat(a,b){return b>0&&Math.abs(Math.round(a)-b)/b<=0.15;}
+function _kSelisih(inv,trf){const d=Math.round(inv)-trf;return 'nominal invoice '+_kFmtNum(inv)+' ('+(d>0?'+':'')+_kFmtNum(d)+' dari transfer) — pilih hanya kalau memang invoice ini';}
 function _kKandidat(r,tgl){
   const rule=_kRule(r.nama);const S=_kSet();
   const tandaBaris='Sheet baris '+r.row+' ';
@@ -725,8 +729,13 @@ function _kKandidat(r,tgl){
     const R=_kResolve(rule);if(R.err)return{cara:'terima',rule,err:R.err,cands:[]};
     const cands=[];
     getInvD().forEach(d=>{
-      if(d.vendor_saya_id!==R.vs.id||(d.type||'markup')==='passthrough'||Math.round(d.total)!==r.nominal||!_kDalamJendela(d.tgl,tgl))return;
+      if(d.vendor_saya_id!==R.vs.id||(d.type||'markup')==='passthrough'||!_kDalamJendela(d.tgl,tgl))return;
       const pays=d.payments||[];const paid=pays.reduce((s,p)=>s+p.jumlah,0);
+      if(Math.round(d.total)!==r.nominal){
+        // Kandidat dekat: nominal beda ≤15%, belum ada pembayaran — hanya bisa dipilih manual
+        if(_kDekat(d.total,r.nominal)&&!paid&&d.terima_status!=='lunas')cands.push({id:d.id,no:d.no,kind:'invd',po_id:d.po_id,tgl:d.tgl,label:`${d.no} · ${d.tgl||''} · ${_kFmtNum(d.total)}`,state:'beda',why:_kSelisih(d.total,r.nominal),rek:R.rek});
+        return;
+      }
       let state='siap',why='';
       if(pays.some(p=>(p.catatan||'').startsWith(tandaBaris))){state='sudah';why='sudah dicatat dari baris ini';}
       else if(d.terima_status==='lunas'||paid>=d.total){
@@ -738,13 +747,17 @@ function _kKandidat(r,tgl){
     });
     return{cara:'terima',rule,cands:cands.sort(urut)};
   }
-  const vendorCands=filterVendor=>{
+  const vendorCands=(filterVendor,dekat)=>{
     const out=[];
     getInvV().forEach(v=>{
       if(filterVendor&&!_kNorm(v.vendor).includes(_kNorm(filterVendor)))return;
       const n=invVNet(v);
-      if(Math.round(v.total)!==r.nominal&&Math.round(n.netTotal)!==r.nominal)return;
       if(!_kDalamJendela(v.tgl,tgl))return;
+      if(Math.round(v.total)!==r.nominal&&Math.round(n.netTotal)!==r.nominal){
+        if(dekat&&_kDekat(n.netTotal,r.nominal)&&v.bayar_status!=='lunas'&&!isPassthrough(v.id)&&!(v.payments||[]).length&&!_ptSudahDitagihMarkup(v.id).length)
+          out.push({id:v.id,no:v.no,kind:'invv',po_id:v.po_id,tgl:v.tgl,label:`${v.no} · ${v.tgl||''} · ${v.vendor} · ${_kFmtNum(n.netTotal)}`,state:'beda',why:_kSelisih(n.netTotal,r.nominal)});
+        return;
+      }
       let state='siap',why='';
       if(isPassthrough(v.id)){
         const pays=v.payments||[];
@@ -758,7 +771,7 @@ function _kKandidat(r,tgl){
     });
     return out.sort(urut);
   };
-  if(rule&&rule.cara==='pt')return{cara:'pt',rule,cands:vendorCands(rule.vendor)};
+  if(rule&&rule.cara==='pt')return{cara:'pt',rule,cands:vendorCands(rule.vendor,true)};
   if((S.kategori_operasional||[]).some(k=>_kNorm(k)===_kNorm(r.kategori)))return{cara:'ops',cands:[]};
   // Penerima tanpa aturan: hanya INV-V yang belum dibayar, dan harus dikonfirmasi
   const c=vendorCands(null).filter(x=>x.state==='siap');
@@ -801,7 +814,7 @@ function _kHtmlRekon(){
       let inv='—';
       if(it.sudah){const c=k.cands.find(c=>c.state==='sudah');inv=`<span style="color:var(--ac)">✓ ${_ke(c.no)}</span><div style="font-size:10px;color:var(--t3)">${_ke(c.why)}</div>`;}
       else if(k.cands.length){
-        inv=`<select style="font-size:12px;max-width:260px" onchange="kopraRekonPilih(${it.row},this.value)"><option value="">— lewati —</option>${k.cands.map(c=>`<option value="${_ke(c.id)}" ${c.id===it.pilih?'selected':''} ${c.state==='siap'?'':'disabled'}>${_ke(c.label)}${c.state==='siap'?'':' — '+_ke(c.why)}</option>`).join('')}</select>`
+        inv=`<select style="font-size:12px;max-width:260px" onchange="kopraRekonPilih(${it.row},this.value)"><option value="">— lewati —</option>${k.cands.map(c=>`<option value="${_ke(c.id)}" ${c.id===it.pilih?'selected':''} ${c.state==='siap'||c.state==='beda'?'':'disabled'}>${_ke(c.label)}${c.state==='siap'?'':c.state==='beda'?' — nominal beda':' — '+_ke(c.why)}</option>`).join('')}</select>`
           +k.cands.filter(c=>c.state!=='siap').map(c=>`<div style="font-size:10px;color:var(--wt)">⚠ ${_ke(c.no)}: ${_ke(c.why)}</div>`).join('')
           +(k.cands.filter(c=>c.state==='siap').length>1?'<div style="font-size:10px;color:var(--wt)">Lebih dari satu kandidat — pilih</div>':'');
       }
@@ -809,45 +822,174 @@ function _kHtmlRekon(){
     </tbody></table></div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
       <div style="font-size:12px;color:var(--t3)">${mode?nCatat+' invoice akan dicatat.':'Mode usulan — aktifkan "Catat semua" di Setting setelah aturan terbukti benar.'}</div>
-      <button class="btn bp bsm" onclick="kopraCatatSemua()" ${mode&&nCatat?'':'disabled'}>Catat semua (${nCatat})</button>
+      <button class="btn bp bsm" onclick="kopraCatatSemua()" ${mode&&(nCatat||R.items.some(it=>!it.sudah&&it.k.cara!=='ops'))?'':'disabled'}>Catat semua (${nCatat})</button>
     </div></div>`;
+}
+
+// Catat satu baris transfer ke kandidat c (state siap/beda) — mengubah data SIMS
+// dan addLog. Dipakai "Catat semua", tombol Catat di daftar menunggu, dan tawaran
+// saat invoice disimpan. Kembalikan entri hasil untuk batch.rekon.hasil.
+function _kCatatSatu(r,c,tgl){
+  const base={row:r.row,ket:r.ket,nama:r.nama,kategori:r.kategori,nominal:r.nominal};
+  const catatan=`Sheet baris ${r.row} — ${r.ket} — ${_kFmtNum(r.nominal)}`;
+  if(c.kind==='invd'){
+    const invDs=getInvD();const d=invDs.find(x=>x.id===c.id);
+    if(!d)return Object.assign(base,{cara:'terima',hasil:'menunggu',catatan:'invoice tidak ditemukan'});
+    if(!d.payments)d.payments=[];
+    d.payments.push({id:uid(),jumlah:r.nominal,tgl,rek_id:c.rek.id,catatan});
+    if(d.payments.reduce((s2,p)=>s2+p.jumlah,0)>=d.total)d.terima_status='lunas';
+    setInvD(invDs);
+    addLog('terima_invd','Terima dari dapur (Kopra)','invd',d.id,d.no,fmtF(r.nominal)+' ke '+c.rek.nama+' · sheet baris '+r.row+(c.state==='beda'?' · nominal invoice '+fmtF(d.total):''));
+    return Object.assign(base,{inv:d.no,inv_id:d.id,po_id:d.po_id,cara:'terima',hasil:'dicatat'});
+  }
+  const iv=getInvV().find(x=>x.id===c.id);
+  const cat=catatan+(c.state==='beda'&&iv?' (nominal invoice '+_kFmtNum(iv.total)+')':'');
+  _konversiPTApply(c.id,{alasan:cat,tgl});
+  addLog('konversi_pt','Konversi pass-through (Kopra)','invv',c.id,c.no,cat);
+  return Object.assign(base,{inv:c.no,inv_id:c.id,po_id:c.po_id,cara:'pt',hasil:'dicatat'});
+}
+function _kStatusRekon(hasil){return hasil.some(h=>h.hasil==='menunggu')?KOPRA_STATUS.sebagian:KOPRA_STATUS.rekon;}
+// Sinkronkan ringkasan baris menunggu batch ini ke sims/kopra.menunggu
+function _kSyncMenunggu(b){
+  const lain=(_kp.doc.menunggu||[]).filter(m=>m.b!==b.id);
+  const ini=((b.rekon&&b.rekon.hasil)||[]).filter(h=>h.hasil==='menunggu').map(h=>{
+    const r=b.rows.find(x=>x.row===h.row)||{};
+    return{b:b.id,file:b.file,tgl:b.tgl,row:h.row,nama:h.nama||r.nama||'',ket:h.ket||r.ket||'',kategori:h.kategori||r.kategori||'',nominal:h.nominal};
+  });
+  _kp.doc.menunggu=lain.concat(ini);
 }
 
 async function kopraCatatSemua(){
   if(!_kSiap())return;
   const b=_kp.batch;const S=_kSet();if(S.rekon_mode!=='catat')return;
   const R=_kp.rekon;const todo=R.items.filter(it=>it.pilih&&!it.sudah);
-  if(!todo.length)return;
-  if(!confirm(`Catat ${todo.length} invoice sebagai lunas dengan tanggal ${_kFmtTgl(b.tgl)}?`))return;
+  if(!todo.length&&!R.items.some(it=>!it.sudah&&it.k.cara!=='ops'))return;
+  if(!confirm(todo.length?`Catat ${todo.length} invoice sebagai lunas dengan tanggal ${_kFmtTgl(b.tgl)}? Baris pembelian lain ditandai "menunggu invoice".`:'Tandai baris pembelian tanpa invoice sebagai "menunggu invoice"?'))return;
+  _kp.sibuk=Date.now();
   const hasil=[];
-  const invDs=getInvD();let ubahD=false;
   for(const it of R.items){
-    const r=it.r;const catatan=`Sheet baris ${r.row} — ${r.ket} — ${_kFmtNum(r.nominal)}`;
-    if(it.sudah){const c=it.k.cands.find(c=>c.state==='sudah');hasil.push({row:r.row,ket:r.ket,nominal:r.nominal,inv:c.no,inv_id:c.id,po_id:c.po_id,cara:it.k.cara,hasil:'sudah'});continue;}
-    if(!it.pilih){hasil.push({row:r.row,ket:r.ket,nominal:r.nominal,cara:it.k.cara,hasil:it.k.cara==='ops'?'operasional':'dilewati'});continue;}
+    const r=it.r;const base={row:r.row,ket:r.ket,nama:r.nama,kategori:r.kategori,nominal:r.nominal};
+    if(it.sudah){const c=it.k.cands.find(c=>c.state==='sudah');hasil.push(Object.assign(base,{inv:c.no,inv_id:c.id,po_id:c.po_id,cara:it.k.cara,hasil:'sudah'}));continue;}
+    if(it.k.cara==='ops'){hasil.push(Object.assign(base,{cara:'ops',hasil:'operasional'}));continue;}
+    if(!it.pilih){hasil.push(Object.assign(base,{cara:it.k.cara,hasil:'menunggu'}));continue;}
     // Cek ulang kondisi terkini (data bisa berubah sejak usulan dibuat)
     const k=_kKandidat(r,b.tgl);const c=k.cands.find(x=>x.id===it.pilih);
-    if(!c||c.state!=='siap'){hasil.push({row:r.row,ket:r.ket,nominal:r.nominal,inv:c?c.no:'',cara:k.cara,hasil:'gagal: '+(c?c.why:'invoice tidak ditemukan')});continue;}
-    if(c.kind==='invd'){
-      const d=invDs.find(x=>x.id===c.id);if(!d)continue;
-      if(!d.payments)d.payments=[];
-      d.payments.push({id:uid(),jumlah:r.nominal,tgl:b.tgl,rek_id:c.rek.id,catatan});
-      if(d.payments.reduce((s,p)=>s+p.jumlah,0)>=d.total)d.terima_status='lunas';
-      ubahD=true;
-      addLog('terima_invd','Terima dari dapur (Kopra)','invd',d.id,d.no,fmtF(r.nominal)+' ke '+c.rek.nama+' · sheet baris '+r.row);
-      hasil.push({row:r.row,ket:r.ket,nominal:r.nominal,inv:d.no,inv_id:d.id,po_id:d.po_id,cara:'terima',hasil:'dicatat'});
-    } else {
-      _konversiPTApply(c.id,{alasan:catatan,tgl:b.tgl});
-      addLog('konversi_pt','Konversi pass-through (Kopra)','invv',c.id,c.no,catatan);
-      hasil.push({row:r.row,ket:r.ket,nominal:r.nominal,inv:c.no,inv_id:c.id,po_id:c.po_id,cara:'pt',hasil:'dicatat'});
-    }
+    if(!c||(c.state!=='siap'&&c.state!=='beda')){hasil.push(Object.assign(base,{inv:c?c.no:'',cara:k.cara,hasil:'menunggu',catatan:'gagal: '+(c?c.why:'invoice tidak ditemukan')}));continue;}
+    hasil.push(_kCatatSatu(r,c,b.tgl));
   }
-  if(ubahD)setInvD(invDs);
-  const n=hasil.filter(h=>h.hasil==='dicatat').length;
-  try{await _kSimpanBatch({rekon:{at:new Date().toISOString(),by:_currentUser?.email||'',hasil},status:_kNextStatus(b,KOPRA_STATUS.rekon)},
-    ['rekon_kopra','Rekonsiliasi lunas dari Kopra','kopra',b.id,b.file,n+' invoice dicatat lunas']);}
+  const n=hasil.filter(h=>h.hasil==='dicatat').length,nm=hasil.filter(h=>h.hasil==='menunggu').length;
+  b.rekon={at:new Date().toISOString(),by:_currentUser?.email||'',hasil};
+  _kSyncMenunggu(b);
+  try{await _kSimpanBatch({rekon:b.rekon,status:_kNextStatus(b,_kStatusRekon(hasil))},
+    ['rekon_kopra','Rekonsiliasi lunas dari Kopra','kopra',b.id,b.file,n+' invoice dicatat lunas'+(nm?' · '+nm+' menunggu invoice':'')]);}
   catch(e){showToast('Lunas dicatat di SIMS, tapi gagal menyimpan hasil ke batch: '+e.message,true);}
-  _kp.rekon=null;showToast(n+' invoice dicatat lunas.');renderKopra();
+  _kp.rekon=null;_kp.sibuk=Date.now();showToast(n+' invoice dicatat lunas'+(nm?' · '+nm+' menunggu invoice':'')+'.');renderKopra();
+}
+
+// Catat satu baris yang menunggu (dari daftar menunggu, hasil batch, atau tawaran)
+async function kopraCatatMenunggu(batchId,row,candId){
+  if(!_kSiap())return;
+  const S=_kSet();if(S.rekon_mode!=='catat'){showToast('Mode rekonsiliasi masih "usulan" — aktifkan di Setting.',true);return;}
+  let b;try{const sn=await db.collection('sims').doc('kopra_b_'+batchId).get();b=sn.data();}catch(e){showToast('Gagal membaca batch: '+e.message,true);return;}
+  const h=b&&b.rekon&&b.rekon.hasil.find(x=>x.row===row);
+  if(!h||h.hasil!=='menunggu'){showToast('Baris ini sudah tidak menunggu.',true);await _kLoadDoc();_kTutupTawaran();renderKopra();return;}
+  const r=b.rows.find(x=>x.row===row);
+  const c=_kKandidat(r,b.tgl).cands.find(x=>x.id===candId);
+  if(!c||(c.state!=='siap'&&c.state!=='beda')){showToast('Invoice tidak lagi bisa dicatat: '+(c?c.why:'tidak ditemukan'),true);return;}
+  if(!confirm(`Catat ${c.no} lunas untuk transfer ${_kFmtTgl(b.tgl)} baris ${row} (${r.nama}, ${_kFmtNum(r.nominal)})?`+(c.state==='beda'?'\n\nPerhatian: '+c.why:'')))return;
+  _kp.sibuk=Date.now();
+  const baru=_kCatatSatu(r,c,b.tgl);
+  b.rekon.hasil=b.rekon.hasil.map(x=>x.row===row?baru:x);
+  await _kLoadDoc();_kSyncMenunggu(b);
+  const st=_kStatusRekon(b.rekon.hasil);
+  b.status=st;b.histori=(b.histori||[]).concat([{t:new Date().toISOString(),by:_currentUser?.email||'',s:st}]);
+  const ix=_kp.doc.batches_idx.find(x=>x.id===b.id);if(ix)ix.status=st;
+  try{await db.collection('sims').doc('kopra_b_'+b.id).set(b);await _kSaveDoc();}
+  catch(e){showToast('Lunas dicatat di SIMS, tapi gagal menyimpan ke batch: '+e.message,true);}
+  addLog('rekon_kopra','Rekonsiliasi lunas dari Kopra','kopra',b.id,b.file,'baris '+row+' → '+c.no);
+  if(_kp.batch&&_kp.batch.id===b.id){_kp.batch=b;_kp.rekon=null;}
+  _kp.sibuk=Date.now();_kTutupTawaran();showToast(c.no+' dicatat lunas.');
+  if(_currentPage==='kopra')renderKopra();
+}
+async function kopraAbaikanMenunggu(batchId,row){
+  if(!_kSiap())return;
+  const alasan=prompt('Abaikan baris '+row+' — tidak akan dicatat lunas di SIMS. Alasannya?','Bukan pembelian ber-invoice');
+  if(alasan===null)return;
+  let b;try{b=(await db.collection('sims').doc('kopra_b_'+batchId).get()).data();}catch(e){showToast(e.message,true);return;}
+  b.rekon.hasil=b.rekon.hasil.map(x=>x.row===row&&x.hasil==='menunggu'?Object.assign({},x,{hasil:'diabaikan',catatan:alasan}):x);
+  await _kLoadDoc();_kSyncMenunggu(b);
+  const st=_kStatusRekon(b.rekon.hasil);b.status=st;
+  const ix=_kp.doc.batches_idx.find(x=>x.id===b.id);if(ix)ix.status=st;
+  try{await db.collection('sims').doc('kopra_b_'+b.id).set(b);await _kSaveDoc();}catch(e){showToast('Gagal simpan: '+e.message,true);return;}
+  addLog('kopra_abaikan','Abaikan transfer menunggu invoice','kopra',b.id,b.file,'baris '+row+' · '+alasan);
+  if(_kp.batch&&_kp.batch.id===b.id){_kp.batch=b;_kp.rekon=null;}
+  _kTutupTawaran();renderKopra();
+}
+
+// ----- Daftar transfer menunggu invoice -----
+function _kHtmlMenunggu(){
+  const list=[...(_kp.doc.menunggu||[])].sort((a,b)=>(a.tgl||'').localeCompare(b.tgl||'')||a.row-b.row);
+  if(!list.length)return '';
+  const S=_kSet();const hari=t=>Math.max(0,Math.round((new Date(today())-new Date(t))/864e5));
+  return `<div class="card" style="border-color:var(--wb)"><div class="ct">Transfer menunggu invoice (${list.length})</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Sudah ditransfer lewat Kopra, tapi invoicenya belum ada di SIMS. Begitu invoice yang cocok disimpan, SIMS menawarkan untuk mencatatnya.</div>
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Transfer</th><th>Penerima</th><th>Keterangan</th><th style="text-align:right">Nominal</th><th>Invoice di SIMS</th><th></th></tr></thead><tbody>
+    ${list.map(m=>{const k=_kKandidat(m,m.tgl);const ok=k.cands.filter(c=>c.state==='siap'||c.state==='beda');
+      const sel=ok.length?`<select id="km-${_ke(m.b)}-${m.row}" style="font-size:12px;max-width:230px">${ok.map(c=>`<option value="${_ke(c.id)}">${_ke(c.label)}${c.state==='beda'?' — nominal beda':''}</option>`).join('')}</select>`:'<span style="font-size:11px;color:var(--t3)">belum ada</span>';
+      return `<tr><td style="white-space:nowrap">${_kFmtTgl(m.tgl)}<div style="font-size:10px;color:var(--t3)">baris ${m.row} · ${hari(m.tgl)} hari</div></td><td>${_ke(m.nama)}</td><td class="txt-cell" style="max-width:200px">${_ke(m.ket)}</td><td class="num-cell">${_kFmtNum(m.nominal)}</td><td>${sel}</td>
+        <td><div class="bg" style="flex-wrap:nowrap">${ok.length?`<button class="btn bxs bp" ${S.rekon_mode==='catat'?'':'disabled'} onclick="kopraCatatMenunggu('${_ke(m.b)}',${m.row},document.getElementById('km-${_ke(m.b)}-${m.row}').value)">Catat</button>`:''}<button class="btn bxs" onclick="kopraBukaBatch('${_ke(m.b)}')">Batch</button><button class="btn bxs" onclick="kopraAbaikanMenunggu('${_ke(m.b)}',${m.row})">Abaikan</button></div></td></tr>`;}).join('')}
+    </tbody></table></div></div>`;
+}
+
+// ----- Tawaran saat invoice disimpan -----
+// Dipanggil dari saveData (js/data.js) setiap invv/invd berubah. Ringan: hanya
+// membaca sims/kopra sekali per sesi (untuk pemilik) lalu mencocokkan di memori.
+let _kTawaranTimer=null;
+function kopraCekMenungguNanti(){clearTimeout(_kTawaranTimer);_kTawaranTimer=setTimeout(_kCekMenunggu,1500);}
+async function _kCekMenunggu(){
+  if(!_currentUser||typeof _dataLoaded==='undefined'||!_dataLoaded)return;
+  if(_kp.sibuk&&Date.now()-_kp.sibuk<5000)return;
+  try{if(!_kp.doc)await _kLoadDoc();}catch(e){return;}
+  if(!_kIsOwner())return;
+  await _kMigrasiMenunggu();
+  const tolak=_kp.tawaranTolak||(_kp.tawaranTolak=new Set());
+  for(const m of (_kp.doc.menunggu||[])){
+    const c=_kKandidat(m,m.tgl).cands.find(x=>x.state==='siap'&&!tolak.has(m.b+':'+m.row+':'+x.id));
+    if(c){_kTampilTawaran(m,c);return;}
+  }
+}
+function _kTampilTawaran(m,c){
+  _kTutupTawaran();const S=_kSet();
+  const el=document.createElement('div');el.id='kopra-tawaran';
+  el.style.cssText='position:fixed;right:16px;bottom:16px;z-index:9999;max-width:420px;background:var(--sf);border:1px solid var(--wb);border-radius:var(--rl);box-shadow:0 6px 24px rgba(0,0,0,.18);padding:12px 14px;font-size:13px';
+  el.innerHTML=`<div style="font-weight:600;margin-bottom:4px">Transfer Kopra cocok dengan ${_ke(c.no)}</div>
+    <div style="color:var(--t2);margin-bottom:8px">${_kFmtTgl(m.tgl)} baris ${m.row} · ${_ke(m.nama)} · ${_kFmtNum(m.nominal)}<br>${_ke(m.ket)}<br>Dicatat sebagai ${c.kind==='invd'?'Rekam terima':'pass-through'}, tanggal ${_kFmtTgl(m.tgl)}.</div>
+    <div class="bg" style="justify-content:flex-end">${S.rekon_mode==='catat'?`<button class="btn bp bsm" onclick="kopraCatatMenunggu('${_ke(m.b)}',${m.row},'${_ke(c.id)}')">Catat lunas</button>`:`<button class="btn bsm" onclick="_kTutupTawaran();nav('kopra')">Buka Export Kopra</button>`}
+    <button class="btn bsm" onclick="(_kp.tawaranTolak=_kp.tawaranTolak||new Set()).add('${_ke(m.b)}:${m.row}:${_ke(c.id)}');_kTutupTawaran()">Nanti</button></div>`;
+  document.body.appendChild(el);
+}
+function _kTutupTawaran(){const el=document.getElementById('kopra-tawaran');if(el)el.remove();}
+// Sekali jalan: batch lama yang hasilnya "dilewati" untuk baris pembelian → "menunggu"
+async function _kMigrasiMenunggu(){
+  if(!_kp.doc||_kp.doc.menunggu_v1)return;
+  for(const bi of _kp.doc.batches_idx||[]){
+    if(bi.status!==KOPRA_STATUS.rekon)continue;
+    const b=(await db.collection('sims').doc('kopra_b_'+bi.id).get()).data();
+    if(!b||!b.rekon)continue;
+    let ubah=false;
+    b.rekon.hasil=b.rekon.hasil.map(h=>{
+      if(h.hasil!=='dilewati'&&!/^gagal/.test(h.hasil||''))return h;
+      if(h.cara==='ops')return h;
+      const r=b.rows.find(x=>x.row===h.row)||{};ubah=true;
+      return Object.assign({},h,{nama:h.nama||r.nama,kategori:h.kategori||r.kategori,hasil:'menunggu'});
+    });
+    if(!ubah)continue;
+    b.status=_kStatusRekon(b.rekon.hasil);bi.status=b.status;
+    await db.collection('sims').doc('kopra_b_'+b.id).set(b);
+    _kSyncMenunggu(b);
+  }
+  _kp.doc.menunggu=_kp.doc.menunggu||[];_kp.doc.menunggu_v1=true;
+  await _kSaveDoc();
 }
 function _kHtmlRekonHasil(rk){
   const poIds=[...new Set(rk.hasil.map(h=>h.po_id).filter(Boolean))];
@@ -856,10 +998,11 @@ function _kHtmlRekonHasil(rk){
     <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Dicatat ${_ke(_kWaktu(rk.at))} oleh ${_ke(rk.by||'')}</div>
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Baris</th><th>Sheet</th><th style="text-align:right">Nominal</th><th>SIMS</th><th>Cara</th><th>Hasil</th></tr></thead><tbody>
     ${rk.hasil.map(h=>`<tr><td>${h.row}</td><td class="txt-cell" style="max-width:220px">${_ke(h.ket)}</td><td class="num-cell">${_kFmtNum(h.nominal)}</td><td>${_ke(h.inv||'—')}</td><td style="font-size:11px">${h.cara==='terima'?'Rekam terima':h.cara==='pt'?'Pass-through':h.cara==='ops'?'Operasional':'—'}</td>
-      <td style="font-size:11px;color:${h.hasil==='dicatat'?'var(--ac)':/^gagal/.test(h.hasil)?'var(--dn)':h.hasil==='dilewati'?'var(--wt)':'var(--t3)'}">${_ke(h.hasil)}</td></tr>`).join('')}
+      <td style="font-size:11px;color:${h.hasil==='dicatat'?'var(--ac)':h.hasil==='menunggu'?'var(--wt)':/^gagal/.test(h.hasil)?'var(--dn)':'var(--t3)'}">${h.hasil==='menunggu'?'menunggu invoice':_ke(h.hasil)}${h.catatan?`<div style="color:var(--t3)">${_ke(h.catatan)}</div>`:''}</td></tr>`).join('')}
     </tbody></table></div>
     <div class="ct" style="margin-top:12px">Invoice vendor di PO yang sama yang belum dibayar</div>
     ${belum.length?belum.map(v=>`<div style="font-size:12px;padding:2px 0">${_ke(v.no)} · ${_ke(v.vendor)} · ${fmtF(invVNet(v).sisa)}</div>`).join(''):'<div style="font-size:12px;color:var(--ac)">Tidak ada — semua sudah lunas.</div>'}
+    ${rk.hasil.some(h=>h.hasil==='menunggu')?'<div style="font-size:12px;color:var(--wt);margin-top:8px">Baris "menunggu invoice" bisa dicatat dari daftar <b>Transfer menunggu invoice</b> di halaman utama Export Kopra, atau otomatis ditawarkan saat invoicenya disimpan.</div>':''}
     <div style="text-align:right;margin-top:8px"><button class="btn bxs" onclick="_kp.batch.rekon=null;_kp.rekon=null;renderKopra()">Rekonsiliasi lagi</button></div>
   </div>`;
 }

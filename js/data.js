@@ -246,6 +246,8 @@ function saveData(keys){
   // lewat ikut "diterima". Dijalankan di sini (satu titik) supaya invoice
   // yang dibuat lewat jalur mana pun (form, scan, split, edit) ikut terjaring.
   if(keys&&(keys.includes('invv')||keys.includes('po'))&&typeof syncTerimaOtomatis==='function'&&syncTerimaOtomatis()>0&&!keys.includes('po'))keys=[...keys,'po'];
+  // Export Kopra: invoice baru/berubah mungkin pasangan transfer yang menunggu invoice
+  if(keys&&(keys.includes('invv')||keys.includes('invd'))&&typeof kopraCekMenungguNanti==='function')kopraCekMenungguNanti();
   // Mark keys as dirty
   (keys||Object.keys(_cache)).forEach(k=>{
     if(k.startsWith('file_'))return;// files handled separately

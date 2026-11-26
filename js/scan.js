@@ -65,6 +65,7 @@ async function _doScan(file) {
     // Auto-attach scanned file to the invoice file input
     try { const dt = new DataTransfer(); dt.items.add(file); document.getElementById('invv-file').files = dt.files; } catch(e) {}
     _showScanPreview(result);
+    if (typeof _biSembunyikanInfo === 'function') _biSembunyikanInfo();
   } catch(e) {
     showToast('Gagal scan: ' + e.message, true);
     if (e.message.includes('API key')) { _anthropicKey = null; openScanKeyModal(() => triggerScanInvoice()); }
@@ -227,7 +228,9 @@ function _recalcScanTotal() {
 }
 
 function applyScanToForm() {
-  const hasPOItems = !!document.querySelector('.invv-cb');
+  let hasPOItems = !!document.querySelector('.invv-cb');
+  // Belum pilih PO: pilih PO terbaru yang punya item vendor ini (js/baca-invoice.js)
+  if (!hasPOItems && typeof _biPilihPOOtomatis === 'function') hasPOItems = _biPilihPOOtomatis(document.getElementById('scan-vendor')?.value.trim());
   if (!hasPOItems) { showToast('Pilih PO dan vendor dulu agar item bisa diisi', true); return; }
 
   // Fill vendor name if field is empty
@@ -251,7 +254,7 @@ function applyScanToForm() {
   document.querySelectorAll('.invv-cb').forEach(cb => { cb.checked = false; });
 
   const claimedIdxs = new Set();
-  let applied = 0, skipped = 0;
+  let applied = 0, skipped = 0, viaQty = 0;
   for (let i = 0; i < _scanItems.length; i++) {
     if (!document.getElementById('scan-chk-' + i)?.checked) continue;
     const nama = (document.getElementById('scan-nama-' + i)?.value || '').trim().toLowerCase();
@@ -268,6 +271,15 @@ function applyScanToForm() {
       const score = _itemNameScore(nama, cbNama);
       if (score > bestCbScore) { bestCbScore = score; bestCb = cb; }
     }
+    // Nama tidak cocok (mis. hasil OCR rusak): cocokkan lewat qty — satu-satunya
+    // item PO tersisa dengan qty sama, atau yang harganya juga sama
+    if (!(bestCb && bestCbScore >= 0.4)) {
+      const qty = parseFloat(document.getElementById('scan-qty-' + i)?.value) || 0;
+      const byQty = [...document.querySelectorAll('.invv-cb')].filter(cb => !claimedIdxs.has(cb.dataset.idx) && qty > 0 && Math.abs((parseFloat(cb.dataset.qty) || 0) - qty) < 1e-6);
+      const byQtyHarga = byQty.filter(cb => hv > 0 && Math.round(parseFloat(cb.dataset.hv) || 0) === Math.round(hv));
+      const pick = byQtyHarga.length === 1 ? byQtyHarga[0] : byQty.length === 1 ? byQty[0] : null;
+      if (pick) { bestCb = pick; bestCbScore = 1; viaQty++; }
+    }
     if (bestCb && bestCbScore >= 0.4) {
       const idx = bestCb.dataset.idx;
       bestCb.checked = true;
@@ -283,6 +295,9 @@ function applyScanToForm() {
   }
 
   calcInvVTotal();
+  // No. invoice vendor (dari Baca tanpa AI) → catatan, kalau catatan masih kosong
+  const catEl = document.getElementById('invv-cat');
+  if (_scanMeta && _scanMeta.no && catEl && !catEl.value.trim()) catEl.value = 'No. invoice vendor: ' + _scanMeta.no;
   closeModal('modal-scan-preview');
-  showToast(applied + ' item diisi' + (skipped ? ` · ${skipped} tidak cocok dengan PO` : ''), skipped > 0 && applied === 0);
+  showToast(applied + ' item diisi' + (viaQty ? ` (${viaQty} dicocokkan lewat qty — cek namanya)` : '') + (skipped ? ` · ${skipped} tidak cocok dengan PO` : ''), skipped > 0 && applied === 0);
 }

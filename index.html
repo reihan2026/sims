@@ -842,7 +842,7 @@
       <div class="fg"><label class="lbl">Catatan</label><input type="text" id="invv-cat"></div>
     </div>
     <div class="fg"><label class="lbl">Upload file invoice vendor <span style="font-weight:400;color:var(--t3);font-size:10px">— atau scan otomatis dengan AI</span></label>
-      <div style="display:flex;align-items:center;gap:8px"><input type="file" id="invv-file" accept="image/*,.pdf" style="flex:1"><button type="button" class="btn bsm bp" id="scan-ai-btn" onclick="triggerScanInvoice()" title="Upload foto/PDF invoice → AI baca item & harga otomatis">Scan AI</button></div>
+      <div style="display:flex;align-items:center;gap:8px"><input type="file" id="invv-file" accept="image/*,.pdf" style="flex:1"><button type="button" class="btn bsm" id="baca-inv-btn" onclick="triggerBacaInvoice()" title="Upload PDF/foto invoice → dibaca di browser tanpa AI (PDF digital akurat; foto/scan pakai OCR)">Baca (tanpa AI)</button><button type="button" class="btn bsm bp" id="scan-ai-btn" onclick="triggerScanInvoice()" title="Upload foto/PDF invoice → AI baca item & harga otomatis">Scan AI</button></div>
     </div>
   </div>
   <div class="mf"><button class="btn" onclick="closeModal('modal-invv')">Batal</button><button class="btn bp" id="invv-save-btn" onclick="saveInvV()">Simpan invoice</button></div>
@@ -1279,9 +1279,10 @@
 <script src="js/misc.js?v=c1594b42"></script>
 <script src="js/laporan.js?v=410b7957"></script>
 <script src="js/vendor.js?v=582520e8"></script>
-<script src="js/scan.js?v=2d3e38d8"></script>
+<script src="js/scan.js?v=f14cf760"></script>
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>
+<script src="js/baca-invoice.js?v=001c1764"></script>
 <script src="js/kopra.js?v=a68e5196"></script>
 <script src="js/periode.js?v=8e7aa7fe"></script>
 </body>

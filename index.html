@@ -681,11 +681,12 @@
     </div>
     <div class="r3">
       <div class="fg"><label class="lbl">Kategori</label>
-        <select id="ie-kat"><option value="">—</option><option>Daging</option><option>Sayur</option><option>Buah</option><option>Bumbu</option><option>Telur</option><option>Beras</option><option>UMKM</option><option>Others</option></select></div>
+        <select id="ie-kat"><option value="">—</option></select></div>
       <div class="fg"><label class="lbl">Tipe kirim</label>
         <select id="ie-tipe"><option value="fresh">Fresh (sesuai deadline)</option><option value="bulk">Bulk (boleh gabung)</option></select></div>
-      <div class="fg"><label class="lbl">Deadline kirim</label><input type="date" id="ie-deadline"></div>
+      <div class="fg"><label class="lbl">Deadline kirim</label><input type="date" id="ie-deadline"><div id="ie-deadline-note" style="display:none;font-size:11px;color:var(--t3);margin-top:3px"></div></div>
     </div>
+    <div class="fg"><label class="lbl">Spesifikasi</label><input type="text" id="ie-spek" placeholder="Spesifikasi..."></div>
     <div class="fg"><label class="lbl">Alasan perubahan (jika ada)</label><input type="text" id="ie-alasan" placeholder="opsional — dicatat di histori revisi"></div>
     <input type="hidden" id="ie-po-id"><input type="hidden" id="ie-idx">
   </div>
@@ -1263,7 +1264,7 @@
 <script src="js/utils.js?v=4095110a"></script>
 <script src="js/master.js?v=084aed35"></script>
 <script src="js/po-form.js?v=c778fbe4"></script>
-<script src="js/po.js?v=c133415a"></script>
+<script src="js/po.js?v=d32b84e0"></script>
 <script src="js/invoice-vendor.js?v=81a9bfa7"></script>
 <script src="js/invoice-dapur.js?v=467195b7"></script>
 <script src="js/cashflow.js?v=b1c31989"></script>

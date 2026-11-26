@@ -722,6 +722,8 @@ function showDetail(id){
 function setItemKat(poId,idx,kat){const pos=getPOs();const po=pos.find(p=>p.id===poId);if(!po||!po.items[idx])return;po.items[idx].kat=kat;setPOs(pos);showToast('Kategori disimpan');}
 
 // ===== EDIT ITEM PO =====
+function escHtmlIE(v){return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escAttrIE(v){return escHtmlIE(v).replace(/"/g,'&quot;');}
 function openItemEdit(poId,idx){
   const po=getPOs().find(p=>p.id===poId);if(!po)return;const item=po.items[idx];if(!item)return;
   document.getElementById('ie-po-id').value=poId;document.getElementById('ie-idx').value=idx;
@@ -729,9 +731,22 @@ function openItemEdit(poId,idx){
   document.getElementById('ie-qty').value=item.qty||'';
   document.getElementById('ie-satuan').value=item.satuan||'';
   document.getElementById('ie-harga-po').value=item.harga_po||'';
-  document.getElementById('ie-kat').value=item.kat||'';
+  // Kategori: isi dari master (getCats) + kategori item sendiri kalau tidak ada di
+  // daftar, supaya simpan lewat dialog ini tidak pernah mengosongkan kategori.
+  const katSel=document.getElementById('ie-kat');
+  const kats=[...getCats()];if(item.kat&&!kats.includes(item.kat))kats.push(item.kat);
+  katSel.innerHTML='<option value="">—</option>'+kats.map(k=>`<option value="${escAttrIE(k)}">${escHtmlIE(k)}</option>`).join('');
+  katSel.value=item.kat||'';
   document.getElementById('ie-tipe').value=item.tipe_kirim||'fresh';
-  document.getElementById('ie-deadline').value=item.deadline||'';
+  // Deadline: input type=date hanya bisa menampilkan YYYY-MM-DD. Deadline teks
+  // (mis. "Minggu, 15 November 2026 MAX pukul 19.00 WIB") ditampilkan sebagai
+  // catatan dan TIDAK diubah saat simpan kecuali user memilih tanggal baru.
+  const dlIn=document.getElementById('ie-deadline');const dlNote=document.getElementById('ie-deadline-note');
+  const dl=item.deadline||'';const dlIsDate=/^\d{4}-\d{2}-\d{2}$/.test(dl);
+  dlIn.value=dlIsDate?dl:'';dlIn.dataset.orig=dlIn.value;
+  if(dl&&!dlIsDate){dlNote.textContent='Tersimpan: '+dl+' (tidak berubah kecuali dipilih tanggal baru)';dlNote.style.display='block';}
+  else{dlNote.textContent='';dlNote.style.display='none';}
+  document.getElementById('ie-spek').value=item.spek||'';
   document.getElementById('ie-harga-vendor').value=item.harga_vendor||'';
   document.getElementById('ie-alasan').value='';
   // Warning jika item sudah punya invV atau invD
@@ -762,11 +777,23 @@ function saveItemEdit(){
   if(newHV>0){item.harga_vendor=newHV;if(item.satuan_konv)delete item.satuan_konv;}
   item.kat=document.getElementById('ie-kat').value;
   item.tipe_kirim=document.getElementById('ie-tipe').value;
-  item.deadline=document.getElementById('ie-deadline').value;
+  // Deadline hanya ditimpa kalau user benar-benar mengubah tanggal di dialog.
+  // Penting: deadline ikut jadi kunci pencocokan item↔invoice (itemKey).
+  const dlIn=document.getElementById('ie-deadline');
+  if(dlIn.value!==(dlIn.dataset.orig||''))item.deadline=dlIn.value;
+  const oldSpek=item.spek||'';const newSpek=document.getElementById('ie-spek').value.trim();
+  if(newSpek!==oldSpek)item.spek=newSpek;
   const alasan=document.getElementById('ie-alasan').value.trim();
+  const changes=[];
   if(item.qty!==oldQty||item.harga_po!==oldHP){
+    changes.push({nama:item.nama,qty_lama:oldQty,qty_baru:item.qty,harga_lama:oldHP,harga_baru:item.harga_po,alasan:alasan||'Edit item'});
+  }
+  if(newSpek!==oldSpek){
+    changes.push({nama:item.nama,qty_lama:item.qty,qty_baru:item.qty,harga_lama:item.harga_po,harga_baru:item.harga_po,alasan:'Spesifikasi: "'+(oldSpek||'—')+'" → "'+(newSpek||'—')+'"'+(alasan?' — '+alasan:'')});
+  }
+  if(changes.length){
     if(!po.revisions)po.revisions=[];
-    po.revisions.push({tgl:today(),changes:[{nama:item.nama,qty_lama:oldQty,qty_baru:item.qty,harga_lama:oldHP,harga_baru:item.harga_po,alasan:alasan||'Edit item'}]});
+    po.revisions.push({tgl:today(),changes});
   }
   addLog('edit_item','Edit item','item',poId,po?.no,item?.nama||'');
   const satSynced=item.satuan!==oldSat?syncSatuanKeInvoice(po,item,oldSat):false;

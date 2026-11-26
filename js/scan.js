@@ -247,14 +247,15 @@ function applyScanToForm() {
   const tglPreview = document.getElementById('scan-tgl')?.value.trim();
   if (tglPreview) {
     const tglField = document.getElementById('invv-tgl');
-    if (tglField && !tglField.value) tglField.value = tglPreview;
+    // Kosong atau masih tanggal bawaan (hari ini) → pakai tanggal di invoice
+    if (tglField && (!tglField.value || tglField.value === today())) tglField.value = tglPreview;
   }
 
   // Uncheck all first so we start from a clean state
   document.querySelectorAll('.invv-cb').forEach(cb => { cb.checked = false; });
 
   const claimedIdxs = new Set();
-  let applied = 0, skipped = 0, viaQty = 0;
+  let applied = 0, skipped = 0, viaQty = 0, qtyUbah = 0, satBeda = [];
   for (let i = 0; i < _scanItems.length; i++) {
     if (!document.getElementById('scan-chk-' + i)?.checked) continue;
     const nama = (document.getElementById('scan-nama-' + i)?.value || '').trim().toLowerCase();
@@ -284,6 +285,20 @@ function applyScanToForm() {
       const idx = bestCb.dataset.idx;
       bestCb.checked = true;
       claimedIdxs.add(idx);
+      // Qty invoice beda dari PO → isi lewat panel edit qty (hanya kalau satuannya sama;
+      // satuan beda butuh konversi, jangan ditebak)
+      const sqty = parseFloat(document.getElementById('scan-qty-' + i)?.value) || 0;
+      const ssat = (document.getElementById('scan-sat-' + i)?.value || '').trim().toLowerCase();
+      const satPO = bestCb.dataset.satOrig || bestCb.dataset.sat || '';
+      if (sqty > 0 && Math.abs(sqty - (parseFloat(bestCb.dataset.qty) || 0)) > 1e-9) {
+        const eq = document.getElementById('invv-eq-' + idx);
+        if (eq && (!ssat || ssat === satPO.toLowerCase())) {
+          eq.value = sqty;
+          const panel = document.getElementById('invv-ep-' + idx);
+          if (panel && !panel.classList.contains('open')) toggleInvVEdit(parseInt(idx), satPO); else onInvVEditChange(parseInt(idx), satPO);
+          qtyUbah++;
+        } else if (eq) satBeda.push(bestCb.dataset.nama);
+      }
       if (hv > 0) {
         const hvInput = document.querySelector(`.invv-hv[data-idx="${idx}"]`);
         if (hvInput) { hvInput.value = hv; updateInvVHarga(hvInput, parseInt(idx)); }
@@ -299,5 +314,5 @@ function applyScanToForm() {
   const catEl = document.getElementById('invv-cat');
   if (_scanMeta && _scanMeta.no && catEl && !catEl.value.trim()) catEl.value = 'No. invoice vendor: ' + _scanMeta.no;
   closeModal('modal-scan-preview');
-  showToast(applied + ' item diisi' + (viaQty ? ` (${viaQty} dicocokkan lewat qty — cek namanya)` : '') + (skipped ? ` · ${skipped} tidak cocok dengan PO` : ''), skipped > 0 && applied === 0);
+  showToast(applied + ' item diisi' + (viaQty ? ` (${viaQty} dicocokkan lewat qty — cek namanya)` : '') + (qtyUbah ? ` · qty ${qtyUbah} item disesuaikan invoice` : '') + (satBeda.length ? ` · satuan beda, cek qty: ${satBeda.join(', ')}` : '') + (skipped ? ` · ${skipped} tidak cocok dengan PO` : ''), (skipped > 0 && applied === 0) || satBeda.length > 0);
 }

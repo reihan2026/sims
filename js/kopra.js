@@ -213,6 +213,8 @@ if(typeof module!=='undefined')module.exports={_kNum,_kNormNama,_kAutoRemark,_kT
 // ----- State halaman -----
 let _kp={doc:null,loading:false,err:'',sheet:null,sheetAt:null,showDone:false,sel:null,batch:null,verif:null,rekon:null,showSet:false,sheetErr:null};
 
+// Penjaga untuk setiap aksi yang menulis (lihat _dataLoaded di js/data.js)
+function _kSiap(){if(typeof _dataLoaded!=='undefined'&&!_dataLoaded){showToast('Data SIMS belum selesai dimuat — tunggu sebentar.',true);return false;}return true;}
 function _kSet(){
   const s=Object.assign({},KOPRA_DEFAULT_SETTINGS,(_kp.doc&&_kp.doc.settings)||{});
   s.kolom=Object.assign({},KOPRA_DEFAULT_SETTINGS.kolom,s.kolom||{});
@@ -243,6 +245,13 @@ async function _kGas(payload){
 // ----- Render utama -----
 async function renderKopra(){
   const root=document.getElementById('kopra-root');if(!root)return;
+  // Jangan izinkan aksi apa pun sebelum data SIMS termuat: rekonsiliasi butuh
+  // invoice, dan addLog/saveData saat _cache masih kosong menimpa data server.
+  if(typeof _dataLoaded!=='undefined'&&!_dataLoaded){
+    root.innerHTML='<div class="card"><div class="empty">Memuat data SIMS… halaman ini terbuka otomatis setelah data siap.</div></div>';
+    clearTimeout(_kp.tunggu);_kp.tunggu=setTimeout(()=>{if(_currentPage==='kopra')renderKopra();},800);
+    return;
+  }
   if(!_kp.doc){
     root.innerHTML='<div class="card"><div class="empty">Memuat data Kopra…</div></div>';
     try{await _kLoadDoc();}catch(e){root.innerHTML=`<div class="card" style="color:var(--dn)">Gagal membaca sims/kopra: ${_ke(e.message)}</div>`;return;}
@@ -258,6 +267,7 @@ async function renderKopra(){
   _kRenderMain(root);
 }
 async function kopraKlaim(){
+  if(!_kSiap())return;
   if(!_currentUser)return;
   if(!confirm('Jadikan '+_currentUser.email+' satu-satunya akun yang bisa membuka Export Kopra?'))return;
   await _kLoadDoc();
@@ -431,6 +441,7 @@ function kopraToggleSkip(row,skip){if(skip)_kp.sel.skip.add(row);else _kp.sel.sk
 function kopraEditRemark(row,val){_kp.sel.remarks[row]=_kAscii(val);renderKopra();}
 
 async function kopraDownload(){
+  if(!_kSiap())return;
   const S=_kSet();const sel=_kp.sel;const P=_kPrepare();
   if(P.blok||!P.rows.length)return;
   if(!S.rek_sumber){showToast('Isi rekening sumber Mandiri di Setting.',true);return;}
@@ -518,6 +529,7 @@ function _kHtmlSetting(){
   </div>`;
 }
 async function kopraSimpanSetting(){
+  if(!_kSiap())return;
   const S=_kSet();const v=id=>document.getElementById(id).value;
   const js=(id,lbl)=>{try{return JSON.parse(v(id));}catch(e){throw new Error(lbl+': JSON tidak valid ('+e.message+')');}};
   let n;
@@ -541,6 +553,7 @@ async function kopraTesKoneksi(){
 }
 // File Kopra lama → ingat remark (kolom 19) per keterangan (kolom 73); isi rekening sumber kalau kosong
 function kopraImporLama(){
+  if(!_kSiap())return;
   const inp=document.createElement('input');inp.type='file';inp.accept='.txt';inp.multiple=true;
   inp.onchange=async()=>{
     const S=_kSet();let n=0,rekS='';
@@ -648,6 +661,7 @@ function kopraUploadTL(){
 function kopraKonfNama(row,on){if(on)_kp.verif.konf.add(row);else _kp.verif.konf.delete(row);renderKopra();}
 function kopraCekManual(row,on){if(on)_kp.verif.cek.add(row);else _kp.verif.cek.delete(row);renderKopra();}
 async function kopraSimpanVerif(){
+  if(!_kSiap())return;
   const b=_kp.batch;const V=_kp.verif;if(!V)return;
   const verif={method:V.mode,at:new Date().toISOString(),by:_currentUser?.email||''};
   if(V.mode==='file'){verif.file=V.file;verif.konfirmasi_nama=[...V.konf];verif.hasil=V.r.res.map(x=>({ref:x.ref,row:x.row,host:x.host||'',ok:x.ok}));}
@@ -658,6 +672,7 @@ async function kopraSimpanVerif(){
 }
 
 async function kopraTulisSheet(){
+  if(!_kSiap())return;
   const b=_kp.batch;const S=_kSet();if(!b.verif)return;
   const rows=b.rows.map(r=>r.row);
   if(!confirm(`Tulis "${S.status_done}" ke kolom ${S.kolom.status} untuk ${rows.length} baris (${Math.min(...rows)}–${Math.max(...rows)})?`))return;
@@ -797,6 +812,7 @@ function _kHtmlRekon(){
 }
 
 async function kopraCatatSemua(){
+  if(!_kSiap())return;
   const b=_kp.batch;const S=_kSet();if(S.rekon_mode!=='catat')return;
   const R=_kp.rekon;const todo=R.items.filter(it=>it.pilih&&!it.sudah);
   if(!todo.length)return;

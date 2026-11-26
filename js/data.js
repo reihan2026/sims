@@ -18,7 +18,14 @@ function _docSizeKB(){
   for(const k in _cache){if(!k.startsWith('file_'))o[k]=_cache[k];}
   return Math.round(JSON.stringify(o).length/1024);
 }
+// true setelah isi sims/data dari server (atau cache offline lengkap) masuk ke
+// _cache. Sebelum itu _cache masih kosong — menyimpan apa pun saat itu menimpa
+// data di server dengan array kosong. Kejadian nyata 26 Nov 2026: addLog dari
+// halaman Export Kopra di tab yang datanya belum termuat menimpa seluruh log
+// aktivitas menjadi 1 entri. saveData & _flushSave menolak menulis sampai true.
+let _dataLoaded=false;
 function loadAllData(){
+  _dataLoaded=false;
   return new Promise((resolve)=>{
     // Unsubscribe any existing listener first
     if(_snapshotUnsub){_snapshotUnsub();_snapshotUnsub=null;}
@@ -39,6 +46,7 @@ function loadAllData(){
           });
           Object.keys(d).forEach(k=>{if(k.startsWith('file_'))_cache[k]=d[k];});
         }
+        _dataLoaded=true;
 
         // Auto-fix counter from existing data
         const fixCtr=(invArr,key,prefix)=>{
@@ -128,7 +136,7 @@ function loadAllData(){
         // Try to load from localStorage as read-only fallback
         try{
           const cached=localStorage.getItem('sims_cache');
-          if(cached){const{data,saved}=JSON.parse(cached);Object.assign(_cache,data);_showOfflineBanner(saved);}
+          if(cached){const{data,saved}=JSON.parse(cached);Object.assign(_cache,data);_showOfflineBanner(saved);_dataLoaded=true;}
         }catch(e){}
         if(!resolved){resolved=true;resolve();}
       }
@@ -229,6 +237,11 @@ let _logShowAll=false;
 
 function saveData(keys){
   if(!_currentUser)return;
+  if(!_dataLoaded){
+    console.warn('[SIMS] saveData ditolak — data belum termuat dari server:',keys);
+    if(typeof showToast==='function')showToast('Data SIMS belum selesai dimuat — perubahan TIDAK disimpan. Tunggu sebentar lalu ulangi.',true);
+    return;
+  }
   // Pelacakan kirim dimatikan → item ber-invoice vendor yang deadline-nya
   // lewat ikut "diterima". Dijalankan di sini (satu titik) supaya invoice
   // yang dibuat lewat jalur mana pun (form, scan, split, edit) ikut terjaring.
@@ -250,6 +263,7 @@ function _setSaveStatus(msg,color){
 
 async function _flushSave(){
   if(!_currentUser||_dirty.size===0)return;
+  if(!_dataLoaded){console.warn('[SIMS] _flushSave ditolak — data belum termuat');_dirty.clear();return;}
   if(_saving){_pendingAfterSave=true;return;}
   _saving=true;
   _setSaveStatus('⟳ Menyimpan...','var(--wn)');

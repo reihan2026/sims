@@ -14,6 +14,8 @@ const KOPRA_DEFAULT_SETTINGS={
   gas_url:'',gas_token:'',tab:'Monitoring VA',
   kolom:{tanggal:'Tanggal',ket:'Keterangan',kategori:'Kategori',nominal:'Nominal',bank:'Bank Penerima',biaya:'Biaya Admin',rek:'Nomor Rekening',nama:'Nama Penerima',status:'Status Maker/ Yayasan'},
   status_perlu:'Perlu Di Input',status_done:'Telah Di Input',
+  // Baris sebelum tanggal ini diabaikan walau statusnya masih "Perlu Di Input" (sisa data lama)
+  mulai_tgl:'2026-11-01',
   rek_sumber:'',biaya_obu:6500,ref_prefix:'SPPG',remark_max:20,
   remark_buang:['Reimburse pembelian','Pembelian','Pembayaran'],
   bank_ibu:['MANDIRI','BANK MANDIRI'],
@@ -137,6 +139,12 @@ function _kTglGrup(rows,refISO,judul){
   const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||b[0].localeCompare(a[0]))[0];
   return best?best[0]:null;
 }
+// Tanggal per baris: kolom Tanggal kalau terisi, selain itu tanggal grupnya
+function _kIsiTanggal(sheet,refISO){
+  sheet.groups.forEach(g=>{g.tgl=_kTglGrup(g.rows,refISO,g.judul);g.rows.forEach(r=>{r.tgl=_kTglKolom(r.tanggal)||g.tgl;});});
+}
+// Baris yang masih perlu diexport: status "Perlu Di Input" dan tidak lebih lama dari mulai_tgl
+function _kPerlu(r,S){return _kNorm(r.status)===_kNorm(S.status_perlu)&&!(S.mulai_tgl&&r.tgl&&r.tgl<S.mulai_tgl);}
 function _kBankInfo(bank,S){
   const b=String(bank||'').trim().toUpperCase().replace(/\s+/g,' ');
   if(!b)return{err:'Bank kosong'};
@@ -260,7 +268,7 @@ async function kopraKlaim(){
 function _kRenderMain(root){
   const S=_kSet();
   const belumSet=!S.gas_url||!S.gas_token||!S.rek_sumber;
-  const groups=_kp.sheet?_kp.sheet.groups.map((g,i)=>({g,i})).filter(({g})=>_kp.showDone||g.rows.some(r=>_kNorm(r.status)===_kNorm(S.status_perlu))).slice(-12).reverse():[];
+  const groups=_kp.sheet?_kp.sheet.groups.map((g,i)=>({g,i})).filter(({g})=>_kp.showDone||g.rows.some(r=>_kPerlu(r,S))).slice(-12).reverse():[];
   root.innerHTML=`
   ${belumSet?`<div class="card" style="border-color:var(--wb);background:var(--wbg);font-size:13px">Setting belum lengkap (${[!S.gas_url&&'URL Apps Script',!S.gas_token&&'token',!S.rek_sumber&&'rekening sumber Mandiri'].filter(Boolean).join(', ')}). Buka <b>Setting</b> di bawah.</div>`:''}
   <div class="card">
@@ -277,11 +285,11 @@ function _kRenderMain(root){
         <span style="color:var(--t3)">Dibaca ${_ke(_kp.sheetAt||'')} · ${_kp.sheet.rows.length} baris transaksi</span>
       </div>
       ${groups.length?`<table class="tbl"><thead><tr><th>Tanggal</th><th>Baris</th><th style="text-align:right">Transaksi</th><th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead><tbody>
-      ${groups.map(({g,i})=>{const tgl=_kTglGrup(g.rows,today(),g.judul);const perlu=g.rows.filter(r=>_kNorm(r.status)===_kNorm(S.status_perlu)).length;
+      ${groups.map(({g,i})=>{const tgl=_kTglGrup(g.rows,today(),g.judul);const perlu=g.rows.filter(r=>_kPerlu(r,S)).length;
         return `<tr><td>${_kFmtTgl(tgl)}</td><td style="font-family:var(--mn)">${g.rows[0].row}–${g.rows[g.rows.length-1].row}</td><td style="text-align:right">${g.rows.length}</td><td class="num-cell">${_kFmtNum(g.rows.reduce((s,r)=>s+(r.nominal||0),0))}</td>
         <td>${perlu?`<span class="tag twn">${perlu} perlu input</span>`:'<span class="tag tok">sudah diinput</span>'}${g.total?'':' <span class="tag twn">belum ditutup baris merah</span>'}</td>
         <td><button class="btn bxs ${_kp.sel&&_kp.sel.gi===i?'bp':''}" onclick="kopraPilihGrup(${i})">Pilih</button></td></tr>`;}).join('')}
-      </tbody></table>`:'<div class="empty">Tidak ada baris "'+_ke(S.status_perlu)+'". Centang "Tampilkan grup yang sudah diinput" untuk melihat grup lama.</div>'}
+      </tbody></table>`:'<div class="empty">Tidak ada baris "'+_ke(S.status_perlu)+'" sejak '+_kFmtTgl(S.mulai_tgl)+'. Centang "Tampilkan grup yang sudah diinput" untuk melihat grup lama.</div>'}
       <div class="fbar" style="margin-top:9px;margin-bottom:0;font-size:12px"><span style="color:var(--t3)">Cadangan — rentang baris manual:</span>
         <input type="number" id="kopra-r1" placeholder="dari" style="width:80px"><input type="number" id="kopra-r2" placeholder="sampai" style="width:80px">
         <button class="btn bxs" onclick="kopraPilihRentang()">Pakai rentang</button></div>`
@@ -297,12 +305,12 @@ async function kopraBacaSheet(){
   try{
     const j=await _kGas({action:'read'});
     if(!j.ok)throw new Error(j.error||'Gagal membaca sheet.');
-    _kp.sheet=_kParseSheet(j.values||[],_kSet());
+    _kp.sheet=_kParseSheet(j.values||[],_kSet());_kIsiTanggal(_kp.sheet,today());
     _kp.sheetAt=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
     _kp.sel=null;
     // Langsung pilih grup terbaru yang masih perlu diinput
     const S=_kSet();
-    const gi=_kp.sheet.groups.map((g,i)=>({g,i})).filter(({g})=>g.rows.some(r=>_kNorm(r.status)===_kNorm(S.status_perlu))).map(x=>x.i);
+    const gi=_kp.sheet.groups.map((g,i)=>({g,i})).filter(({g})=>g.rows.some(r=>_kPerlu(r,S))).map(x=>x.i);
     if(gi.length===1)_kSelect(_kp.sheet.groups[gi[0]].rows,gi[0]);
   }catch(e){_kp.err=e.message;}
   _kp.loading=false;renderKopra();
@@ -317,8 +325,8 @@ function kopraPilihRentang(){
 }
 function _kSelect(rows,gi){
   const S=_kSet();
-  const anyPerlu=rows.some(r=>_kNorm(r.status)===_kNorm(S.status_perlu));
-  const skip=new Set(anyPerlu?rows.filter(r=>_kNorm(r.status)!==_kNorm(S.status_perlu)).map(r=>r.row):[]);
+  const anyPerlu=rows.some(r=>_kPerlu(r,S));
+  const skip=new Set(anyPerlu?rows.filter(r=>!_kPerlu(r,S)).map(r=>r.row):[]);
   const g=gi!=null&&_kp.sheet?_kp.sheet.groups[gi]:null;
   _kp.sel={gi,rows,tgl:_kTglGrup(rows,today(),g&&g.judul)||today(),skip,remarks:{},reexport:false};
 }
@@ -489,6 +497,7 @@ function _kHtmlSetting(){
       <div class="fg"><label class="lbl">Biaya per transfer bank lain</label><input type="number" id="kset-biaya" value="${S.biaya_obu}"></div>
       <div class="fg"><label class="lbl">Awalan referensi / batas remark</label><div style="display:flex;gap:6px"><input type="text" id="kset-prefix" value="${_ke(S.ref_prefix)}"><input type="number" id="kset-max" value="${S.remark_max}" style="width:80px"></div></div>
     </div>
+    <div class="fg"><label class="lbl">Abaikan baris sebelum tanggal</label><input type="date" id="kset-mulai" value="${_ke(S.mulai_tgl||'')}"></div>
     <div class="fg"><label class="lbl">Rekonsiliasi lunas</label><select id="kset-mode"><option value="usulan" ${S.rekon_mode!=='catat'?'selected':''}>Usulan saja — tombol "Catat semua" nonaktif</option><option value="catat" ${S.rekon_mode==='catat'?'selected':''}>Aktif — "Catat semua" mencatat lunas di SIMS</option></select></div>
     <details style="margin-bottom:9px"><summary style="font-size:12px;cursor:pointer">Lanjutan: pemetaan kolom, kode bank, aturan penerima (JSON)</summary>
       <div class="fg" style="margin-top:8px"><label class="lbl">Pemetaan kolom (field → nama kolom di sheet)</label>${ta('kset-kolom',S.kolom)}</div>
@@ -512,7 +521,7 @@ async function kopraSimpanSetting(){
   try{
     n=Object.assign({},S,{gas_url:v('kset-url').trim(),gas_token:v('kset-token').trim(),tab:v('kset-tab').trim()||'Monitoring VA',
       rek_sumber:v('kset-rek').replace(/\D/g,''),biaya_obu:parseInt(v('kset-biaya'),10)||0,ref_prefix:v('kset-prefix').trim()||'SPPG',
-      remark_max:parseInt(v('kset-max'),10)||20,rekon_mode:v('kset-mode'),
+      remark_max:parseInt(v('kset-max'),10)||20,rekon_mode:v('kset-mode'),mulai_tgl:v('kset-mulai')||'',
       kolom:js('kset-kolom','Pemetaan kolom'),bank_codes:js('kset-bank','Kode bank'),bank_ibu:js('kset-ibu','Bank IBU'),
       kategori_operasional:js('kset-ops','Kategori operasional'),rules:js('kset-rules','Aturan penerima')});
     if(n.gas_url&&!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(n.gas_url))throw new Error('URL harus berbentuk https://script.google.com/macros/s/…/exec');

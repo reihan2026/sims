@@ -96,8 +96,11 @@ function _kFmtNum(n){return Math.round(n||0).toLocaleString('id-ID');}
 function _kFmtTgl(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${parseInt(d,10)} ${_K_MON_EN[parseInt(m,10)-1]} ${y}`;}
 
 // Baca isi tab Monitoring VA (array 2D nilai tampil) → baris transaksi + grup.
-// Grup = baris transaksi di antara dua baris total (baris merah: Keterangan &
-// Nama kosong tapi Nominal terisi). Baris total ada SETELAH grupnya.
+// Grup = baris transaksi di antara dua baris merah. Baris merah: Nama, Kategori &
+// Rekening kosong tapi Nominal terisi. Keterangan-nya berisi label tanggal untuk
+// grup DI BAWAHNYA ("25 November" di baris 808 → baris 809–819), sedangkan
+// angka totalnya (nominal + biaya) biasanya milik grup DI ATASNYA. Keduanya
+// disimpan (judul & penutup) dan dicek dua-duanya.
 function _kParseSheet(values,S){
   const K=S.kolom||{};
   let hi=-1;
@@ -110,24 +113,26 @@ function _kParseSheet(values,S){
   const cols={};Object.keys(K).forEach(f=>{cols[f]=hdr.indexOf(_kNorm(K[f]));});
   const wajib=['ket','nominal','bank','rek','nama','status'].filter(f=>cols[f]<0);
   if(wajib.length)throw new Error('Kolom tidak ditemukan di sheet: '+wajib.map(f=>`"${K[f]}"`).join(', ')+'. Cek pemetaan kolom di Setting.');
-  const rows=[],groups=[];let cur=[];
+  const rows=[],groups=[];let cur=[],judul=null;
   for(let i=hi+1;i<values.length;i++){
     const v=values[i];const g=f=>cols[f]>=0?String(v[cols[f]]==null?'':v[cols[f]]).trim():'';
     const ket=g('ket'),nama=g('nama'),nomRaw=g('nominal');
     if(!ket&&!nama&&!nomRaw)continue;
-    if(!ket&&!nama&&nomRaw){
-      if(cur.length)groups.push({rows:cur,total:{row:i+1,nominal:_kNum(nomRaw),nominalRaw:nomRaw,biaya:_kNum(g('biaya'))}});
-      cur=[];continue;
+    if(!nama&&!g('rek')&&!g('kategori')&&nomRaw){
+      const merah={row:i+1,label:ket,nominal:_kNum(nomRaw),nominalRaw:nomRaw,biaya:_kNum(g('biaya'))};
+      if(cur.length)groups.push({rows:cur,judul,total:merah});
+      cur=[];judul=merah;continue;
     }
     const t={row:i+1,tanggal:g('tanggal'),ket,kategori:g('kategori'),nominalRaw:nomRaw,nominal:_kNum(nomRaw),
       bank:g('bank'),biayaRaw:g('biaya'),biaya:_kNum(g('biaya')),rekRaw:g('rek'),rek:g('rek').replace(/[\s.\-]/g,''),nama,status:g('status')};
     rows.push(t);cur.push(t);
   }
-  if(cur.length)groups.push({rows:cur,total:null});
+  if(cur.length)groups.push({rows:cur,judul,total:null});
   return{hdrRow:hi+1,cols,rows,groups};
 }
-function _kTglGrup(rows,refISO){
+function _kTglGrup(rows,refISO,judul){
   for(const r of rows){const t=_kTglKolom(r.tanggal);if(t)return t;}
+  if(judul&&judul.label){const t=_kTglDariTeks(judul.label,refISO);if(t)return t;}
   const cnt={};rows.forEach(r=>{const t=_kTglDariTeks(r.ket,refISO);if(t)cnt[t]=(cnt[t]||0)+1;});
   const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]||b[0].localeCompare(a[0]))[0];
   return best?best[0]:null;
@@ -272,9 +277,9 @@ function _kRenderMain(root){
         <span style="color:var(--t3)">Dibaca ${_ke(_kp.sheetAt||'')} · ${_kp.sheet.rows.length} baris transaksi</span>
       </div>
       ${groups.length?`<table class="tbl"><thead><tr><th>Tanggal</th><th>Baris</th><th style="text-align:right">Transaksi</th><th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead><tbody>
-      ${groups.map(({g,i})=>{const tgl=_kTglGrup(g.rows,today());const perlu=g.rows.filter(r=>_kNorm(r.status)===_kNorm(S.status_perlu)).length;
+      ${groups.map(({g,i})=>{const tgl=_kTglGrup(g.rows,today(),g.judul);const perlu=g.rows.filter(r=>_kNorm(r.status)===_kNorm(S.status_perlu)).length;
         return `<tr><td>${_kFmtTgl(tgl)}</td><td style="font-family:var(--mn)">${g.rows[0].row}–${g.rows[g.rows.length-1].row}</td><td style="text-align:right">${g.rows.length}</td><td class="num-cell">${_kFmtNum(g.rows.reduce((s,r)=>s+(r.nominal||0),0))}</td>
-        <td>${perlu?`<span class="tag twn">${perlu} perlu input</span>`:'<span class="tag tok">sudah diinput</span>'}${g.total?'':' <span class="tag tno">belum ada baris total</span>'}</td>
+        <td>${perlu?`<span class="tag twn">${perlu} perlu input</span>`:'<span class="tag tok">sudah diinput</span>'}${g.total?'':' <span class="tag twn">belum ditutup baris merah</span>'}</td>
         <td><button class="btn bxs ${_kp.sel&&_kp.sel.gi===i?'bp':''}" onclick="kopraPilihGrup(${i})">Pilih</button></td></tr>`;}).join('')}
       </tbody></table>`:'<div class="empty">Tidak ada baris "'+_ke(S.status_perlu)+'". Centang "Tampilkan grup yang sudah diinput" untuk melihat grup lama.</div>'}
       <div class="fbar" style="margin-top:9px;margin-bottom:0;font-size:12px"><span style="color:var(--t3)">Cadangan — rentang baris manual:</span>
@@ -314,7 +319,8 @@ function _kSelect(rows,gi){
   const S=_kSet();
   const anyPerlu=rows.some(r=>_kNorm(r.status)===_kNorm(S.status_perlu));
   const skip=new Set(anyPerlu?rows.filter(r=>_kNorm(r.status)!==_kNorm(S.status_perlu)).map(r=>r.row):[]);
-  _kp.sel={gi,rows,tgl:_kTglGrup(rows,today())||today(),skip,remarks:{},reexport:false};
+  const g=gi!=null&&_kp.sheet?_kp.sheet.groups[gi]:null;
+  _kp.sel={gi,rows,tgl:_kTglGrup(rows,today(),g&&g.judul)||today(),skip,remarks:{},reexport:false};
 }
 
 // Baris terpilih + hasil validasi
@@ -356,9 +362,14 @@ function _kPrepare(){
   const total=out.reduce((s,r)=>s+(r.nominal||0),0),biaya=out.reduce((s,r)=>s+r.biaya,0);
   let cekTotal=null;
   const g=sel.gi!=null?_kp.sheet.groups[sel.gi]:null;
-  if(g&&g.total){
+  if(g&&(g.judul||g.total)){
     const all=g.rows.reduce((s,r)=>s+(r.nominal||0),0),allB=g.rows.reduce((s,r)=>s+(isNaN(r.biaya)?0:r.biaya),0);
-    cekTotal={row:g.total.row,sheet:g.total.nominal,hitung:all+allB,ok:g.total.nominal===all+allB,biayaSheet:g.total.biaya,biayaHitung:allB};
+    const hit=all+allB;
+    // Cocok dengan baris judul (atas) atau baris penutup (bawah) — tampilkan mana yang cocok
+    const cand=[g.judul,g.total].filter(Boolean);
+    const m=cand.find(x=>x.nominal===hit);
+    const ref=m||g.judul||g.total;
+    cekTotal={row:ref.row,sheet:ref.nominal,hitung:hit,ok:!!m,posisi:ref===g.judul?'judul':'penutup',biayaSheet:ref.biaya,biayaHitung:allB};
   }
   return{rows:out,total,biaya,cekTotal,blok:out.some(r=>r.issues.some(i=>i.b))};
 }
@@ -385,7 +396,7 @@ function _kHtmlPreview(){
       <div class="met"><div class="ml">Transaksi</div><div class="mv">${P.rows.length}</div><div class="ms">${sel.skip.size?sel.skip.size+' di-skip':'tidak ada skip'}</div></div>
       <div class="met"><div class="ml">Total transfer</div><div class="mv" style="font-size:16px">${_kFmtNum(P.total)}</div></div>
       <div class="met"><div class="ml">Biaya antar bank</div><div class="mv" style="font-size:16px">${_kFmtNum(P.biaya)}</div><div class="ms">${P.rows.filter(r=>r.tipe==='OBU').length} × ${_kFmtNum(S.biaya_obu)}</div></div>
-      <div class="met"><div class="ml">Baris total sheet</div>${P.cekTotal?`<div class="mv ${P.cekTotal.ok?'g':'r'}" style="font-size:16px">${P.cekTotal.ok?'Cocok':'Beda'}</div><div class="ms">baris ${P.cekTotal.row}: ${_kFmtNum(P.cekTotal.sheet)}${P.cekTotal.ok?'':' · hitung '+_kFmtNum(P.cekTotal.hitung)}</div>`:'<div class="mv a" style="font-size:14px">Tidak ada</div><div class="ms">grup belum punya baris total</div>'}</div>
+      <div class="met"><div class="ml">Baris total sheet</div>${P.cekTotal?`<div class="mv ${P.cekTotal.ok?'g':'r'}" style="font-size:16px">${P.cekTotal.ok?'Cocok':'Beda'}</div><div class="ms">baris ${P.cekTotal.posisi} ${P.cekTotal.row}: ${_kFmtNum(P.cekTotal.sheet)}${P.cekTotal.ok?'':' · hitung '+_kFmtNum(P.cekTotal.hitung)}</div>`:'<div class="mv a" style="font-size:14px">Tidak ada</div><div class="ms">grup belum punya baris total</div>'}</div>
     </div>
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th></th><th>Baris</th><th>Keterangan</th><th>Remark Kopra</th><th>Penerima</th><th style="text-align:right">Nominal</th><th>Cek</th></tr></thead><tbody>
     ${sel.rows.map(r=>{const x=P.rows.find(p=>p.row===r.row);const skip=sel.skip.has(r.row);

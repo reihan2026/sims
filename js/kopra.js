@@ -266,6 +266,7 @@ async function renderKopra(){
   }
   if(!_kIsOwner()){root.innerHTML='<div class="card"><div class="empty">Halaman Export Kopra hanya untuk akun pemilik.</div></div>';return;}
   if(!_kp.doc.menunggu_v1){try{await _kMigrasiMenunggu();}catch(e){console.warn('[Kopra] migrasi menunggu:',e);}}
+  try{const n=await _kBersihkanMenunggu();if(n)showToast(n+' transfer menunggu ternyata sudah dicatat lunas — ditutup.');}catch(e){console.warn('[Kopra] bersihkan menunggu:',e);}
   if(_kp.batch){_kRenderBatch(root);return;}
   _kRenderMain(root);
 }
@@ -773,8 +774,11 @@ function _kKandidat(r,tgl){
   };
   if(rule&&rule.cara==='pt')return{cara:'pt',rule,cands:vendorCands(rule.vendor,true)};
   if((S.kategori_operasional||[]).some(k=>_kNorm(k)===_kNorm(r.kategori)))return{cara:'ops',cands:[]};
-  // Penerima tanpa aturan: hanya INV-V yang belum dibayar, dan harus dikonfirmasi
-  const c=vendorCands(null).filter(x=>x.state==='siap');
+  // Penerima tanpa aturan: INV-V yang belum dibayar (harus dikonfirmasi), atau yang
+  // sudah dicatat pass-through untuk transfer ini (dicatat manual di luar Export Kopra)
+  const semua=vendorCands(null);
+  const sudah=semua.filter(x=>x.state==='sudah'),c=semua.filter(x=>x.state==='siap');
+  if(sudah.length)return{cara:'pt',rule:null,cands:sudah.concat(c)};
   return c.length?{cara:'pt',rule:null,perluKonfirmasi:true,cands:c}:{cara:'none',cands:[]};
 }
 
@@ -941,6 +945,35 @@ function _kHtmlMenunggu(){
     </tbody></table></div></div>`;
 }
 
+// Baris menunggu yang ternyata sudah dicatat di luar Export Kopra (mis. lewat
+// tombol Bayar/Konversi biasa) → tutup otomatis. Hanya menulis dokumen Kopra
+// dan log; data invoice tidak diubah.
+async function _kBersihkanMenunggu(){
+  if(!_kp.doc||!(_kp.doc.menunggu||[]).length||!_kIsOwner())return 0;
+  if(typeof _dataLoaded!=='undefined'&&!_dataLoaded)return 0;
+  if(_kp.bersih)return 0; // cegah dua render berjalan bersamaan mencatat dua kali
+  _kp.bersih=true;try{return await _kBersihkanMenungguInti();}finally{_kp.bersih=false;}
+}
+async function _kBersihkanMenungguInti(){
+  const perBatch={};
+  _kp.doc.menunggu.forEach(m=>{const c=_kKandidat(m,m.tgl).cands.find(x=>x.state==='sudah');if(c)(perBatch[m.b]=perBatch[m.b]||[]).push({row:m.row,c});});
+  let n=0;
+  for(const bid of Object.keys(perBatch)){
+    const b=(await db.collection('sims').doc('kopra_b_'+bid).get()).data();if(!b||!b.rekon)continue;
+    perBatch[bid].forEach(({row,c})=>{
+      b.rekon.hasil=b.rekon.hasil.map(h=>h.row===row&&h.hasil==='menunggu'?Object.assign({},h,{hasil:'sudah',inv:c.no,inv_id:c.id,po_id:c.po_id,catatan:'dicatat di luar Export Kopra'}):h);
+      addLog('rekon_kopra','Rekonsiliasi lunas dari Kopra','kopra',b.id,b.file,'baris '+row+' → '+c.no+' (sudah dicatat manual)');n++;
+    });
+    b.status=_kStatusRekon(b.rekon.hasil);
+    const ix=_kp.doc.batches_idx.find(x=>x.id===b.id);if(ix)ix.status=b.status;
+    await db.collection('sims').doc('kopra_b_'+b.id).set(b);
+    _kSyncMenunggu(b);
+    if(_kp.batch&&_kp.batch.id===b.id){_kp.batch=b;_kp.rekon=null;}
+  }
+  if(n)await _kSaveDoc();
+  return n;
+}
+
 // ----- Tawaran saat invoice disimpan -----
 // Dipanggil dari saveData (js/data.js) setiap invv/invd berubah. Ringan: hanya
 // membaca sims/kopra sekali per sesi (untuk pemilik) lalu mencocokkan di memori.
@@ -952,6 +985,7 @@ async function _kCekMenunggu(){
   try{if(!_kp.doc)await _kLoadDoc();}catch(e){return;}
   if(!_kIsOwner())return;
   await _kMigrasiMenunggu();
+  try{await _kBersihkanMenunggu();}catch(e){console.warn('[Kopra] bersihkan menunggu:',e);}
   const tolak=_kp.tawaranTolak||(_kp.tawaranTolak=new Set());
   for(const m of (_kp.doc.menunggu||[])){
     const c=_kKandidat(m,m.tgl).cands.find(x=>x.state==='siap'&&!tolak.has(m.b+':'+m.row+':'+x.id));

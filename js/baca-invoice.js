@@ -180,9 +180,7 @@ async function _biBaca(file){
       }
     } else {set('OCR…');lines=await _biOcrTerbaik({file},set);sumber='ocr';}
     const P=_biParse(lines);
-    // Vendor: baris kepala yang paling cocok dengan master vendor
-    let vendor='';
-    for(const l of P.lines.slice(0,15)){const v=_matchVendor(_biBersih(l));if(v){vendor=v;break;}}
+    const vendor=_biTebakVendor(P);
     if(!P.items.length){
       showToast(sumber==='ocr'?'Tidak ada baris item yang terbaca dari gambar — isi manual atau pakai Scan AI.':'Tidak ada baris item yang dikenali di PDF ini — isi manual.',true);
       return;
@@ -195,6 +193,27 @@ async function _biBaca(file){
   }catch(e){showToast('Gagal membaca invoice: '+e.message,true);}
   finally{if(btn){btn.disabled=false;btn.textContent='Baca (tanpa AI)';}}
 }
+// Vendor, urut dari yang paling bisa dipercaya:
+// 1. nama pemilik rekening di invoice ("a/n Unggul Pamungkas") → aturan penerima Kopra
+// 2. nominal sama dengan tepat satu transfer Kopra yang menunggu → aturan penerimanya
+// 3. kepala invoice — baris alamat tujuan (Kepada/SPPG/Jl.) diabaikan, karena
+//    "Kebayoran Lama" di alamat SPPG sempat tertebak jadi vendor "Pasar Kebayoran Lama"
+function _biTebakVendor(P){
+  const master=(getMaster()?.vendor||[]).map(v=>v.nama).filter(Boolean);
+  const dariAturan=frag=>{if(!frag)return '';const f=String(frag).toLowerCase();const c=master.filter(v=>v.toLowerCase().includes(f));return c.length===1?c[0]:'';};
+  const rules=(typeof _kSet==='function'&&typeof _kp!=='undefined'&&_kp.doc)?(_kSet().rules||[]):[];
+  const teks=P.lines.join(' ').toLowerCase().replace(/\s+/g,' ');
+  for(const r of rules){if(r.cara==='pt'&&r.penerima&&teks.includes(r.penerima.toLowerCase())){const v=dariAturan(r.vendor);if(v)return v;}}
+  try{
+    const tot=P.total!=null?P.total:P.sum;
+    const m=((_kp&&_kp.doc&&_kp.doc.menunggu)||[]).filter(x=>x.nominal===tot);
+    if(m.length===1){const r=_kRule(m[0].nama);if(r&&r.cara==='pt'){const v=dariAturan(r.vendor);if(v)return v;}}
+  }catch(e){}
+  const tujuan=/kepada|yth|sppg|dapur|jl\.|jalan|ciputat|rt\s*\d|kel\.|kec\.|kota|jakarta/i;
+  for(const l of P.lines.slice(0,15)){if(tujuan.test(l))continue;const v=_matchVendor(_biBersih(l));if(v)return v;}
+  return '';
+}
+
 // Keterangan tambahan di preview: sumber baca, no. invoice vendor, transfer Kopra yang cocok
 function _biInfoPreview(P,sumber){
   const body=document.querySelector('#modal-scan-preview .mb');if(!body)return;

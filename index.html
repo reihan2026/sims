@@ -57,6 +57,7 @@
     <button class="ni" onclick="nav('laporan-keu')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Laporan Keuangan</button>
     <div class="nsec">Pengaturan</div>
     <button class="ni" onclick="nav('master')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07"/></svg>Master Data</button>
+    <button class="ni" onclick="nav('kopra')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H9M17 7v8"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Export Kopra</button>
   </nav>
   <div class="sfooter">
     <div id="user-badge" style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:6px 8px;background:var(--s2);border-radius:var(--r)">
@@ -269,6 +270,12 @@
     <div class="card"><div class="ct">Rekap per rekening</div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Rekening</th><th>Total digunakan</th><th>Dikembalikan</th><th>Saldo</th><th>Progress</th><th>Aksi</th></tr></thead><tbody id="rek-tbody"></tbody></table></div></div>
     <div class="card"><div class="ct">Histori transaksi</div><div id="rek-hist"></div></div>
   </div>
+</div>
+
+<!-- EXPORT KOPRA -->
+<div id="page-kopra" class="page">
+  <div class="ph"><div><div class="ph-t">Export Kopra</div><div class="ph-s">Sheet Monitoring VA → file transfer Kopra → status sheet → lunas di SIMS</div></div></div>
+  <div class="pc"><div id="kopra-root"></div></div>
 </div>
 
 <!-- MASTER DATA -->
@@ -1261,11 +1268,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="js/firebase.js?v=a84daf44"></script>
 <script src="js/data.js?v=88ef8257"></script>
-<script src="js/utils.js?v=4095110a"></script>
+<script src="js/utils.js?v=646eb04f"></script>
 <script src="js/master.js?v=084aed35"></script>
 <script src="js/po-form.js?v=c778fbe4"></script>
 <script src="js/po.js?v=d32b84e0"></script>
-<script src="js/invoice-vendor.js?v=81a9bfa7"></script>
+<script src="js/invoice-vendor.js?v=2b6ab50f"></script>
 <script src="js/invoice-dapur.js?v=467195b7"></script>
 <script src="js/cashflow.js?v=b1c31989"></script>
 <script src="js/dashboard.js?v=2268fba9"></script>
@@ -1275,6 +1282,7 @@
 <script src="js/scan.js?v=2d3e38d8"></script>
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>
+<script src="js/kopra.js?v=e2506f1d"></script>
 <script src="js/periode.js?v=8e7aa7fe"></script>
 </body>
 </html>

@@ -151,12 +151,12 @@ function inlineAddRek(targetSelId){
 }
 
 // ===== NAVIGATION =====
-const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','arsip-nota','cashflow','rekening','konsumsi','laporan-keu','master'];
+const PAGES=['dash','po-baru','daftar-po','detail-po','pov','inv-vendor','inv-dapur','arsip-nota','cashflow','rekening','konsumsi','laporan-keu','master','kopra'];
 function nav(name){
   _currentPage=name; // track for real-time re-render
   PAGES.forEach(p=>{const el=document.getElementById('page-'+p);if(el)el.classList.toggle('active',p===name);});
   document.querySelectorAll('.ni').forEach(b=>b.classList.remove('active'));
-  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,'arsip-nota':6,cashflow:7,rekening:8,konsumsi:9,'laporan-keu':10,master:11};
+  const MAP={dash:0,'po-baru':1,'daftar-po':2,pov:3,'inv-vendor':4,'inv-dapur':5,'arsip-nota':6,cashflow:7,rekening:8,konsumsi:9,'laporan-keu':10,master:11,kopra:12};
   const i=MAP[name];if(i!==undefined)document.querySelectorAll('.ni')[i]?.classList.add('active');
   closeSidebar();closeStatPopup();
   renderPOShortcut();
@@ -171,6 +171,7 @@ function nav(name){
   if(name==='konsumsi')renderKonsumsi();
   if(name==='laporan-keu')renderLaporanKeu();
   if(name==='master'){renderMaster();initUserProfile();renderUsersAdmin();_logShowAll=false;renderLog();renderArsipPeriode();}
+  if(name==='kopra')renderKopra();
   if(name==='po-baru')initPOForm();
   _pushNavState();
   renderBackBtn();

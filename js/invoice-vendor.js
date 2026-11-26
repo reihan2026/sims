@@ -807,8 +807,20 @@ function saveKonversiPT(){
       [...new Set(_bentrok.map(x=>x.invD))].join(', ')+'. Hapus baris itu dulu sebelum dikonversi.',true);
     closeModal('modal-konversi-pt');return;
   }
+  const {hapusCount}=_konversiPTApply(invVId,{alasan,tgl:today(),adaCB,cbPct,cbNominal});
+  addLog('konversi_pt','Konversi pass-through','invv',invVId,iv.no,alasan+(hapusCount?' · '+hapusCount+' bayar dihapus':''));
+  closeModal('modal-konversi-pt');
+  showToast(`Invoice dikonversi ke pass-through${hapusCount?' — '+hapusCount+' pembayaran lama dihapus':''}.`);
+  segarkanHalamanAktif();
+}
+
+// Inti konversi pass-through tanpa UI — dipakai modal Konversi dan rekonsiliasi
+// Export Kopra (js/kopra.js), yang butuh tanggal = tanggal transfer, bukan hari ini.
+// Pemanggil wajib sudah memeriksa _ptSudahDitagihMarkup & isPassthrough, dan
+// mencatat addLog sendiri.
+function _konversiPTApply(invVId,{alasan,tgl,adaCB=false,cbPct=0,cbNominal=0}){
+  const invVs=getInvV();const iv=invVs.find(v=>v.id===invVId);if(!iv)return{hapusCount:0};
   const hapusCount=(iv.payments||[]).length;
-  const tgl=today();
 
   iv.payments=[{id:uid(),jumlah:iv.total,tgl,rek_id:'',catatan:`Pass-through: ${alasan}`}];
   iv.bayar_status='lunas';
@@ -845,11 +857,7 @@ function saveKonversiPT(){
     invDs.push(invD);setInvD(invDs);
     if(dapur)autoMaster(dapur,[]);
   }
-
-  addLog('konversi_pt','Konversi pass-through','invv',invVId,iv.no,alasan+(hapusCount?' · '+hapusCount+' bayar dihapus':''));
-  closeModal('modal-konversi-pt');
-  showToast(`Invoice dikonversi ke pass-through${hapusCount?' — '+hapusCount+' pembayaran lama dihapus':''}.`);
-  segarkanHalamanAktif();
+  return{hapusCount};
 }
 
 

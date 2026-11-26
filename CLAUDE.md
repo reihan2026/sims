@@ -46,7 +46,10 @@ sims/
     ├── dashboard.js    — dashboard + agenda/metrics
     ├── misc.js         — filter detail PO, global search, drag-drop, activity log, bulk update
     ├── laporan.js      — laporan PO, konsumsi bahan baku, laporan keuangan
-    └── vendor.js       — PO ke vendor, vendor milik saya
+    ├── vendor.js       — PO ke vendor, vendor milik saya
+    └── kopra.js        — Export Kopra: sheet Monitoring VA → TXT Kopra → verifikasi → status sheet → rekonsiliasi lunas
+apps-script/
+    └── kopra-monitoring.gs — Apps Script Web App di spreadsheet Monitoring (baca sheet + tulis Status Maker)
 ```
 
 Sections within each file are still delimited by `// ===== SECTION NAME =====` comments.
@@ -84,6 +87,7 @@ Accessors follow the pattern `getPOs()`, `getInvV()`, `getInvD()`, `getReks()`, 
 - Filter, global search, drag-drop, activity log, bulk update → `js/misc.js`
 - Laporan PO, Konsumsi Bahan Baku, Laporan Keuangan → `js/laporan.js`
 - PO ke Vendor, Vendor Milik Saya → `js/vendor.js`
+- Export Kopra (data di `sims/kopra` + `sims/kopra_b_<id>`, bukan `sims/data`) → `js/kopra.js`
 
 ## Critical Constraints
 

@@ -61,7 +61,9 @@ function _biBarisItem(line){
   }
   if(!(qty>0))return null;
   let nama=t.slice(0,i).join(' ');
-  nama=nama.replace(/^\d{1,3}[.)]?\s+/,'').trim(); // nomor urut di depan
+  // Bersihkan sisa OCR: tanda baca/nomor urut di depan, potongan 1–2 huruf di belakang ("Wortel RE")
+  nama=nama.replace(/^[^A-Za-z0-9]+/,'').replace(/^\d{1,3}[.)]?\s+/,'').replace(/^[^A-Za-z0-9]+/,'')
+    .replace(/(\s+[^\sA-Za-z0-9]+|\s+[A-Za-z]{1,2})+$/,'').replace(/[^A-Za-z0-9)%]+$/,'').trim();
   if(!nama||!/[a-zA-Z]{2,}/.test(nama))return null;
   if(/\b(sub\s*total|total|ppn|pajak|diskon|discount|ongkir|ongkos|dp|bayar|sisa|telp|telepon|hp|rekening|no\.?\s*rek)\b/i.test(nama))return null;
   const cocok=Math.abs(qty*harga-jumlah)<=Math.max(1,jumlah*0.005);
@@ -108,10 +110,45 @@ async function _biOcr(sumber,progres){
   try{const {data}=await w.recognize(sumber);return data.text.split('\n');}
   finally{await w.terminate();}
 }
-async function _biPdfKeKanvas(doc,p){
-  const pg=await doc.getPage(p);const vp=pg.getViewport({scale:2});
-  const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;
-  await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;return c;
+// Hitam-putih + hapus garis tabel panjang. Garis tabel membuat Tesseract salah
+// memotong baris (uji invoice TM Kaya: tanpa ini item terbaca acak-acakan).
+function _biPrep(c){
+  const ctx=c.getContext('2d');const W=c.width,H=c.height;const im=ctx.getImageData(0,0,W,H);const d=im.data;
+  const bw=new Uint8Array(W*H);
+  for(let i=0,p=0;i<d.length;i+=4,p++){bw[p]=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])<150?1:0;}
+  const hMin=Math.round(W*0.06),vMin=Math.round(W*0.025);const kill=new Uint8Array(W*H);
+  for(let y=0;y<H;y++){let s=-1;for(let x=0;x<=W;x++){const on=x<W&&bw[y*W+x];if(on&&s<0)s=x;if(!on&&s>=0){if(x-s>=hMin)for(let k=s;k<x;k++)kill[y*W+k]=1;s=-1;}}}
+  for(let x=0;x<W;x++){let s=-1;for(let y=0;y<=H;y++){const on=y<H&&bw[y*W+x];if(on&&s<0)s=y;if(!on&&s>=0){if(y-s>=vMin)for(let k=s;k<y;k++)kill[k*W+x]=1;s=-1;}}}
+  for(let p=0,i=0;p<W*H;p++,i+=4){const v=(bw[p]&&!kill[p])?0:255;d[i]=d[i+1]=d[i+2]=v;d[i+3]=255;}
+  ctx.putImageData(im,0,0);return c;
+}
+// Gambar sumber (halaman PDF atau file foto) ke kanvas selebar W piksel
+async function _biKanvas(sumber,W){
+  const c=document.createElement('canvas');
+  if(sumber.doc){
+    const pg=await sumber.doc.getPage(sumber.page);const vp0=pg.getViewport({scale:1});const vp=pg.getViewport({scale:W/vp0.width});
+    c.width=Math.round(vp.width);c.height=Math.round(vp.height);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;
+  } else {
+    const img=await createImageBitmap(sumber.file);const k=W/img.width;
+    c.width=W;c.height=Math.round(img.height*k);const ctx=c.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0,c.width,c.height);
+  }
+  return c;
+}
+// Coba beberapa ukuran/praproses; berhenti begitu jumlah baris = total invoice
+async function _biOcrTerbaik(sumber,set){
+  const varian=[{W:1400,prep:true},{W:1600,prep:true},{W:1400,prep:false}];
+  let best=null,bestSkor=-1;
+  for(let v=0;v<varian.length;v++){
+    const c=await _biKanvas(sumber,varian[v].W);if(varian[v].prep)_biPrep(c);
+    const lines=await _biOcr(c,x=>set('OCR '+(v+1)+'/'+varian.length+' · '+x+'%'));
+    const P=_biParse(lines);const valid=P.items.length&&P.total!=null&&P.total===P.sum;
+    const skor=(valid?1000:0)+P.items.length;
+    if(skor>bestSkor){bestSkor=skor;best=lines;}
+    if(valid)break;
+  }
+  return best||[];
 }
 
 function triggerBacaInvoice(){
@@ -131,10 +168,10 @@ async function _biBaca(file){
       if(r.adaTeks){lines=r.lines;sumber='pdf';}
       else{
         set('OCR…');lines=[];
-        for(let p=1;p<=Math.min(r.doc.numPages,3);p++)lines=lines.concat(await _biOcr(await _biPdfKeKanvas(r.doc,p),x=>set('OCR '+x+'%')));
+        for(let p=1;p<=Math.min(r.doc.numPages,3);p++)lines=lines.concat(await _biOcrTerbaik({doc:r.doc,page:p},set));
         sumber='ocr';
       }
-    } else {set('OCR…');lines=await _biOcr(file,x=>set('OCR '+x+'%'));sumber='ocr';}
+    } else {set('OCR…');lines=await _biOcrTerbaik({file},set);sumber='ocr';}
     const P=_biParse(lines);
     // Vendor: baris kepala yang paling cocok dengan master vendor
     let vendor='';

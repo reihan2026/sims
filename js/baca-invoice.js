@@ -27,7 +27,7 @@ async function _biPdfjs(){
 const _BI_BULAN={jan:1,januari:1,january:1,feb:2,februari:2,february:2,mar:3,maret:3,march:3,apr:4,april:4,mei:5,may:5,jun:6,juni:6,june:6,jul:7,juli:7,july:7,agu:8,agt:8,ags:8,aug:8,agustus:8,august:8,sep:9,sept:9,september:9,okt:10,oct:10,oktober:10,october:10,nov:11,november:11,des:12,dec:12,desember:12,december:12};
 // "17.276.000" / "17,276,000" / "34000" / "Rp1.597.000" → angka bulat; "1,5" / "0.5" → desimal (qty)
 function _biNum(tok){
-  let t=String(tok||'').replace(/^rp\.?/i,'').replace(/[^\d.,]/g,'');
+  let t=String(tok||'').replace(/^rp\.?/i,'').replace(/[^\d.,]/g,'').replace(/^[.,]+|[.,]+$/g,'');
   if(!t)return NaN;
   if(/^\d{1,3}([.,]\d{3})+$/.test(t))return parseInt(t.replace(/[.,]/g,''),10);
   if(/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(t))return parseFloat(t.replace(/\./g,'').replace(',','.'));
@@ -62,13 +62,20 @@ function _biBarisItem(line){
   if(!(qty>0))return null;
   let nama=t.slice(0,i).join(' ');
   // Bersihkan sisa OCR: tanda baca/nomor urut di depan, potongan 1–2 huruf di belakang ("Wortel RE")
-  nama=nama.replace(/^[^A-Za-z0-9]+/,'').replace(/^\d{1,3}[.)]?\s+/,'').replace(/^[^A-Za-z0-9]+/,'')
-    .replace(/(\s+[^\sA-Za-z0-9]+|\s+[A-Za-z]{1,2})+$/,'').replace(/[^A-Za-z0-9)%]+$/,'').trim();
+  nama=nama.replace(/^[^A-Za-z0-9]+/,'').replace(/^\d{1,3}[.)]?\s+/,'').replace(/^[^A-Za-z0-9]+/,'');
+  for(let k=0;k<4;k++)nama=nama.replace(/[^A-Za-z0-9)%]+$/,'').replace(/\s+[A-Za-z]{1,2}$/,'').trim();
   if(!nama||!/[a-zA-Z]{2,}/.test(nama))return null;
   if(/\b(sub\s*total|total|ppn|pajak|diskon|discount|ongkir|ongkos|dp|bayar|sisa|telp|telepon|hp|rekening|no\.?\s*rek)\b/i.test(nama))return null;
-  const cocok=Math.abs(qty*harga-jumlah)<=Math.max(1,jumlah*0.005);
-  if(!cocok)return null;
-  return{nama,qty,satuan:satuan||'',harga_vendor:harga,jumlah};
+  const pas=(h,j)=>Math.abs(qty*h-j)<=Math.max(1,j*0.005);
+  let h=harga,j=jumlah;
+  if(!pas(h,j)){
+    // Garis tabel sering terbaca sebagai angka "1" di belakang angka ("17000|" → "170001").
+    // Coba buang satu digit 1 di belakang harga/jumlah — tetap wajib lolos qty × harga = jumlah.
+    const buang1=n=>/1$/.test(String(n))&&n>=10?Math.floor(n/10):null;
+    const hb=buang1(h),jb=buang1(j);
+    if(hb&&pas(hb,j))h=hb;else if(jb&&pas(h,jb))j=jb;else if(hb&&jb&&pas(hb,jb)){h=hb;j=jb;}else return null;
+  }
+  return{nama,qty,satuan:satuan||'',harga_vendor:h,jumlah:j};
 }
 function _biParse(lines){
   const L=lines.map(l=>String(l||'')).filter(l=>l.trim());

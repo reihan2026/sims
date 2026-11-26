@@ -41,6 +41,8 @@ function renderDashboard(){
   const invDJT=invD.filter(id=>{if(id.terima_status==='lunas')return false;if(!id.jatuh)return false;return diffDays(id.jatuh)<=0;});
   if(invDJT.length)agendaSections.push({id:'ag-invd',tag:'TAGIH',tc:'bl',label:'Invoice dapur jatuh tempo',count:invDJT.length,urgent:false,items:invDJT.map(id=>{const r=(id.payments||[]).reduce((s,p)=>s+p.jumlah,0);return`<div class="agenda-item"><div><strong>${id.no}</strong> — ${id.dapur}<br><span style="font-size:11px;font-family:var(--mn)">Sisa: ${fmtF(id.total-r)} · Jt: ${id.jatuh}</span></div><button class="btn bxs bp" onclick="openTerima('${id.id}')">Rekam</button></div>`})});
   const totalBlmV=pos.reduce((s,po)=>s+aktifItems(po).filter(i=>(!i.vendor||!i.harga_vendor)&&i.status_kirim!=='diterima').length,0);
+  // Export Kopra: transfer yang sudah keluar lewat Kopra tapi invoicenya belum ada di SIMS
+  if(typeof kopraAgendaSection==='function'){const ks=kopraAgendaSection();if(ks)agendaSections.push(ks);}
   const totalUrgent=agendaSections.filter(s=>s.urgent).reduce((s,x)=>s+x.count,0);
   const totalWarn=agendaSections.filter(s=>!s.urgent).reduce((s,x)=>s+x.count,0)+totalBlmV;
   const poAktif=pos.filter(po=>{const myV=invV.filter(v=>v.po_id===po.id);const myD=invD.filter(d=>d.po_id===po.id);return !aktifItems(po).every(i=>i.status_kirim==='diterima')||myV.some(v=>v.bayar_status!=='lunas')||myD.some(d=>d.terima_status!=='lunas');}).length;

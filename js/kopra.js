@@ -913,7 +913,7 @@ async function kopraCatatMenunggu(batchId,row,candId){
   addLog('rekon_kopra','Rekonsiliasi lunas dari Kopra','kopra',b.id,b.file,'baris '+row+' → '+c.no);
   if(_kp.batch&&_kp.batch.id===b.id){_kp.batch=b;_kp.rekon=null;}
   _kp.sibuk=Date.now();_kTutupTawaran();showToast(c.no+' dicatat lunas.');
-  if(_currentPage==='kopra')renderKopra();
+  if(_currentPage==='kopra')renderKopra();else if(_currentPage==='dash')renderDashboard();
 }
 async function kopraAbaikanMenunggu(batchId,row){
   if(!_kSiap())return;
@@ -927,7 +927,7 @@ async function kopraAbaikanMenunggu(batchId,row){
   try{await db.collection('sims').doc('kopra_b_'+b.id).set(b);await _kSaveDoc();}catch(e){showToast('Gagal simpan: '+e.message,true);return;}
   addLog('kopra_abaikan','Abaikan transfer menunggu invoice','kopra',b.id,b.file,'baris '+row+' · '+alasan);
   if(_kp.batch&&_kp.batch.id===b.id){_kp.batch=b;_kp.rekon=null;}
-  _kTutupTawaran();renderKopra();
+  _kTutupTawaran();if(_currentPage==='dash')renderDashboard();else renderKopra();
 }
 
 // ----- Daftar transfer menunggu invoice -----
@@ -972,6 +972,34 @@ async function _kBersihkanMenungguInti(){
   }
   if(n)await _kSaveDoc();
   return n;
+}
+
+// ----- Agenda Dashboard -----
+// Dipanggil sinkron dari renderDashboard. sims/kopra dimuat sekali di latar
+// belakang; setelah termuat Dashboard digambar ulang. Hanya untuk akun pemilik.
+function kopraAgendaSection(){
+  if(!_currentUser||(typeof _dataLoaded!=='undefined'&&!_dataLoaded))return null;
+  if(!_kp.doc){
+    if(!_kp.muatAgenda){
+      _kp.muatAgenda=true;
+      _kLoadDoc().then(()=>_kBersihkanMenunggu()).catch(e=>console.warn('[Kopra] agenda:',e))
+        .finally(()=>{_kp.muatAgenda=false;if(_kp.doc&&_currentPage==='dash')renderDashboard();});
+    }
+    return null;
+  }
+  if(!_kIsOwner())return null;
+  const list=[...(_kp.doc.menunggu||[])].sort((a,b)=>(a.tgl||'').localeCompare(b.tgl||'')||a.row-b.row);
+  if(!list.length)return null;
+  const S=_kSet();const hari=t=>Math.max(0,Math.round((new Date(today())-new Date(t))/864e5));
+  const lama=list.some(m=>hari(m.tgl)>=3);
+  return{id:'ag-kopra',tag:'KOPRA',tc:lama?'or':'',label:'Transfer menunggu invoice',count:list.length,urgent:lama,
+    items:list.map(m=>{
+      const c=_kKandidat(m,m.tgl).cands.find(x=>x.state==='siap');const h=hari(m.tgl);
+      const btn=c&&S.rekon_mode==='catat'
+        ?`<button class="btn bxs bp" onclick="kopraCatatMenunggu('${_ke(m.b)}',${m.row},'${_ke(c.id)}')">Catat ${_ke(c.no)}</button>`
+        :`<button class="btn bxs bt" onclick="nav('kopra')">${c?'Lihat':'Input invoice'}</button>`;
+      return `<div class="agenda-item ${h>=3?'ai-urgent':'ai-warn'}"><div><strong>${_ke(m.nama)}</strong> <span style="font-size:11px;color:var(--t2)">${_ke(m.ket)}</span><br><span style="font-size:11px;font-family:var(--mn);color:${h>=3?'var(--dn)':'var(--wt)'}">${_kFmtNum(m.nominal)} · transfer ${_kFmtTgl(m.tgl)} baris ${m.row} · ${h} hari${c?' · invoice cocok: '+_ke(c.no):''}</span></div>${btn}</div>`;
+    })};
 }
 
 // ----- Tawaran saat invoice disimpan -----

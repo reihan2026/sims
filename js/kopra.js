@@ -94,6 +94,8 @@ function _kTglDariTeks(s,refISO){
 }
 function _kTglKolom(s){const m=String(s||'').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:null;}
 function _kAddDays(iso,n){const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+// ISO (UTC) → jam lokal pengguna, mis. "26 Nov 2026 18:32"
+function _kWaktu(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return iso;const p=n=>String(n).padStart(2,'0');return `${d.getDate()} ${_K_MON_EN[d.getMonth()]} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;}
 function _kFmtNum(n){return Math.round(n||0).toLocaleString('id-ID');}
 function _kFmtTgl(iso){if(!iso)return '—';const [y,m,d]=iso.split('-');return `${parseInt(d,10)} ${_K_MON_EN[parseInt(m,10)-1]} ${y}`;}
 
@@ -598,7 +600,7 @@ function _kRenderBatch(root){
   root.innerHTML=`
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-      <div><div style="font-weight:600">${_ke(b.file)}</div><div style="font-size:12px;color:var(--t3)">${_kFmtTgl(b.tgl)} · ${b.n} transfer · ${fmtF(b.total)} + biaya ${fmtF(b.biaya)} · dibuat ${_ke((b.created||'').slice(0,16).replace('T',' '))} ${_ke(b.created_by||'')}</div></div>
+      <div><div style="font-weight:600">${_ke(b.file)}</div><div style="font-size:12px;color:var(--t3)">${_kFmtTgl(b.tgl)} · ${b.n} transfer · ${fmtF(b.total)} + biaya ${fmtF(b.biaya)} · dibuat ${_ke(_kWaktu(b.created))} ${_ke(b.created_by||'')}</div></div>
       <div class="bg">${_kStatusTag(b.status)}<button class="btn bsm" onclick="_kUnduh(_kp.batch.file,_kp.batch.txt)">⬇ Unduh lagi</button><button class="btn bsm" onclick="kopraTutupBatch()">← Kembali</button></div>
     </div>
     ${batal?'<div style="margin-top:8px;font-size:12px;color:var(--dn)">Batch ini digantikan export yang lebih baru — jangan dipakai.</div>':''}
@@ -608,7 +610,7 @@ function _kRenderBatch(root){
   </tbody></table></div></div>
   ${batal?'':_kHtmlVerif()}
   ${batal?'':`<div class="card"><div class="ct">5 · Status Maker di sheet</div>
-    ${b.sheet_done?`<div style="font-size:13px;color:var(--ac)">✓ "${_ke(S.status_done)}" ditulis ke baris ${b.rows.map(r=>r.row).join(', ')} — ${_ke((b.sheet_done.at||'').slice(0,16).replace('T',' '))}</div>`
+    ${b.sheet_done?`<div style="font-size:13px;color:var(--ac)">✓ "${_ke(S.status_done)}" ditulis ke baris ${b.rows.map(r=>r.row).join(', ')} — ${_ke(_kWaktu(b.sheet_done.at))}</div>`
       :`<div style="font-size:12px;color:var(--t2);margin-bottom:8px">Menulis "${_ke(S.status_done)}" ke kolom ${_ke(S.kolom.status)} untuk ${b.n} baris batch ini saja. Isi baris dicek ulang dulu (penerima, rekening, nominal, keterangan); kalau ada yang berubah, tidak ada yang ditulis.</div>
       ${_kp.sheetErr?_kHtmlSheetErr():''}
       <button class="btn bp bsm" onclick="kopraTulisSheet()" ${verified?'':'disabled'}>Tulis status ke sheet</button>${verified?'':' <span style="font-size:11px;color:var(--t3)">Verifikasi dulu.</span>'}`}
@@ -618,7 +620,7 @@ function _kRenderBatch(root){
 
 function _kHtmlVerif(){
   const b=_kp.batch;
-  if(b.verif)return `<div class="card"><div class="ct">4 · Verifikasi Kopra</div><div style="font-size:13px;color:var(--ac)">✓ Terverifikasi (${b.verif.method==='file'?'file '+_ke(b.verif.file||''):'manual'}) — ${_ke((b.verif.at||'').slice(0,16).replace('T',' '))}${b.verif.konfirmasi_nama&&b.verif.konfirmasi_nama.length?' · nama host dikonfirmasi: baris '+b.verif.konfirmasi_nama.join(', '):''}</div></div>`;
+  if(b.verif)return `<div class="card"><div class="ct">4 · Verifikasi Kopra</div><div style="font-size:13px;color:var(--ac)">✓ Terverifikasi (${b.verif.method==='file'?'file '+_ke(b.verif.file||''):'manual'}) — ${_ke(_kWaktu(b.verif.at))}${b.verif.konfirmasi_nama&&b.verif.konfirmasi_nama.length?' · nama host dikonfirmasi: baris '+b.verif.konfirmasi_nama.join(', '):''}</div></div>`;
   const V=_kp.verif;
   let body='';
   if(V&&V.mode==='file'){
@@ -851,7 +853,7 @@ function _kHtmlRekonHasil(rk){
   const poIds=[...new Set(rk.hasil.map(h=>h.po_id).filter(Boolean))];
   const belum=getInvV().filter(v=>poIds.includes(v.po_id)&&v.bayar_status!=='lunas');
   return `<div class="card"><div class="ct">6 · Rekonsiliasi lunas di SIMS</div>
-    <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Dicatat ${_ke((rk.at||'').slice(0,16).replace('T',' '))} oleh ${_ke(rk.by||'')}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Dicatat ${_ke(_kWaktu(rk.at))} oleh ${_ke(rk.by||'')}</div>
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Baris</th><th>Sheet</th><th style="text-align:right">Nominal</th><th>SIMS</th><th>Cara</th><th>Hasil</th></tr></thead><tbody>
     ${rk.hasil.map(h=>`<tr><td>${h.row}</td><td class="txt-cell" style="max-width:220px">${_ke(h.ket)}</td><td class="num-cell">${_kFmtNum(h.nominal)}</td><td>${_ke(h.inv||'—')}</td><td style="font-size:11px">${h.cara==='terima'?'Rekam terima':h.cara==='pt'?'Pass-through':h.cara==='ops'?'Operasional':'—'}</td>
       <td style="font-size:11px;color:${h.hasil==='dicatat'?'var(--ac)':/^gagal/.test(h.hasil)?'var(--dn)':h.hasil==='dilewati'?'var(--wt)':'var(--t3)'}">${_ke(h.hasil)}</td></tr>`).join('')}

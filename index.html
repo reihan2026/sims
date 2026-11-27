@@ -584,6 +584,17 @@
   <div class="mf"><button class="btn" onclick="closeModal('modal-vendor-saya')">Batal</button><button class="btn bp" onclick="saveVendorSaya()">Simpan</button></div>
 </div></div>
 
+<!-- Cetak invoice mitra: pilih dengan/tanpa paraf -->
+<div class="modal-bg" id="modal-cetak-paraf"><div class="modal" style="max-width:360px">
+  <div class="mh"><span class="mht">Cetak invoice</span><button class="btn bgh bsm" onclick="closeModal('modal-cetak-paraf')">✕</button></div>
+  <div class="mb">
+    <input type="hidden" id="cp-inv-id">
+    <div id="cp-inv-no" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;padding:6px 0"><input type="checkbox" id="cp-paraf" style="width:20px;height:20px"> Dengan paraf</label>
+  </div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-cetak-paraf')">Batal</button><button class="btn bp" onclick="cetakInvDFormalGo()">🖨 Cetak</button></div>
+</div></div>
+
 <!-- Edit Dapur -->
 <div class="modal-bg" id="modal-edit-dapur"><div class="modal" style="max-width:440px">
   <div class="mh"><span class="mht">Edit Dapur</span><button class="btn bgh bsm" onclick="closeModal('modal-edit-dapur')">✕</button></div>
@@ -1284,12 +1295,12 @@
 <script src="js/po-form.js?v=c778fbe4"></script>
 <script src="js/po.js?v=d32b84e0"></script>
 <script src="js/invoice-vendor.js?v=2b6ab50f"></script>
-<script src="js/invoice-dapur.js?v=467195b7"></script>
+<script src="js/invoice-dapur.js?v=1bd97e69"></script>
 <script src="js/cashflow.js?v=b1c31989"></script>
 <script src="js/dashboard.js?v=9edd56d4"></script>
 <script src="js/misc.js?v=c1594b42"></script>
 <script src="js/laporan.js?v=410b7957"></script>
-<script src="js/vendor.js?v=c4c36be3"></script>
+<script src="js/vendor.js?v=e2000a91"></script>
 <script src="js/scan.js?v=f36b6810"></script>
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>

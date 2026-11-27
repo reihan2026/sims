@@ -576,7 +576,7 @@ function renderInvD(){
         ${iv.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${iv.id}')">Rekam terima</button>`:''}
         ${iv.type==='passthrough'&&iv.terima_status==='lunas'&&iv.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===iv.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
           ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();renderInvD();showToast('Invoice vendor diupdate!')">Sync vendor</button>`:''}
-        ${iv.vendor_saya_id?`<button class="btn bsm bp" onclick="printInvDFormal('${iv.id}')">🖨 Cetak Invoice</button>`:''}
+        ${iv.vendor_saya_id?`<button class="btn bsm bp" onclick="cetakInvDFormal('${iv.id}')">🖨 Cetak Invoice</button>`:''}
         <button class="btn bsm bi" onclick="showInvDDetail('${iv.id}')">Detail</button>
         <div class="kbb">
           <button class="kbb-btn" onclick="openKbb('kbb-invd-${iv.id}',event)">⋯</button>
@@ -584,7 +584,7 @@ function renderInvD(){
             ${iv.type==='passthrough'&&iv.pt_inv_id?`<button onclick="showInvVDetail('${iv.pt_inv_id}')">Lihat inv vendor</button>`:''}
             ${po?`<button onclick="showDetail('${po.id}')">Lihat PO</button>`:''}
             <button onclick="openEditInvD('${iv.id}')">Edit header</button>
-            ${iv.vendor_saya_id?`<button onclick="printInvDFormal('${iv.id}')">🖨 Cetak invoice formal</button>`:''}
+            ${iv.vendor_saya_id?`<button onclick="cetakInvDFormal('${iv.id}')">🖨 Cetak invoice formal</button>`:''}
             <button onclick="printInvD('${iv.id}')">🖨 Cetak internal</button>
             <div class="kbb-div"></div>
             <button class="kd" onclick="delInvD('${iv.id}')">Hapus</button>

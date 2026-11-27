@@ -534,14 +534,31 @@ const _CETAK_BAR_CSS=`.pbar{position:sticky;top:0;z-index:9;display:flex;gap:8px
 .pbar button{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:44px;padding:0 16px;border-radius:8px;border:none;cursor:pointer}
 .pb-back{background:#fff;color:#1A1814}.pb-print{background:#2D5A3D;color:#fff}
 @media print{.pbar{display:none!important}}`;
-function _cetakBarHtml(extra){return '<div class="pbar"><button type="button" class="pb-back" onclick="kembaliKeSims()">← Kembali ke SIMS</button>'+(extra||'')+'<button type="button" class="pb-print" onclick="window.print()">🖨 Cetak / PDF</button></div>';}
+function _cetakBarHtml(){return '<div class="pbar"><button type="button" class="pb-back" onclick="kembaliKeSims()">← Kembali ke SIMS</button><button type="button" class="pb-print" onclick="window.print()">🖨 Cetak / PDF</button></div>';}
 function _cetakBarJs(){
   const url=JSON.stringify(location.href.split('#')[0]);
   return `function kembaliKeSims(){try{window.close();}catch(e){}setTimeout(function(){if(!window.closed)location.href=${url};},400);}`;
 }
 
-// Vendor yang punya paraf: jendela cetak TIDAK langsung print — user pilih dulu
-// "Dengan paraf" di bar atas (pratinjau langsung berubah), lalu tekan Cetak / PDF.
+// Tombol "Cetak Invoice": vendor yang punya paraf → dialog kecil "Dengan paraf" dulu.
+// Pilihan HARUS dibuat sebelum jendela cetak dibuka: di iPhone window.print() dari
+// tombol di dalam jendela cetak tidak memunculkan dialog print, hanya print otomatis
+// saat jendela dimuat yang berhasil.
+function cetakInvDFormal(invId){
+  const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
+  const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
+  if(!vs||!vs.paraf_ada){printInvDFormal(invId,false);return;}
+  document.getElementById('cp-inv-id').value=invId;
+  document.getElementById('cp-inv-no').textContent=inv.no+' — '+vs.nama;
+  document.getElementById('cp-paraf').checked=false;
+  openModal('modal-cetak-paraf');
+}
+function cetakInvDFormalGo(){
+  const id=document.getElementById('cp-inv-id').value;
+  const wp=document.getElementById('cp-paraf').checked;
+  closeModal('modal-cetak-paraf');
+  printInvDFormal(id,wp); // sinkron dalam klik → jendela cetak tidak diblokir
+}
 async function printInvDFormal(invId,withParaf){
   withParaf=!!withParaf;
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
@@ -561,10 +578,9 @@ async function printInvDFormal(invId,withParaf){
   let kopSrc=getFile('kop_'+vs.id);
   if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
   if(kopSrc)kopSrc=await _resizeImageForPrint(kopSrc,800,160);
-  // Paraf: selalu dimuat kalau vendor punya (supaya bisa dicentang di jendela cetak),
-  // tapi hanya TAMPIL kalau "Dengan paraf" dicentang. Gagal muat → cetak tanpa paraf.
+  // Paraf hanya dimuat & tampil kalau "Dengan paraf" dicentang. Gagal muat → cetak tanpa paraf.
   let parafSrc=null;
-  if(vs.paraf_ada){parafSrc=getFile('paraf_'+vs.id)||await loadFile('paraf_'+vs.id);if(!parafSrc&&withParaf)showToast('Paraf gagal dimuat — invoice dicetak tanpa paraf',true);}
+  if(withParaf&&vs.paraf_ada){parafSrc=getFile('paraf_'+vs.id)||await loadFile('paraf_'+vs.id);if(!parafSrc)showToast('Paraf gagal dimuat — invoice dicetak tanpa paraf',true);}
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
   // Setelan tampilan per vendor mitra (backward-compat: tanpa setelan = kiri + netral)
   const ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
@@ -656,12 +672,11 @@ async function printInvDFormal(invId,withParaf){
   const stampHtml=parafSrc
     ?`<div class="stamp" style="justify-content:flex-end"><div style="flex:1;max-width:200px;text-align:center"><div class="paraf-wrap"><img src="${parafSrc}" class="paraf-img" alt="Paraf"></div><div class="stamp-box" style="margin-top:0">Hormat kami</div></div></div>`
     :`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
-  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}.pb-paraf{background:#3A352E;padding:0 12px;border-radius:8px;min-height:44px}`:'';
-  const parafToggle=parafSrc?`<label class="pb-paraf"><input type="checkbox" id="pb-paraf-cb" ${withParaf?'checked':''} onchange="document.body.classList.toggle('dgn-paraf',this.checked)"> Dengan paraf</label>`:'';
+  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}`:'';
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   if(w.closed)return;
   w.document.open();
-  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body${parafSrc&&withParaf?' class="dgn-paraf"':''}>${_cetakBarHtml(parafToggle)}${body}<script>${_cetakBarJs()}${parafSrc?'':'window.onload=function(){setTimeout(function(){window.print();},100);};'}<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body>${_cetakBarHtml()}${body}<script>${_cetakBarJs()}window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
   w.document.close();
   }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }

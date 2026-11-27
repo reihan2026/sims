@@ -567,13 +567,14 @@
     </div>
     <div class="fg" style="margin-top:4px">
       <label class="lbl">Paraf / tanda tangan (gambar)</label>
-      <div id="vs-paraf-preview" style="display:none;margin-bottom:8px"><img id="vs-paraf-img" style="max-width:220px;max-height:90px;border:1px solid var(--bd);border-radius:var(--r);object-fit:contain;background:#fff"></div>
+      <div id="vs-paraf-preview" style="display:none;margin-bottom:8px"><img id="vs-paraf-img" style="max-width:220px;max-height:90px;border:1px solid var(--bd);border-radius:var(--r);object-fit:contain;background-color:#fff;background-image:linear-gradient(45deg,#e6e6e6 25%,transparent 25%,transparent 75%,#e6e6e6 75%),linear-gradient(45deg,#e6e6e6 25%,transparent 25%,transparent 75%,#e6e6e6 75%);background-size:12px 12px;background-position:0 0,6px 6px"></div>
       <div id="vs-paraf-loading" style="display:none;font-size:11px;color:var(--t3);margin-bottom:6px">Memuat paraf…</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="file" id="vs-paraf-file" accept="image/*" style="flex:1" onchange="previewVsParaf(this)">
+        <button class="btn bxs bi" id="vs-paraf-bg" style="display:none" onclick="bersihkanLatarVsParaf()" title="Buang latar putih/kertas di sekitar coretan">Hapus latar</button>
         <button class="btn bxs bd-" id="vs-paraf-del" style="display:none" onclick="delVsParaf()">Hapus paraf</button>
       </div>
-      <div style="font-size:10px;color:var(--t3);margin-top:4px">PNG latar transparan paling rapi. Paraf hanya tampil di invoice cetak kalau dicentang "Dengan paraf" saat mencetak.</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px">Latar putih/kertas otomatis dibuang saat unggah (kotak-kotak = transparan). Foto kertas: pastikan terang & tidak berbayang. Paraf hanya tampil di invoice cetak kalau dicentang "Dengan paraf" saat mencetak.</div>
     </div>
     <div class="fg" style="margin-top:6px">
       <label class="lbl">Pratinjau invoice</label>
@@ -1288,7 +1289,7 @@
 <script src="js/dashboard.js?v=9edd56d4"></script>
 <script src="js/misc.js?v=c1594b42"></script>
 <script src="js/laporan.js?v=410b7957"></script>
-<script src="js/vendor.js?v=6c3f6ece"></script>
+<script src="js/vendor.js?v=f88f201d"></script>
 <script src="js/scan.js?v=f36b6810"></script>
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>

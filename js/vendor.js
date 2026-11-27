@@ -283,8 +283,9 @@ let _vsParafNew=null,_vsParafDel=false;
 function _vsParafShow(src){
   const prev=document.getElementById('vs-paraf-preview'),img=document.getElementById('vs-paraf-img');
   document.getElementById('vs-paraf-loading').style.display='none';
-  if(src){img.src=src;prev.style.display='block';document.getElementById('vs-paraf-del').style.display='';}
-  else{img.removeAttribute('src');prev.style.display='none';document.getElementById('vs-paraf-del').style.display='none';}
+  const bg=document.getElementById('vs-paraf-bg');
+  if(src){img.src=src;prev.style.display='block';document.getElementById('vs-paraf-del').style.display='';if(bg)bg.style.display='';}
+  else{img.removeAttribute('src');prev.style.display='none';document.getElementById('vs-paraf-del').style.display='none';if(bg)bg.style.display='none';}
 }
 function previewVsParaf(input){
   const f=input.files[0];if(!f)return;
@@ -294,7 +295,8 @@ function previewVsParaf(input){
     // Perkecil & tetap PNG (transparansi terjaga) supaya file kecil di sims_files
     const probe=new Image();
     probe.onload=async()=>{
-      const out=await _resizeImageForPrint(e.target.result,600,240);
+      const small=await _resizeImageForPrint(e.target.result,600,240);
+      const out=await _parafTransparan(small);
       _vsParafNew=out;_vsParafDel=false;_vsParafShow(out);renderVsPreview();
     };
     probe.onerror=()=>{showToast('Gambar paraf tidak bisa dibaca — coba file lain',true);input.value='';};
@@ -302,6 +304,58 @@ function previewVsParaf(input){
   };
   r.onerror=()=>{showToast('Gagal membaca file paraf',true);input.value='';};
   r.readAsDataURL(f);
+}
+// Buang latar paraf: warna latar ditaksir dari tepi gambar (putih/kertas/abu foto),
+// piksel yang mirip latar → transparan (tepi dihaluskan), lalu potong margin kosong.
+// Gambar yang tepinya sudah transparan dibiarkan apa adanya.
+function _parafTransparan(dataUrl){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        const W=img.width,H=img.height;if(!W||!H){resolve(dataUrl);return;}
+        const c=document.createElement('canvas');c.width=W;c.height=H;
+        const g=c.getContext('2d');g.drawImage(img,0,0);
+        const id=g.getImageData(0,0,W,H),d=id.data;
+        // Sampel tepi (bingkai 3px)
+        const rs=[],gs=[],bs=[];let transp=0,n=0;
+        for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+          if(x>2&&x<W-3&&y>2&&y<H-3)continue;
+          const i=(y*W+x)*4;n++;
+          if(d[i+3]<128){transp++;continue;}
+          rs.push(d[i]);gs.push(d[i+1]);bs.push(d[i+2]);
+        }
+        if(transp>n*0.5||!rs.length){resolve(dataUrl);return;} // sudah transparan
+        const med=a=>{a.sort((p,q)=>p-q);return a[a.length>>1];};
+        const br=med(rs),bgc=med(gs),bb=med(bs);
+        const LO=28,HI=80; // jarak warna: <LO = latar, >HI = tinta, di antaranya halus
+        let minX=W,minY=H,maxX=-1,maxY=-1;
+        for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+          const i=(y*W+x)*4;
+          const dist=Math.max(Math.abs(d[i]-br),Math.abs(d[i+1]-bgc),Math.abs(d[i+2]-bb));
+          let a=dist<=LO?0:dist>=HI?1:(dist-LO)/(HI-LO);
+          d[i+3]=Math.round(d[i+3]*a);
+          if(d[i+3]>40){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}
+        }
+        if(maxX<0){resolve(dataUrl);return;} // tidak ada coretan terdeteksi → jangan hapus semua
+        g.putImageData(id,0,0);
+        const pad=6;minX=Math.max(0,minX-pad);minY=Math.max(0,minY-pad);maxX=Math.min(W-1,maxX+pad);maxY=Math.min(H-1,maxY+pad);
+        const o=document.createElement('canvas');o.width=maxX-minX+1;o.height=maxY-minY+1;
+        o.getContext('2d').drawImage(c,minX,minY,o.width,o.height,0,0,o.width,o.height);
+        resolve(o.toDataURL('image/png'));
+      }catch(e){console.error('_parafTransparan:',e);resolve(dataUrl);}
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+async function bersihkanLatarVsParaf(){
+  const img=document.getElementById('vs-paraf-img');
+  const src=_vsParafNew||img.getAttribute('src');if(!src)return;
+  const out=await _parafTransparan(src);
+  if(out===src){showToast('Latar sudah transparan / tidak ada yang bisa dibuang');return;}
+  _vsParafNew=out;_vsParafDel=false;_vsParafShow(out);renderVsPreview();
+  showToast('Latar dibuang — tekan Simpan untuk menyimpan');
 }
 function delVsParaf(){
   _vsParafNew=null;_vsParafDel=true;

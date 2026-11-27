@@ -283,3 +283,7 @@ body.no-kirim .kirim-ui{display:none!important}
 .main{min-width:0}
 
 #kopra-root .btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* Dokumen BGN — akun tim keuangan dapur hanya melihat halaman ini */
+#bgn-root .btn:disabled{opacity:.4;cursor:not-allowed}
+body.mode-dapur .snav .ni:not(#ni-bgn),body.mode-dapur .snav .nsec,body.mode-dapur #po-shortcut,body.mode-dapur .gsearch-wrap,body.mode-dapur #sf-backup,body.mode-dapur #save-status{display:none!important}

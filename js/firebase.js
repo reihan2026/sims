@@ -14,7 +14,10 @@ auth.onAuthStateChanged(user=>{
     const name=user.email.split('@')[0];
     document.getElementById('user-display-name').textContent=user.email;
     document.getElementById('user-avatar').textContent=name.substring(0,2).toUpperCase();
+    // Akun tim keuangan dapur: hanya halaman Dokumen BGN, sims/data tidak dimuat
+    bgnCekDapur().then(dapur=>{if(dapur){bgnModeDapur();return;}
     loadAllData().then(()=>{normalizeDapurRefs();syncPassthroughInvV();syncMissingPTInvD();syncPTInvDTotals();if(syncTerimaOtomatis())saveData(['po']);initUserProfile();renderDashboard();renderPOShortcut();initNavHistory();updateDL();});
+    });
   } else {
     _currentUser=null;
     document.getElementById('login-screen').style.display='flex';

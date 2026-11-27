@@ -475,6 +475,7 @@ async function kopraDownload(){
     await _kSaveDoc();
   }catch(e){showToast('Gagal menyimpan batch: '+e.message+' — file tidak diunduh.',true);await _kLoadDoc();renderKopra();return;}
   _kUnduh(file,txt);
+  _kSyncBgn(sel.tgl);
   addLog('export_kopra','Export file Kopra','kopra',id,file,`${rows.length} transfer · ${fmtF(P.total)} · biaya ${fmtF(P.biaya)}`);
   showToast('File Kopra diunduh — upload ke Kopra, lalu verifikasi di Riwayat.');
   _kp.sel=null;renderKopra();
@@ -593,7 +594,10 @@ async function _kSimpanBatch(patch,logArgs){
   await db.collection('sims').doc('kopra_b_'+b.id).set(b);
   await _kSaveDoc();
   if(logArgs)addLog(...logArgs);
+  _kSyncBgn(b.tgl);
 }
+// Salinan transfer hari itu untuk halaman Dokumen BGN (js/bgn.js)
+function _kSyncBgn(tgl){if(typeof bgnSyncAcuan==='function'&&tgl)bgnSyncAcuan(tgl).catch(e=>console.warn('[Kopra] sync BGN:',e));}
 const _kRank={[KOPRA_STATUS.batal]:-1,[KOPRA_STATUS.dl]:0,[KOPRA_STATUS.ver]:1,[KOPRA_STATUS.sheet]:2,[KOPRA_STATUS.sebagian]:2.5,[KOPRA_STATUS.rekon]:3};
 function _kNextStatus(b,s){return _kRank[s]>(_kRank[b.status]||0)?s:b.status;}
 

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>SIMS — Sistem Internal Manajemen Suplai</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="css/style.css?v=782c1874">
+<link rel="stylesheet" href="css/style.css?v=7a5cba0f">
 </head>
 <body>
 <!-- LOGIN SCREEN -->
@@ -58,6 +58,7 @@
     <div class="nsec">Pengaturan</div>
     <button class="ni" onclick="nav('master')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07"/></svg>Master Data</button>
     <button class="ni" onclick="nav('kopra')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M7 17L17 7M17 7H9M17 7v8"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>Export Kopra</button>
+    <button class="ni" id="ni-bgn" onclick="nav('bgn')"><svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 17c1.5-2 2.5-2 3.5 0s2 2 4.5-1"/></svg>Dokumen BGN</button>
   </nav>
   <div class="sfooter">
     <div id="user-badge" style="display:flex;align-items:center;gap:7px;margin-bottom:8px;padding:6px 8px;background:var(--s2);border-radius:var(--r)">
@@ -65,7 +66,7 @@
       <div style="flex:1;min-width:0"><div id="user-display-name" style="font-size:12px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div><div style="font-size:10px;color:var(--t3)">Online</div></div>
       <button class="btn bxs" onclick="doLogout()" title="Keluar" style="padding:3px 6px;font-size:11px">↩</button>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:6px">
+    <div id="sf-backup" style="display:flex;gap:6px;margin-bottom:6px">
       <button class="btn bsm" style="flex:1;font-size:10px" onclick="backupData()">⬇ Backup</button>
       <button class="btn bsm" style="flex:1;font-size:10px" onclick="restoreData()">⬆ Restore</button>
     </div>
@@ -276,6 +277,12 @@
 <div id="page-kopra" class="page">
   <div class="ph"><div><div class="ph-t">Export Kopra</div><div class="ph-s">Sheet Monitoring VA → file transfer Kopra → status sheet → lunas di SIMS</div></div></div>
   <div class="pc"><div id="kopra-root"></div></div>
+</div>
+
+<!-- DOKUMEN BGN -->
+<div id="page-bgn" class="page">
+  <div class="ph"><div><div class="ph-t">Dokumen BGN Harian</div><div class="ph-s">SPM Bahan Baku · SPM Operasional · Kuitansi · LPDH → dicocokkan dengan transfer Kopra → tanda tangan</div></div></div>
+  <div class="pc"><div id="bgn-root"></div></div>
 </div>
 
 <!-- MASTER DATA -->
@@ -1297,9 +1304,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="js/firebase.js?v=a84daf44"></script>
+<script src="js/firebase.js?v=73db1513"></script>
 <script src="js/data.js?v=0b746ac0"></script>
-<script src="js/utils.js?v=c5987a76"></script>
+<script src="js/utils.js?v=4e5d3907"></script>
 <script src="js/master.js?v=084aed35"></script>
 <script src="js/po-form.js?v=c778fbe4"></script>
 <script src="js/po.js?v=19245e53"></script>
@@ -1314,7 +1321,8 @@
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>
 <script src="js/baca-invoice.js?v=b4311518"></script>
-<script src="js/kopra.js?v=a68e5196"></script>
+<script src="js/kopra.js?v=04bc21c6"></script>
+<script src="js/bgn.js?v=90d65009"></script>
 <script src="js/periode.js?v=8e7aa7fe"></script>
 </body>
 </html>

@@ -5,12 +5,14 @@
 // tim dapur mengunduh hasilnya.
 //
 // Penyimpanan (semua di luar sims/data — PDF tidak pernah masuk _cache):
-//   sims_bgn_cfg/main      — owner_uid, dapur_emails, settings
-//   sims_bgn/h_YYYYMMDD    — satu dokumen per hari: acuan (salinan transfer Kopra
+// Semua di koleksi yang sudah diizinkan Firestore rules saat ini (sims, sims_files):
+//   sims/bgn_cfg           — owner_uid, dapur_emails, settings
+//   sims/bgn_idx           — ringkasan per hari {hari:{tgl:{status,n,nx,saldo,topup}}}
+//   sims/bgn_h_YYYYMMDD    — satu dokumen per hari: acuan (salinan transfer Kopra
 //                            hari itu saja), docs (metadata + hasil baca), status,
 //                            signed, approved, tolak, histori
-//   sims_bgn_files/<key>_<i> — isi PDF base64, dipecah per ~700 KB
-//   sims_ttd/<uid>         — gambar tanda tangan (rules: hanya pemiliknya)
+//   sims_files/bgn_<key>_<i> — isi PDF base64, dipecah per ~700 KB
+//   sims/bgn_ttd_<uid>     — gambar tanda tangan (rules: hanya pemiliknya)
 // Akun tim dapur (email di dapur_emails) hanya melihat halaman ini dan tidak
 // memuat sims/data. Penegakan sebenarnya lewat Firestore rules — teksnya dibuat
 // di kartu Setting halaman ini.
@@ -325,14 +327,19 @@ function _bKel(r,S,ovr){
 // ----- State -----
 let _bg={cfg:null,mode:null,tgl:null,day:null,unsub:null,hari:[],busy:'',prev:null,ttd:null,preview:null,setOpen:false,err:''};
 function _bS(){return Object.assign({},BGN_DEFAULT,(_bg.cfg&&_bg.cfg.settings)||{});}
-function _bDocId(tgl){return 'h_'+tgl.replace(/-/g,'');}
+function _bDocId(tgl){return 'bgn_h_'+tgl.replace(/-/g,'');}
+function _bRefHari(tgl){return db.collection('sims').doc(_bDocId(tgl));}
+const _bRefCfg=()=>db.collection('sims').doc('bgn_cfg');
+const _bRefIdx=()=>db.collection('sims').doc('bgn_idx');
+const _bRefTtd=uid=>db.collection('sims').doc('bgn_ttd_'+uid);
+const _bRefFile=(key,i)=>db.collection('sims_files').doc('bgn_'+key+'_'+i);
 function _bEmail(){return (_currentUser&&_currentUser.email||'').toLowerCase();}
 function _bIsOwner(){return !!(_bg.cfg&&_bg.cfg.owner_uid&&_currentUser&&_bg.cfg.owner_uid===_currentUser.uid);}
 function _bIsDapur(cfg){const c=cfg||_bg.cfg;return !!(c&&(c.dapur_emails||[]).map(e=>e.toLowerCase()).includes(_bEmail()));}
 
 // ----- Login: akun tim dapur tidak memuat sims/data -----
 async function bgnCekDapur(){
-  try{const s=await db.collection('sims_bgn_cfg').doc('main').get();_bg.cfg=s.exists?s.data():{};}
+  try{const s=await _bRefCfg().get();_bg.cfg=s.exists?s.data():{};}
   catch(e){console.warn('[BGN] baca config:',e);_bg.cfg=null;return false;}
   return _bIsDapur();
 }
@@ -366,13 +373,13 @@ function _bB64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fr
 function _bUnB64(b64){const s=atob(b64);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u;}
 async function _bSimpanFile(key,bytes){
   const b64=_bB64(bytes);const n=Math.ceil(b64.length/BGN_CHUNK);const b=db.batch();
-  for(let i=0;i<n;i++)b.set(db.collection('sims_bgn_files').doc(key+'_'+i),{d:b64.slice(i*BGN_CHUNK,(i+1)*BGN_CHUNK),i,n});
+  for(let i=0;i<n;i++)b.set(_bRefFile(key,i),{d:b64.slice(i*BGN_CHUNK,(i+1)*BGN_CHUNK),i,n});
   await b.commit();return n;
 }
 const _bFileCache={};
 async function _bAmbilFile(key,n){
   if(_bFileCache[key])return _bFileCache[key];
-  const parts=await Promise.all([...Array(n)].map((_,i)=>db.collection('sims_bgn_files').doc(key+'_'+i).get()));
+  const parts=await Promise.all([...Array(n)].map((_,i)=>_bRefFile(key,i).get()));
   if(parts.some(p=>!p.exists))throw new Error('Potongan file '+key+' tidak lengkap di server.');
   const u=_bUnB64(parts.map(p=>p.data().d).join(''));_bFileCache[key]=u;return u;
 }
@@ -382,7 +389,7 @@ async function bgnSyncAcuan(tgl){
   if(typeof _kp==='undefined')return null;
   if(!_kp.doc)await _kLoadDoc();
   const S=_kSet();
-  const ref=db.collection('sims_bgn').doc(_bDocId(tgl));
+  const ref=_bRefHari(tgl);
   const cur=await ref.get();const ovr=(cur.exists&&cur.data().kel_override)||{};
   const idx=(_kp.doc.batches_idx||[]).filter(b=>b.tgl===tgl&&b.status!==KOPRA_STATUS.batal);
   const rows=[],batches=[];
@@ -394,6 +401,7 @@ async function bgnSyncAcuan(tgl){
   }
   const acuan={rows,batches,biaya_obu:S.biaya_obu||0,belum_verif:batches.some(b=>(_kRank[b.status]||0)<1),at:new Date().toISOString(),by:_bEmail()};
   await ref.set({tgl,acuan},{merge:true});
+  await _bRefIdx().set({hari:{[tgl]:{ada:rows.length>0}}},{merge:true});
   return acuan;
 }
 // Sinkron otomatis hari-hari yang punya batch Kopra 14 hari terakhir
@@ -403,7 +411,7 @@ async function _bSyncTerbaru(){
   const batas=new Date(Date.now()-14*864e5).toISOString().slice(0,10);
   const tgls=[...new Set((_kp.doc.batches_idx||[]).filter(b=>b.tgl>=batas).map(b=>b.tgl))];
   for(const t of tgls){
-    const s=await db.collection('sims_bgn').doc(_bDocId(t)).get();
+    const s=await _bRefHari(t).get();
     const a=s.exists&&s.data().acuan;
     const sig=(_kp.doc.batches_idx||[]).filter(b=>b.tgl===t&&b.status!==KOPRA_STATUS.batal).map(b=>b.id+':'+b.status).sort().join('|');
     const sigDoc=a?(a.batches||[]).map(b=>b.id+':'+b.status).sort().join('|'):null;
@@ -420,7 +428,7 @@ async function renderBgn(){
   }
   if(!_bg.cfg||_bg.cfgStale){
     root.innerHTML='<div class="card"><div class="empty">Memuat…</div></div>';
-    try{const s=await db.collection('sims_bgn_cfg').doc('main').get();_bg.cfg=s.exists?s.data():{};_bg.cfgStale=false;}
+    try{const s=await _bRefCfg().get();_bg.cfg=s.exists?s.data():{};_bg.cfgStale=false;}
     catch(e){root.innerHTML='<div class="card" style="color:var(--dn)">Gagal membaca pengaturan Dokumen BGN: '+_be(e.message)+'</div>';return;}
   }
   if(!_bg.mode)_bg.mode=_bIsDapur()?'dapur':'tim';
@@ -440,7 +448,7 @@ async function renderBgn(){
 async function bgnKlaim(){
   if(!_currentUser)return;
   if(!confirm('Jadikan '+_currentUser.email+' pemilik Dokumen BGN (satu-satunya yang bisa menandatangani)?'))return;
-  const ref=db.collection('sims_bgn_cfg').doc('main');const s=await ref.get();
+  const ref=_bRefCfg();const s=await ref.get();
   if(s.exists&&s.data().owner_uid){showToast('Sudah ada pemilik.',true);_bg.cfg=s.data();renderBgn();return;}
   _bg.cfg=Object.assign({},s.exists?s.data():{},{owner_uid:_currentUser.uid,owner_email:_bEmail(),dapur_emails:(s.exists&&s.data().dapur_emails)||[],settings:Object.assign({},BGN_DEFAULT,(s.exists&&s.data().settings)||{})});
   await ref.set(_bg.cfg);
@@ -449,8 +457,8 @@ async function bgnKlaim(){
 }
 async function _bMuatDaftarHari(){
   try{
-    const q=await db.collection('sims_bgn').orderBy('tgl','desc').limit(21).get();
-    _bg.hari=q.docs.map(d=>{const x=d.data();return{tgl:x.tgl,status:x.status||'',n:BGN_JENIS.filter(j=>x.docs&&x.docs[j]).length,ada:!!(x.acuan&&x.acuan.rows&&x.acuan.rows.length)};});
+    const s=await _bRefIdx().get();const H=(s.exists&&s.data().hari)||{};_bg.idx=H;
+    _bg.hari=Object.keys(H).sort().reverse().slice(0,21).map(t=>Object.assign({tgl:t},H[t]));
     if(_currentPage==='bgn'&&!_bg.preview)_bRenderHari(document.getElementById('bgn-root'));
   }catch(e){console.warn('[BGN] daftar hari:',e);}
 }
@@ -458,16 +466,17 @@ function _bBukaHari(tgl){
   if(_bg.unsub){_bg.unsub();_bg.unsub=null;}
   _bg.tgl=tgl;_bg.dayFor=tgl;_bg.day=null;_bg.prev=null;_bg.err='';
   const root=document.getElementById('bgn-root');if(root)root.innerHTML='<div class="card"><div class="empty">Memuat '+_bFmtTgl(tgl)+'…</div></div>';
-  _bg.unsub=db.collection('sims_bgn').doc(_bDocId(tgl)).onSnapshot(s=>{
+  _bg.unsub=_bRefHari(tgl).onSnapshot(s=>{
     if(_bg.tgl!==tgl)return;
     _bg.day=s.exists?s.data():{tgl};
     if(_currentPage==='bgn'&&!_bg.preview)_bRenderHari(document.getElementById('bgn-root'));
     _bPerbaruiStatus();
   },e=>{_bg.err='Gagal membaca dokumen hari ini: '+e.message;_bg.day={tgl};_bRenderHari(document.getElementById('bgn-root'));});
-  db.collection('sims_bgn').where('tgl','<',tgl).orderBy('tgl','desc').limit(1).get().then(q=>{
+  _bRefIdx().get().then(s=>{
     if(_bg.tgl!==tgl)return;
-    const d=q.docs[0]&&q.docs[0].data();const L=d&&d.docs&&d.docs.lpdh&&d.docs.lpdh.parsed;
-    _bg.prev=L&&typeof L.saldo==='number'&&!isNaN(L.saldo)?{tgl:d.tgl,saldo:L.saldo}:null;
+    const H=(s.exists&&s.data().hari)||{};
+    const t=Object.keys(H).filter(k=>k<tgl&&typeof H[k].saldo==='number').sort().pop();
+    _bg.prev=t?{tgl:t,saldo:H[t].saldo}:null;
     if(_currentPage==='bgn'&&_bg.day&&!_bg.preview)_bRenderHari(document.getElementById('bgn-root'));
   }).catch(e=>console.warn('[BGN] saldo kemarin:',e));
 }
@@ -488,7 +497,11 @@ function _bPerbaruiStatus(){
   const H=_bHasil();const st=_bStatusHitung(d,H);
   if(d.status===st&&d.nx===H.x)return;
   const docs=d.docs||{};if(!Object.keys(docs).length&&!d.acuan)return;
-  db.collection('sims_bgn').doc(_bDocId(d.tgl)).set({tgl:d.tgl,status:st,nx:H.x,nw:H.w},{merge:true}).catch(e=>console.warn('[BGN] status:',e));
+  const L=docs.lpdh&&docs.lpdh.parsed;const n=BGN_JENIS.filter(j=>docs[j]).length;
+  const ent={status:st,nx:H.x,n,ada:!!(d.acuan&&d.acuan.rows&&d.acuan.rows.length)};
+  if(L&&typeof L.saldo==='number')ent.saldo=L.saldo;if(L&&typeof L.topup==='number')ent.topup=L.topup;
+  _bRefHari(d.tgl).set({tgl:d.tgl,status:st,nx:H.x,nw:H.w},{merge:true}).catch(e=>console.warn('[BGN] status:',e));
+  _bRefIdx().set({hari:{[d.tgl]:ent}},{merge:true}).then(()=>{if(_bg.idx){_bg.idx[d.tgl]=Object.assign({},_bg.idx[d.tgl],ent);_bg.hari=Object.keys(_bg.idx).sort().reverse().slice(0,21).map(t=>Object.assign({tgl:t},_bg.idx[t]));}}).catch(e=>console.warn('[BGN] idx:',e));
 }
 function _bTag(s){const c={[BGN_STATUS.ok]:'tok',[BGN_STATUS.siap]:'tin',[BGN_STATUS.selisih]:'tno',[BGN_STATUS.tolak]:'tno',[BGN_STATUS.tunggu]:'twn',[BGN_STATUS.acuan]:'twn'}[s]||'tgr';return '<span class="tag '+c+'">'+_be(s||'—')+'</span>';}
 
@@ -598,14 +611,18 @@ service cloud.firestore {
     function masuk() { return request.auth != null; }
     function dapur() { return masuk() && request.auth.token.email.lower() in [${list}]; }
     function tim() { return masuk() && !dapur(); }
-    // Tim SIMS: semua koleksi kecuali gambar tanda tangan
-    match /{col}/{doc=**} { allow read, write: if tim() && col != 'sims_ttd'; }
-    // Gambar tanda tangan: hanya pemiliknya sendiri
-    match /sims_ttd/{uid} { allow read, write: if masuk() && request.auth.uid == uid; }
-    // Tim dapur: hanya Dokumen BGN
-    match /sims_bgn_cfg/{d} { allow read: if masuk(); }
-    match /sims_bgn/{d} { allow read, write: if dapur(); }
-    match /sims_bgn_files/{d} { allow read, write: if dapur(); }
+    // Tim SIMS: dokumen sims/* kecuali gambar tanda tangan orang lain
+    match /sims/{d} {
+      allow read, write: if tim() && !d.matches('bgn_ttd_.*');
+      allow read, write: if masuk() && d == 'bgn_ttd_' + request.auth.uid;
+      // Tim dapur: hanya pengaturan (baca), ringkasan, dan dokumen harian BGN
+      allow read: if dapur() && d == 'bgn_cfg';
+      allow read, write: if dapur() && (d == 'bgn_idx' || d.matches('bgn_h_[0-9]{8}'));
+    }
+    match /sims_files/{f} {
+      allow read, write: if tim() || (dapur() && f.matches('bgn_.*'));
+    }
+    match /sims_arsip/{doc=**} { allow read, write: if tim(); }
   }
 }`;
 }
@@ -616,7 +633,7 @@ async function bgnSimpanSetting(){
   const settings=Object.assign({},_bS(),{nama_ttd:v('bgn-set-nama').trim()||BGN_DEFAULT.nama_ttd,tarif_insentif:parseInt(v('bgn-set-tarif'),10)||0,
     ttd_lebar:parseFloat(v('bgn-set-lebar'))||BGN_DEFAULT.ttd_lebar,ttd_turun:parseFloat(v('bgn-set-turun'))||0});
   const cfg=Object.assign({},_bg.cfg,{dapur_emails:emails,settings});
-  try{await db.collection('sims_bgn_cfg').doc('main').set(cfg);}catch(e){showToast('Gagal simpan: '+e.message,true);return;}
+  try{await _bRefCfg().set(cfg);}catch(e){showToast('Gagal simpan: '+e.message,true);return;}
   _bg.cfg=cfg;addLog('bgn_setting','Setting Dokumen BGN','bgn','','',`tim dapur: ${emails.join(', ')||'-'} · ttd ${settings.nama_ttd} · insentif/PM ${settings.tarif_insentif}`);
   showToast('Setting tersimpan. Jangan lupa perbarui Firestore rules kalau daftar email berubah.');renderBgn();
 }
@@ -627,7 +644,7 @@ async function bgnSync(){
 }
 async function bgnUbahKel(ref,kel){
   const id=_bDocId(_bg.tgl);
-  try{await db.collection('sims_bgn').doc(id).set({kel_override:{[ref]:kel}},{merge:true});await bgnSyncAcuan(_bg.tgl);
+  try{await _bRefHari(_bg.tgl).set({kel_override:{[ref]:kel}},{merge:true});await bgnSyncAcuan(_bg.tgl);
     addLog('bgn_kelompok','Ubah kelompok transfer BGN','bgn',id,ref,BGN_LABEL[BGN_KEL_DOK[kel]]);}
   catch(e){showToast('Gagal: '+e.message,true);}
 }
@@ -657,7 +674,7 @@ async function _bUploadSatu(f){
   const tgl=_bTglDok(jenis,parsed)||_bg.tgl;
   if(tgl!==_bg.tgl&&!confirm(f.name+' bertanggal '+_bFmtTgl(tgl)+', bukan '+_bFmtTgl(_bg.tgl)+'.\n\nSimpan ke hari '+_bFmtTgl(tgl)+'?'))throw new Error('dibatalkan (tanggal dokumen '+_bFmtTgl(tgl)+').');
   const sha=await _bSha(bytes);
-  const ref=db.collection('sims_bgn').doc(_bDocId(tgl));
+  const ref=_bRefHari(tgl);
   const cur=await ref.get();const lama=cur.exists&&cur.data().docs&&cur.data().docs[jenis];
   if(lama&&lama.sha===sha)return '• '+f.name+': sama persis dengan '+BGN_LABEL[jenis]+' yang sudah ada — dilewati.';
   const versi=(lama?lama.versi:0)+1;const key=tgl.replace(/-/g,'')+'_'+jenis+'_v'+versi;
@@ -710,13 +727,13 @@ async function _bBukaBlob(bytes,nama,unduh){
 }
 function _bCatatHistori(a,j){
   const FV=firebase.firestore.FieldValue;
-  db.collection('sims_bgn').doc(_bDocId(_bg.tgl)).set({histori:FV.arrayUnion({t:new Date().toISOString(),by:_bEmail(),a,j})},{merge:true}).catch(()=>{});
+  _bRefHari(_bg.tgl).set({histori:FV.arrayUnion({t:new Date().toISOString(),by:_bEmail(),a,j})},{merge:true}).catch(()=>{});
 }
 
 // ----- Gambar tanda tangan -----
 async function _bMuatTtd(){
   if(_bg.ttd&&_bg.ttdUid===_currentUser.uid)return _bg.ttd;
-  const s=await db.collection('sims_ttd').doc(_currentUser.uid).get();
+  const s=await _bRefTtd(_currentUser.uid).get();
   _bg.ttd=s.exists?s.data():null;_bg.ttdUid=_currentUser.uid;return _bg.ttd;
 }
 // Latar terang → transparan, tinta dipertahankan, dipotong ke kotak tinta
@@ -743,7 +760,7 @@ async function bgnUploadTtd(file){
     const t=await _bProsesTtd(file);
     if(t.png.length>900*1024)throw new Error('Gambar terlalu besar setelah diproses — potong lebih rapat.');
     t.at=new Date().toISOString();
-    await db.collection('sims_ttd').doc(_currentUser.uid).set(t);_bg.ttd=t;_bg.ttdUid=_currentUser.uid;
+    await _bRefTtd(_currentUser.uid).set(t);_bg.ttd=t;_bg.ttdUid=_currentUser.uid;
     addLog('bgn_ttd','Ganti gambar tanda tangan','bgn','','',t.w+'×'+t.h+' px');showToast('Tanda tangan tersimpan.');renderBgn();
   }catch(e){showToast('Gagal: '+e.message,true);}
 }
@@ -812,7 +829,7 @@ async function bgnSimpanTtd(){
   const P=_bg.preview;if(!P||P.H.x||!_bIsOwner())return;
   const btn=document.getElementById('bgn-btn-simpan');if(btn){btn.disabled=true;btn.textContent='Menyimpan…';}
   try{
-    const ref=db.collection('sims_bgn').doc(_bDocId(P.tgl));
+    const ref=_bRefHari(P.tgl);
     const cur=(await ref.get()).data();
     // Ada upload baru sejak pratinjau dibuat → jangan tandatangani versi lama
     const berubah=BGN_JENIS.filter(j=>!cur.docs[j]||cur.docs[j].versi!==P.signed[j].versi);
@@ -841,7 +858,7 @@ async function bgnTolak(){
   if(!cat||!cat.trim())return;
   const at=new Date().toISOString();
   try{
-    await db.collection('sims_bgn').doc(_bDocId(_bg.tgl)).set({tolak:{catatan:cat.trim(),by:_bEmail(),at},approved:null,signed:null,status:BGN_STATUS.tolak,
+    await _bRefHari(_bg.tgl).set({tolak:{catatan:cat.trim(),by:_bEmail(),at},approved:null,signed:null,status:BGN_STATUS.tolak,
       histori:firebase.firestore.FieldValue.arrayUnion({t:at,by:_bEmail(),a:ok?'batal':'tolak',c:cat.trim()})},{merge:true});
     addLog(ok?'bgn_batal':'bgn_tolak',ok?'Batalkan persetujuan dokumen BGN':'Tolak dokumen BGN','bgn',_bDocId(_bg.tgl),_bFmtTgl(_bg.tgl),cat.trim());
   }catch(e){showToast('Gagal: '+e.message,true);}

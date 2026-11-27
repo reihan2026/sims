@@ -414,7 +414,7 @@ function renderVsPreview(){
   const pp=document.getElementById('vs-paraf-preview');
   const paraf=(pp&&pp.style.display!=='none')?document.getElementById('vs-paraf-img').src:'';
   const sign=`<div style="display:flex;justify-content:flex-end;margin-top:8px"><div style="width:110px;text-align:center;font-size:8px;color:#1A1814">
-      <div style="height:40px;display:flex;align-items:flex-end;justify-content:center">${paraf?`<img src="${paraf}" style="max-height:38px;max-width:105px;object-fit:contain">`:''}</div>
+      <div style="height:40px;display:flex;align-items:flex-end;justify-content:center">${paraf?`<img src="${paraf}" style="max-height:38px;max-width:105px;object-fit:contain;margin-bottom:-11px;position:relative;z-index:1">`:''}</div>
       <div style="border-top:1px solid #D8D3C8;padding-top:3px">Hormat kami</div>
       ${paraf?'<div style="color:#9E9890;font-size:7px;margin-top:2px">(paraf tampil bila dicentang saat cetak)</div>':''}</div></div>`;
   box.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:12px;color:#1A1814">${hdr}${body}${sign}</div>`;
@@ -654,7 +654,7 @@ async function printInvDFormal(invId,withParaf){
   const stampHtml=parafSrc
     ?`<div class="stamp" style="justify-content:flex-end"><div style="flex:1;max-width:200px;text-align:center"><div class="paraf-wrap"><img src="${parafSrc}" class="paraf-img" alt="Paraf"></div><div class="stamp-box" style="margin-top:0">Hormat kami</div></div></div>`
     :`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
-  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-6px}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}`:'';
+  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}`:'';
   const parafToggle=parafSrc?`<label class="pb-paraf"><input type="checkbox" id="pb-paraf-cb" ${withParaf?'checked':''} onchange="document.body.classList.toggle('dgn-paraf',this.checked)"> Dengan paraf</label>`:'';
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   if(w.closed)return;

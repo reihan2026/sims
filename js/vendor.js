@@ -540,8 +540,10 @@ function _cetakBarJs(){
   return `function kembaliKeSims(){try{window.close();}catch(e){}setTimeout(function(){if(!window.closed)location.href=${url};},400);}`;
 }
 
+// Vendor yang punya paraf: jendela cetak TIDAK langsung print — user pilih dulu
+// "Dengan paraf" di bar atas (pratinjau langsung berubah), lalu tekan Cetak / PDF.
 async function printInvDFormal(invId,withParaf){
-  if(withParaf===undefined){const cb=document.getElementById('invd-paraf-'+invId);withParaf=!!(cb&&cb.checked);}
+  withParaf=!!withParaf;
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
   if(!vs){showToast('Vendor tidak ditemukan!',true);return;}
@@ -654,12 +656,12 @@ async function printInvDFormal(invId,withParaf){
   const stampHtml=parafSrc
     ?`<div class="stamp" style="justify-content:flex-end"><div style="flex:1;max-width:200px;text-align:center"><div class="paraf-wrap"><img src="${parafSrc}" class="paraf-img" alt="Paraf"></div><div class="stamp-box" style="margin-top:0">Hormat kami</div></div></div>`
     :`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
-  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}`:'';
+  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}.pb-paraf{background:#3A352E;padding:0 12px;border-radius:8px;min-height:44px}`:'';
   const parafToggle=parafSrc?`<label class="pb-paraf"><input type="checkbox" id="pb-paraf-cb" ${withParaf?'checked':''} onchange="document.body.classList.toggle('dgn-paraf',this.checked)"> Dengan paraf</label>`:'';
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   if(w.closed)return;
   w.document.open();
-  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body${parafSrc&&withParaf?' class="dgn-paraf"':''}>${_cetakBarHtml(parafToggle)}${body}<script>${_cetakBarJs()}window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body${parafSrc&&withParaf?' class="dgn-paraf"':''}>${_cetakBarHtml(parafToggle)}${body}<script>${_cetakBarJs()}${parafSrc?'':'window.onload=function(){setTimeout(function(){window.print();},100);};'}<\/script></body></html>`);
   w.document.close();
   }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }

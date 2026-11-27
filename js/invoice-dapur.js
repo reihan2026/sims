@@ -576,7 +576,6 @@ function renderInvD(){
         ${iv.terima_status!=='lunas'?`<button class="btn bsm bp" onclick="openTerima('${iv.id}')">Rekam terima</button>`:''}
         ${iv.type==='passthrough'&&iv.terima_status==='lunas'&&iv.pt_inv_id&&(()=>{const ptV=getInvV().find(v=>v.id===iv.pt_inv_id);return ptV&&ptV.bayar_status!=='lunas';})()
           ?`<button class="btn bsm bt" onclick="syncPassthroughInvV();renderInvD();showToast('Invoice vendor diupdate!')">Sync vendor</button>`:''}
-        ${iv.vendor_saya_id&&getVendorSaya().find(v=>v.id===iv.vendor_saya_id)?.paraf_ada?`<label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--t2);cursor:pointer"><input type="checkbox" id="invd-paraf-${iv.id}"> Dengan paraf</label>`:''}
         ${iv.vendor_saya_id?`<button class="btn bsm bp" onclick="printInvDFormal('${iv.id}')">🖨 Cetak Invoice</button>`:''}
         <button class="btn bsm bi" onclick="showInvDDetail('${iv.id}')">Detail</button>
         <div class="kbb">

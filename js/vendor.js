@@ -540,6 +540,96 @@ function _cetakBarJs(){
   return `function kembaliKeSims(){try{window.close();}catch(e){}setTimeout(function(){if(!window.closed)location.href=${url};},400);}`;
 }
 
+// iPhone/iPad dari ikon layar utama: jendela cetak tampil di penampil Safari mini
+// yang mengabaikan window.print() → buat PDF sendiri lalu buka lembar Bagikan iOS
+// (ada Cetak, Simpan ke File, WhatsApp). localStorage sims_force_pdf=1 untuk uji di desktop.
+function _cetakPakaiPDF(){
+  if(localStorage.getItem('sims_force_pdf')==='1')return true;
+  return window.navigator.standalone===true;
+}
+const _PDF_LIBS=['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js','https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+function _pdfLoadScript(src){
+  return new Promise((res,rej)=>{
+    if(document.querySelector('script[data-pdf-src="'+src+'"][data-ok]')){res();return;}
+    const s=document.createElement('script');s.src=src;s.dataset.pdfSrc=src;
+    s.onload=()=>{s.dataset.ok='1';res();};
+    s.onerror=()=>{s.remove();rej(new Error('Gagal memuat pustaka PDF — cek koneksi internet'));};
+    document.head.appendChild(s);
+  });
+}
+let _cpPdf=null; // {file,url,name} PDF terakhir yang siap dibagikan
+async function _buatPdfInvD(invId,withParaf){
+  const doc=await printInvDFormal(invId,withParaf,true);
+  if(!doc)throw new Error('Invoice tidak ditemukan');
+  for(const src of _PDF_LIBS)await _pdfLoadScript(src);
+  // Render di iframe tersembunyi selebar A4 supaya CSS invoice tidak bocor ke SIMS
+  const fr=document.createElement('iframe');
+  fr.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;visibility:hidden';
+  document.body.appendChild(fr);
+  try{
+    const d=fr.contentDocument;
+    d.open();d.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>${doc.css}body{background:#fff}</style></head><body>${doc.body}</body></html>`);d.close();
+    await Promise.all([...d.images].map(im=>im.complete?0:new Promise(r=>{im.onload=im.onerror=r;})));
+    await new Promise(r=>setTimeout(r,50));
+    // Tinggi = isi invoice saja (bukan tinggi iframe) agar tidak ada halaman kosong di akhir
+    const wEl=d.querySelector('.w');
+    const contentH=Math.ceil((wEl?wEl.getBoundingClientRect().bottom:d.body.scrollHeight)+20);
+    const canvas=await window.html2canvas(d.body,{scale:2,backgroundColor:'#ffffff',useCORS:true,windowWidth:794,width:794,height:contentH,windowHeight:contentH,logging:false});
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+    const pw=210,ph=297;
+    const pageHpx=Math.floor(canvas.width*ph/pw);
+    // Titik potong aman (piksel canvas): batas bawah baris tabel & awal blok total/rekening/tanda tangan
+    const k=canvas.width/794,bodyTop=d.body.getBoundingClientRect().top;
+    const cuts=[...d.querySelectorAll('tr,.tot,.rek-footer,.stamp')].map(el=>{const r=el.getBoundingClientRect();return Math.round(((el.tagName==='TR'?r.bottom:r.top)-bodyTop)*k);}).sort((p,q)=>p-q);
+    for(let y=0,pg=0;y<canvas.height;pg++){
+      const cap=pg>0?Math.floor(canvas.width*(ph-8)/pw):pageHpx; // halaman lanjutan diberi margin atas 8mm
+      let h=Math.min(cap,canvas.height-y);
+      if(y+h<canvas.height){const ok=cuts.filter(c=>c>y+cap*0.5&&c<=y+cap);if(ok.length)h=ok[ok.length-1]-y;}
+      if(pg>0&&h<40)break; // sisa beberapa piksel saja → jangan buat halaman baru
+      const c=document.createElement('canvas');c.width=canvas.width;c.height=h;
+      const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,h);g.drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
+      if(pg>0)pdf.addPage();
+      pdf.addImage(c.toDataURL('image/jpeg',0.9),'JPEG',0,pg>0?8:0,pw,h*pw/canvas.width);
+      y+=h;
+    }
+    const blob=pdf.output('blob');
+    const name=doc.title.replace(/[\\/:*?"<>|]/g,'-')+'.pdf';
+    return {file:new File([blob],name,{type:'application/pdf'}),url:URL.createObjectURL(blob),name};
+  }finally{fr.remove();}
+}
+// Tahap 1 (iOS): siapkan PDF di dalam dialog; tombol Bagikan baru aktif setelah siap.
+// navigator.share WAJIB dipanggil langsung dari ketukan → tidak bisa disambung setelah proses async.
+async function _cetakInvDPdf(invId,withParaf){
+  const st=document.getElementById('cp-status'),go=document.getElementById('cp-go'),sh=document.getElementById('cp-share');
+  if(_cpPdf){URL.revokeObjectURL(_cpPdf.url);_cpPdf=null;}
+  document.getElementById('cp-pilih').style.display='none';
+  go.style.display='none';sh.style.display='';sh.disabled=true;
+  st.style.display='';st.textContent='Menyiapkan PDF…';
+  try{
+    const r=await _buatPdfInvD(invId,withParaf);
+    if(document.getElementById('cp-inv-id').value!==invId||!document.getElementById('modal-cetak-paraf').classList.contains('open')){URL.revokeObjectURL(r.url);return;}
+    _cpPdf=r;sh.disabled=false;
+    st.textContent='PDF siap. Ketuk "Bagikan / Cetak", lalu pilih Cetak (Print), Simpan ke File, atau WhatsApp.';
+  }catch(e){
+    console.error('PDF invoice:',e);
+    st.textContent='Gagal membuat PDF: '+(e.message||e)+'. Coba lagi, atau pakai jendela cetak biasa.';
+    sh.style.display='none';go.style.display='';go.textContent='🖨 Jendela cetak biasa';
+    go.onclick=()=>{closeModal('modal-cetak-paraf');printInvDFormal(invId,withParaf);};
+  }
+}
+async function cetakInvDBagikan(){
+  if(!_cpPdf)return;
+  const {file,url,name}=_cpPdf;
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:name});
+      closeModal('modal-cetak-paraf');return;
+    }
+  }catch(e){if(e&&e.name==='AbortError')return;console.error('share:',e);}
+  // Cadangan: buka PDF-nya langsung (bisa dibagikan/dicetak dari penampil)
+  const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.download=name;document.body.appendChild(a);a.click();a.remove();
+}
 // Tombol "Cetak Invoice": vendor yang punya paraf → dialog kecil "Dengan paraf" dulu.
 // Pilihan HARUS dibuat sebelum jendela cetak dibuka: di iPhone window.print() dari
 // tombol di dalam jendela cetak tidak memunculkan dialog print, hanya print otomatis
@@ -547,29 +637,40 @@ function _cetakBarJs(){
 function cetakInvDFormal(invId){
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
-  if(!vs||!vs.paraf_ada){printInvDFormal(invId,false);return;}
+  const pdf=_cetakPakaiPDF();
+  if(!pdf&&(!vs||!vs.paraf_ada)){printInvDFormal(invId,false);return;}
   document.getElementById('cp-inv-id').value=invId;
-  document.getElementById('cp-inv-no').textContent=inv.no+' — '+vs.nama;
+  document.getElementById('cp-inv-no').textContent=inv.no+' — '+(vs?vs.nama:'');
   document.getElementById('cp-paraf').checked=false;
+  document.getElementById('cp-pilih').style.display=(vs&&vs.paraf_ada)?'':'none';
+  document.getElementById('cp-status').style.display='none';
+  document.getElementById('cp-share').style.display='none';
+  const go=document.getElementById('cp-go');go.style.display='';go.onclick=cetakInvDFormalGo;
+  go.textContent=pdf?'📄 Buat PDF':'🖨 Cetak';
   openModal('modal-cetak-paraf');
 }
 function cetakInvDFormalGo(){
   const id=document.getElementById('cp-inv-id').value;
   const wp=document.getElementById('cp-paraf').checked;
+  if(_cetakPakaiPDF()){_cetakInvDPdf(id,wp);return;}
   closeModal('modal-cetak-paraf');
   printInvDFormal(id,wp); // sinkron dalam klik → jendela cetak tidak diblokir
 }
-async function printInvDFormal(invId,withParaf){
+// pdfMode=true: tidak buka jendela, kembalikan {title,css,body} untuk dijadikan PDF (iOS).
+async function printInvDFormal(invId,withParaf,pdfMode){
   withParaf=!!withParaf;
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
   if(!vs){showToast('Vendor tidak ditemukan!',true);return;}
+  let w=null;
+  if(!pdfMode){
   // Jendela cetak WAJIB dibuka sinkron saat tombol diklik. Dulu dibuka setelah
   // await (muat logo kop dari Firestore + resize) → Safari/HP/Chrome (kalau
   // lambat) menganggapnya pop-up tak diminta dan memblokirnya, tombol terasa mati.
-  const w=window.open('','_blank','width=820,height=800');
+  w=window.open('','_blank','width=820,height=800');
   if(!w){showToast('Jendela cetak diblokir browser — izinkan pop-up untuk SIMS lalu coba lagi',true);return;}
   w.document.write('<!DOCTYPE html><html><head><title>Menyiapkan invoice…</title></head><body style="font-family:sans-serif;padding:24px;color:#6B6560">Menyiapkan invoice…</body></html>');
+  }
   try{
   const po=getPOs().find(p=>p.id===inv.po_id);
   const recv=(inv.payments||[]).reduce((s,p)=>s+p.jumlah,0);
@@ -674,11 +775,12 @@ async function printInvDFormal(invId,withParaf){
     :`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
   const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-20px;position:relative;z-index:1}`:'';
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
+  if(pdfMode)return {title:`${inv.no} — ${vs.nama}`,css:css+parafCss,body};
   if(w.closed)return;
   w.document.open();
   w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body>${_cetakBarHtml()}${body}<script>${_cetakBarJs()}window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
   w.document.close();
-  }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
+  }catch(e){console.error('printInvDFormal:',e);if(pdfMode)throw e;try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }
 
 // Init handled by Firebase auth.onAuthStateChanged

@@ -590,9 +590,10 @@
   <div class="mb">
     <input type="hidden" id="cp-inv-id">
     <div id="cp-inv-no" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
-    <label style="display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;padding:6px 0"><input type="checkbox" id="cp-paraf" style="width:20px;height:20px"> Dengan paraf</label>
+    <label id="cp-pilih" style="display:flex;align-items:center;gap:10px;font-size:15px;cursor:pointer;padding:6px 0"><input type="checkbox" id="cp-paraf" style="width:20px;height:20px"> Dengan paraf</label>
+    <div id="cp-status" style="display:none;font-size:13px;color:var(--t2);line-height:1.5;margin-top:6px"></div>
   </div>
-  <div class="mf"><button class="btn" onclick="closeModal('modal-cetak-paraf')">Batal</button><button class="btn bp" onclick="cetakInvDFormalGo()">🖨 Cetak</button></div>
+  <div class="mf"><button class="btn" onclick="closeModal('modal-cetak-paraf')">Batal</button><button class="btn bp" id="cp-go" onclick="cetakInvDFormalGo()">🖨 Cetak</button><button class="btn bp" id="cp-share" style="display:none" onclick="cetakInvDBagikan()">📤 Bagikan / Cetak</button></div>
 </div></div>
 
 <!-- Edit Dapur -->
@@ -1300,7 +1301,7 @@
 <script src="js/dashboard.js?v=9edd56d4"></script>
 <script src="js/misc.js?v=c1594b42"></script>
 <script src="js/laporan.js?v=410b7957"></script>
-<script src="js/vendor.js?v=e2000a91"></script>
+<script src="js/vendor.js?v=49c72add"></script>
 <script src="js/scan.js?v=f36b6810"></script>
 <script src="js/arsip.js?v=620645fd"></script>
 <script src="js/arsip-data.js?v=52bf4d07"></script>

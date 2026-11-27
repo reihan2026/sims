@@ -258,8 +258,55 @@ function openModalVendorSaya(id){
     if(existing){img.src=existing;prev.style.display='block';delBtn.style.display='';}
     else{prev.style.display='none';delBtn.style.display='none';}
   } else {prev.style.display='none';delBtn.style.display='none';}
+  // Paraf: file di sims_files/paraf_<id>; vs.paraf_ada menandai ada/tidaknya
+  _vsParafNew=null;_vsParafDel=false;
+  document.getElementById('vs-paraf-file').value='';
+  _vsParafShow(null);
+  if(vs?.id&&vs.paraf_ada){
+    const cached=getFile('paraf_'+vs.id);
+    if(cached)_vsParafShow(cached);
+    else{
+      const ld=document.getElementById('vs-paraf-loading');ld.style.display='';ld.textContent='Memuat paraf…';
+      loadFile('paraf_'+vs.id).then(d=>{
+        // Modal bisa sudah ditutup / ganti vendor / user sudah pilih paraf baru
+        if(document.getElementById('vs-edit-id').value!==vs.id||_vsParafNew||_vsParafDel)return;
+        ld.style.display='none';
+        if(d){_vsParafShow(d);renderVsPreview();}
+        else{ld.style.display='';ld.textContent='⚠ Paraf tersimpan gagal dimuat (cek koneksi). Biarkan saja agar tetap tersimpan, atau unggah ulang.';}
+      });
+    }
+  }
   renderVsPreview();
   openModal('modal-vendor-saya');
+}
+let _vsParafNew=null,_vsParafDel=false;
+function _vsParafShow(src){
+  const prev=document.getElementById('vs-paraf-preview'),img=document.getElementById('vs-paraf-img');
+  document.getElementById('vs-paraf-loading').style.display='none';
+  if(src){img.src=src;prev.style.display='block';document.getElementById('vs-paraf-del').style.display='';}
+  else{img.removeAttribute('src');prev.style.display='none';document.getElementById('vs-paraf-del').style.display='none';}
+}
+function previewVsParaf(input){
+  const f=input.files[0];if(!f)return;
+  if(!/^image\//.test(f.type)){showToast('Paraf harus berupa gambar (PNG/JPG)',true);input.value='';return;}
+  const r=new FileReader();
+  r.onload=e=>{
+    // Perkecil & tetap PNG (transparansi terjaga) supaya file kecil di sims_files
+    const probe=new Image();
+    probe.onload=async()=>{
+      const out=await _resizeImageForPrint(e.target.result,600,240);
+      _vsParafNew=out;_vsParafDel=false;_vsParafShow(out);renderVsPreview();
+    };
+    probe.onerror=()=>{showToast('Gambar paraf tidak bisa dibaca — coba file lain',true);input.value='';};
+    probe.src=e.target.result;
+  };
+  r.onerror=()=>{showToast('Gagal membaca file paraf',true);input.value='';};
+  r.readAsDataURL(f);
+}
+function delVsParaf(){
+  _vsParafNew=null;_vsParafDel=true;
+  document.getElementById('vs-paraf-file').value='';
+  _vsParafShow(null);renderVsPreview();
 }
 const VS_ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
 // Pratinjau invoice mini di form mitra — cerminkan layout + warna + isi form secara live
@@ -310,7 +357,13 @@ function renderVsPreview(){
         <tr><td style="padding:3px 5px">Wortel</td><td style="text-align:right;padding:3px 5px">15 kg</td><td style="text-align:right;padding:3px 5px">Rp 180.000</td></tr>
       </tbody></table>
     <div style="text-align:right;font-weight:700;font-size:12px;color:${ac};margin-top:6px">Total: Rp 680.000</div>`;
-  box.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:12px;color:#1A1814">${hdr}${body}</div>`;
+  const pp=document.getElementById('vs-paraf-preview');
+  const paraf=(pp&&pp.style.display!=='none')?document.getElementById('vs-paraf-img').src:'';
+  const sign=`<div style="display:flex;justify-content:flex-end;margin-top:8px"><div style="width:110px;text-align:center;font-size:8px;color:#1A1814">
+      <div style="height:40px;display:flex;align-items:flex-end;justify-content:center">${paraf?`<img src="${paraf}" style="max-height:38px;max-width:105px;object-fit:contain">`:''}</div>
+      <div style="border-top:1px solid #D8D3C8;padding-top:3px">Hormat kami</div>
+      ${paraf?'<div style="color:#9E9890;font-size:7px;margin-top:2px">(paraf tampil bila dicentang saat cetak)</div>':''}</div></div>`;
+  box.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:12px;color:#1A1814">${hdr}${body}${sign}</div>`;
 }
 function vsRekRow(bank='',no='',atas=''){
   return`<div class="r2" style="margin-bottom:6px;align-items:center">
@@ -360,8 +413,22 @@ function saveVendorSaya(){
     const kop_logo_pos=document.getElementById('vs-kop-logo-pos').value||'kiri';
     const kop_logo_size=parseInt(document.getElementById('vs-kop-logo-size').value)||80;
     const kop_teks=document.getElementById('vs-kop-teks').value||'full';
-    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna,kop_logo_pos,kop_logo_size,kop_teks};
-    const doSave=()=>{
+    const prevVs=getVendorSaya().find(v=>v.id===vsId);
+    const obj={id:vsId,nama,telp,alamat,rekening:reks,kop_layout,kop_warna,kop_logo_pos,kop_logo_size,kop_teks,paraf_ada:!!prevVs?.paraf_ada};
+    // Paraf disimpan/dihapus di sims_files DULU; paraf_ada baru diubah kalau berhasil
+    const parafNew=_vsParafNew,parafDel=_vsParafDel;
+    const saveParaf=async()=>{
+      if(parafNew){
+        try{await saveFile('paraf_'+vsId,parafNew);obj.paraf_ada=true;addLog('paraf_vendor','Paraf vendor mitra diubah','vendor_saya',vsId,nama,'');}
+        catch(err){console.error('paraf save:',err);showToast('Vendor tersimpan, tapi paraf gagal disimpan: '+(err.message||err),true);}
+      } else if(parafDel&&obj.paraf_ada){
+        obj.paraf_ada=false;delete _cache['file_paraf_'+vsId];
+        addLog('paraf_vendor','Paraf vendor mitra dihapus','vendor_saya',vsId,nama,'');
+        try{if(_currentUser)await db.collection('sims_files').doc('paraf_'+vsId).delete();}catch(err){console.error('paraf delete:',err);}
+      }
+    };
+    const doSave=async()=>{
+      await saveParaf();
       const list=getVendorSaya();
       const idx=list.findIndex(v=>v.id===vsId);
       if(idx>=0)list[idx]=obj;else list.push(obj);
@@ -385,6 +452,8 @@ function saveVendorSaya(){
 }
 function delVendorSaya(id){
   if(!confirm('Hapus vendor ini?'))return;
+  const _v=getVendorSaya().find(v=>v.id===id);
+  if(_v?.paraf_ada){delete _cache['file_paraf_'+id];if(_currentUser)db.collection('sims_files').doc('paraf_'+id).delete().catch(e=>console.error('paraf delete:',e));}
   setVendorSaya(getVendorSaya().filter(v=>v.id!==id));
   renderVendorSaya();
   showToast('Vendor dihapus');
@@ -411,13 +480,14 @@ const _CETAK_BAR_CSS=`.pbar{position:sticky;top:0;z-index:9;display:flex;gap:8px
 .pbar button{font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:44px;padding:0 16px;border-radius:8px;border:none;cursor:pointer}
 .pb-back{background:#fff;color:#1A1814}.pb-print{background:#2D5A3D;color:#fff}
 @media print{.pbar{display:none!important}}`;
-function _cetakBarHtml(){return '<div class="pbar"><button type="button" class="pb-back" onclick="kembaliKeSims()">← Kembali ke SIMS</button><button type="button" class="pb-print" onclick="window.print()">🖨 Cetak / PDF</button></div>';}
+function _cetakBarHtml(extra){return '<div class="pbar"><button type="button" class="pb-back" onclick="kembaliKeSims()">← Kembali ke SIMS</button>'+(extra||'')+'<button type="button" class="pb-print" onclick="window.print()">🖨 Cetak / PDF</button></div>';}
 function _cetakBarJs(){
   const url=JSON.stringify(location.href.split('#')[0]);
   return `function kembaliKeSims(){try{window.close();}catch(e){}setTimeout(function(){if(!window.closed)location.href=${url};},400);}`;
 }
 
-async function printInvDFormal(invId){
+async function printInvDFormal(invId,withParaf){
+  if(withParaf===undefined){const cb=document.getElementById('invd-paraf-'+invId);withParaf=!!(cb&&cb.checked);}
   const inv=getInvD().find(d=>d.id===invId);if(!inv)return;
   const vs=getVendorSaya().find(v=>v.id===inv.vendor_saya_id);
   if(!vs){showToast('Vendor tidak ditemukan!',true);return;}
@@ -435,6 +505,10 @@ async function printInvDFormal(invId){
   let kopSrc=getFile('kop_'+vs.id);
   if(!kopSrc)kopSrc=await loadFile('kop_'+vs.id);
   if(kopSrc)kopSrc=await _resizeImageForPrint(kopSrc,800,160);
+  // Paraf: selalu dimuat kalau vendor punya (supaya bisa dicentang di jendela cetak),
+  // tapi hanya TAMPIL kalau "Dengan paraf" dicentang. Gagal muat → cetak tanpa paraf.
+  let parafSrc=null;
+  if(vs.paraf_ada){parafSrc=getFile('paraf_'+vs.id)||await loadFile('paraf_'+vs.id);if(!parafSrc&&withParaf)showToast('Paraf gagal dimuat — invoice dicetak tanpa paraf',true);}
   const items=inv.type==='passthrough'?[{nama:'Pass-through — lihat invoice vendor terlampir',qty:1,satuan:'',harga_dapur:inv.total}]:inv.items;
   // Setelan tampilan per vendor mitra (backward-compat: tanpa setelan = kiri + netral)
   const ACCENTS={default:'#1A1814',biru:'#1E5AA8',hijau:'#1F7A4D',marun:'#8B2020',ungu:'#5B3A8B'};
@@ -523,11 +597,15 @@ async function printInvDFormal(invId){
     <div class="rek-footer-title">Informasi pembayaran</div>
     ${vs.rekening.map(r=>`<div class="rek-row"><span class="rek-bank">${r.bank}</span><span>${r.no}</span>${r.atas?`<span style="color:#6B6560">a.n. ${r.atas}</span>`:''}</div>`).join('')}
   </div>`:'';
-  const stampHtml=`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
+  const stampHtml=parafSrc
+    ?`<div class="stamp" style="justify-content:flex-end"><div style="flex:1;max-width:200px;text-align:center"><div class="paraf-wrap"><img src="${parafSrc}" class="paraf-img" alt="Paraf"></div><div class="stamp-box" style="margin-top:0">Hormat kami</div></div></div>`
+    :`<div class="stamp" style="justify-content:flex-end"><div class="stamp-box" style="max-width:200px">Hormat kami</div></div>`;
+  const parafCss=parafSrc?`.paraf-wrap{height:56px;display:flex;align-items:flex-end;justify-content:center}.paraf-img{max-height:70px;max-width:190px;object-fit:contain;margin-bottom:-6px}body:not(.dgn-paraf) .paraf-img{visibility:hidden}.pb-paraf{display:flex;align-items:center;gap:6px;color:#fff;font:600 14px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;cursor:pointer}.pb-paraf input{width:20px;height:20px}`:'';
+  const parafToggle=parafSrc?`<label class="pb-paraf"><input type="checkbox" id="pb-paraf-cb" ${withParaf?'checked':''} onchange="document.body.classList.toggle('dgn-paraf',this.checked)"> Dengan paraf</label>`:'';
   const body=`<div class="w">${topHtml}${tableHtml}${totHtml}${inv.catatan?`<div style="margin-top:10px;font-size:12px;color:#6B6560">Catatan: ${inv.catatan}</div>`:''}${rekFooter}${stampHtml}</div>`;
   if(w.closed)return;
   w.document.open();
-  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}</style></head><body>${_cetakBarHtml()}${body}<script>${_cetakBarJs()}window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>${inv.no} — ${vs.nama}</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}${_CETAK_BAR_CSS}${parafCss}</style></head><body${parafSrc&&withParaf?' class="dgn-paraf"':''}>${_cetakBarHtml(parafToggle)}${body}<script>${_cetakBarJs()}window.onload=function(){setTimeout(function(){window.print();},100);};<\/script></body></html>`);
   w.document.close();
   }catch(e){console.error('printInvDFormal:',e);try{w.close();}catch(_){}showToast('Gagal menyiapkan invoice: '+(e.message||e),true);}
 }

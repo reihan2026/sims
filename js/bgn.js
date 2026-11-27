@@ -586,53 +586,60 @@ function _bHtmlSetting(){
   return `<div class="card"><details ${_bg.setOpen?'open':''} ontoggle="_bg.setOpen=this.open"><summary class="ct" style="cursor:pointer;margin:0">Setting Dokumen BGN (pemilik)</summary>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px;font-size:12px">
       <label>Email akun tim keuangan dapur (pisahkan dengan koma)<input type="text" id="bgn-set-emails" value="${_be((C.dapur_emails||[]).join(', '))}" style="width:100%"></label>
+      <label>Email tim SIMS (akses penuh — sama dengan daftar di rules sekarang)<input type="text" id="bgn-set-tim" value="${_be((C.tim_emails&&C.tim_emails.length?C.tim_emails:[C.owner_email||'']).join(', '))}" style="width:100%"></label>
       <label>Nama penanda tangan (dicari di PDF)<input type="text" id="bgn-set-nama" value="${_be(S.nama_ttd)}" style="width:100%"></label>
       <label>Insentif per PM (Rp)<input type="number" id="bgn-set-tarif" value="${S.tarif_insentif}" style="width:100%"></label>
       <label>Lebar tanda tangan (× lebar nama)<input type="number" step="0.1" id="bgn-set-lebar" value="${S.ttd_lebar}" style="width:100%"></label>
       <label>Turun di bawah garis nama (× tinggi huruf)<input type="number" step="0.05" id="bgn-set-turun" value="${S.ttd_turun}" style="width:100%"></label>
     </div>
     <button class="btn bp bsm" style="margin-top:10px" onclick="bgnSimpanSetting()">Simpan setting</button>
-    <div style="margin-top:14px;font-size:12px"><b>Gambar tanda tangan</b> — PNG/JPG tanda tangan di kertas putih; latar putih dibuang otomatis. Hanya akun Anda yang bisa membacanya (setelah rules dipasang).
+    <div style="margin-top:14px;font-size:12px"><b>Gambar tanda tangan</b> — PNG/JPG tanda tangan di kertas putih; latar putih dibuang otomatis. Setelah rules di bawah dipasang, hanya akun Anda yang bisa membacanya.
       <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap">
         <div id="bgn-ttd-prev" style="min-width:160px;min-height:60px;border:1px dashed var(--bd);border-radius:6px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#f3f3f3 0 25%,#fff 0 50%) 0 0/14px 14px">${_bg.ttd?`<img src="${_bg.ttd.png}" style="max-height:70px;max-width:220px">`:'<span style="color:var(--t3)">belum ada</span>'}</div>
         <button class="btn bsm" onclick="document.getElementById('bgn-ttd-file').click()">${_bg.ttd?'Ganti gambar':'Upload gambar'}</button>
         <input type="file" id="bgn-ttd-file" accept="image/*" style="display:none" onchange="bgnUploadTtd(this.files[0]);this.value=''">
       </div></div>
-    <div style="margin-top:14px;font-size:12px"><b>Firestore rules</b> — tanpa ini, akun tim dapur secara teknis masih bisa membaca seluruh data SIMS lewat console browser. Salin, bandingkan dulu dengan rules yang sekarang di Firebase console → Firestore → Rules, lalu ganti dan Publish.
-      <textarea id="bgn-rules" readonly style="width:100%;height:190px;font-family:var(--mn);font-size:11px;margin-top:6px">${_be(_bRules(C.dapur_emails||[]))}</textarea>
+    <div style="margin-top:14px;font-size:12px"><b>Firestore rules</b> — rules sekarang hanya mengizinkan email tim SIMS, jadi akun tim dapur belum bisa membuka apa pun. Isi email tim SIMS dan tim dapur di atas, Simpan, lalu salin teks ini ke Firebase console → Firestore Database → Rules (ganti seluruh isi) dan Publish.
+      <textarea id="bgn-rules" readonly style="width:100%;height:190px;font-family:var(--mn);font-size:11px;margin-top:6px">${_be(_bRules(C.dapur_emails||[],(C.tim_emails&&C.tim_emails.length?C.tim_emails:[C.owner_email||'']).filter(Boolean)))}</textarea>
       <button class="btn bxs" onclick="navigator.clipboard.writeText(document.getElementById('bgn-rules').value).then(()=>showToast('Rules disalin'))">Salin rules</button></div>
   </details></div>`;
 }
-function _bRules(emails){
-  const list=emails.length?emails.map(e=>"'"+e.toLowerCase()+"'").join(', '):"'email-tim-dapur@contoh.com'";
+function _bRules(dapurEmails,timEmails){
+  const q=a=>a.map(e=>"'"+e.toLowerCase()+"'").join(', ');
+  const dap=dapurEmails.length?q(dapurEmails):"'email-tim-dapur@contoh.com'";
+  const tim=timEmails.length?q(timEmails):"'email-anda@contoh.com'";
   return `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function masuk() { return request.auth != null; }
-    function dapur() { return masuk() && request.auth.token.email.lower() in [${list}]; }
-    function tim() { return masuk() && !dapur(); }
-    // Tim SIMS: dokumen sims/* kecuali gambar tanda tangan orang lain
+    function tim() { return request.auth != null && request.auth.token.email in [${tim}]; }
+    function dapur() { return request.auth != null && request.auth.token.email in [${dap}]; }
+
     match /sims/{d} {
+      // Tim SIMS: semua dokumen, kecuali gambar tanda tangan milik orang lain
       allow read, write: if tim() && !d.matches('bgn_ttd_.*');
-      allow read, write: if masuk() && d == 'bgn_ttd_' + request.auth.uid;
-      // Tim dapur: hanya pengaturan (baca), ringkasan, dan dokumen harian BGN
+      allow read, write: if tim() && d == 'bgn_ttd_' + request.auth.uid;
+      // Tim keuangan dapur: hanya Dokumen BGN
       allow read: if dapur() && d == 'bgn_cfg';
       allow read, write: if dapur() && (d == 'bgn_idx' || d.matches('bgn_h_[0-9]{8}'));
     }
+    match /sims/{d}/{sub=**} { allow read, write: if tim(); }
     match /sims_files/{f} {
       allow read, write: if tim() || (dapur() && f.matches('bgn_.*'));
     }
-    match /sims_arsip/{doc=**} { allow read, write: if tim(); }
+    match /sims_files/{f}/{sub=**} { allow read, write: if tim(); }
+    match /sims_arsip/{document=**} { allow read, write: if tim(); }
   }
 }`;
 }
 async function bgnSimpanSetting(){
   const v=id=>document.getElementById(id).value;
-  const emails=v('bgn-set-emails').split(/[,\s;]+/).map(e=>e.trim().toLowerCase()).filter(e=>/^\S+@\S+\.\S+$/.test(e));
-  if(emails.includes(_bg.cfg.owner_email)){showToast('Email pemilik tidak boleh masuk daftar tim dapur.',true);return;}
+  const parse=x=>x.split(/[,\s;]+/).map(e=>e.trim().toLowerCase()).filter(e=>/^\S+@\S+\.\S+$/.test(e));
+  const emails=parse(v('bgn-set-emails')),tim=parse(v('bgn-set-tim'));
+  if(emails.some(e=>tim.includes(e)||e===_bg.cfg.owner_email)){showToast('Email tim dapur tidak boleh sama dengan email tim SIMS / pemilik.',true);return;}
+  if(!tim.includes(_bg.cfg.owner_email))tim.unshift(_bg.cfg.owner_email);
   const settings=Object.assign({},_bS(),{nama_ttd:v('bgn-set-nama').trim()||BGN_DEFAULT.nama_ttd,tarif_insentif:parseInt(v('bgn-set-tarif'),10)||0,
     ttd_lebar:parseFloat(v('bgn-set-lebar'))||BGN_DEFAULT.ttd_lebar,ttd_turun:parseFloat(v('bgn-set-turun'))||0});
-  const cfg=Object.assign({},_bg.cfg,{dapur_emails:emails,settings});
+  const cfg=Object.assign({},_bg.cfg,{dapur_emails:emails,tim_emails:tim,settings});
   try{await _bRefCfg().set(cfg);}catch(e){showToast('Gagal simpan: '+e.message,true);return;}
   _bg.cfg=cfg;addLog('bgn_setting','Setting Dokumen BGN','bgn','','',`tim dapur: ${emails.join(', ')||'-'} · ttd ${settings.nama_ttd} · insentif/PM ${settings.tarif_insentif}`);
   showToast('Setting tersimpan. Jangan lupa perbarui Firestore rules kalau daftar email berubah.');renderBgn();

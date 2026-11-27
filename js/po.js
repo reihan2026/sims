@@ -393,9 +393,14 @@ function detItems(id,po,itemInvV,itemInvD,itemPassthrough){
     </div>
     <button class="btn bxs" onclick="window._spekVisible=!window._spekVisible;showDetail('${id}')">${spekVisible?'Hide spek':'Show spek'}</button>
   </div>`;
-  if(selMode)html+=`<div id="sel-actionbar" style="position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 10px;margin-bottom:9px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r)">
-    <span style="font-size:12px;color:var(--wt)"><strong id="sel-count">0</strong> item dipilih</span>
+  if(selMode)html+=`<div id="sel-actionbar" data-po="${id}" style="position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:7px 10px;margin-bottom:9px;background:var(--wbg);border:1px solid var(--wb);border-radius:var(--r)">
+    <div style="font-size:12px;color:var(--wt);min-width:0">
+      <div><strong id="sel-count">0</strong> item dipilih<span id="sel-total"></span></div>
+      <div id="sel-status" style="font-size:11px;color:var(--t3)"></div>
+    </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn bxs bt" id="sel-invv-btn" onclick="selBuatInvoice('${id}','v')" disabled>Buat Invoice Vendor</button>
+      <button class="btn bxs bpu" id="sel-invd-btn" onclick="selBuatInvoice('${id}','d')" disabled>Buat Invoice Dapur</button>
       <button class="btn bxs" onclick="clearSelItems()">Bersihkan pilihan</button>
       <button class="btn bxs bd-" id="sel-batal-btn" onclick="openBatalkanMassal('${id}')" disabled>Batalkan terpilih</button>
     </div>
@@ -705,6 +710,14 @@ function showDetail(id){
     detInvD(id,invD)+
     detRevisions(po);
 
+  // Sisa pilihan setelah invoice dari mode pilih disimpan (vendor campur)
+  if(window._selMode&&window._selRestore&&window._selRestore.poId===id){
+    const keep=new Set(window._selRestore.ids);
+    document.querySelectorAll('.item-sel-cb').forEach(c=>{c.checked=keep.has(c.value);});
+    updSelCount();
+  }
+  window._selRestore=null;
+
   // Restore collapsed state after render
   if(_collapsedHari.size>0){
     _collapsedHari.forEach(hariId=>{
@@ -1006,7 +1019,100 @@ function onSelCbChange(cb){
 function updSelCount(){
   const n=selectedItemIds().length;
   const el=document.getElementById('sel-count');if(el)el.textContent=n;
-  const btn=document.getElementById('sel-batal-btn');if(btn)btn.disabled=n===0;
+  ['sel-batal-btn','sel-invv-btn','sel-invd-btn'].forEach(b=>{const btn=document.getElementById(b);if(btn)btn.disabled=n===0;});
+  const bar=document.getElementById('sel-actionbar');
+  const tEl=document.getElementById('sel-total'),sEl=document.getElementById('sel-status');
+  if(!bar||!tEl||!sEl)return;
+  if(!n){tEl.textContent='';sEl.textContent='';return;}
+  const info=selItemInfo(bar.dataset.po);
+  const nilaiPO=info.reduce((a,x)=>a+(x.item.qty||0)*(x.item.harga_po||0),0);
+  const adaHv=info.filter(x=>x.hv>0);
+  const nilaiV=adaHv.reduce((a,x)=>a+(x.item.qty||0)*x.hv,0);
+  const tanpaHv=info.length-adaHv.length;
+  tEl.innerHTML=` · Nilai PO <strong class="num">${fmtF(nilaiPO)}</strong> · Nilai vendor <strong class="num">${adaHv.length?fmtF(nilaiV):'—'}</strong>${tanpaHv?` <span style="color:var(--t3)">(${tanpaHv} item belum ada harga vendor)</span>`:''}`;
+  const sudahV=info.filter(x=>x.invV).length,sudahD=info.filter(x=>x.invD).length;
+  const st=[];
+  if(sudahV)st.push(sudahV+' sudah ada inv. vendor');
+  if(sudahD)st.push(sudahD+' sudah ada inv. dapur');
+  sEl.textContent=st.join(' · ');
+}
+// Data item terpilih untuk bar ringkasan & tombol buat invoice. Vendor & harga
+// vendor mengikuti logika kolom tabel (item.vendor, lalu invoice vendor-nya).
+function selItemInfo(poId){
+  const po=getPOs().find(p=>p.id===poId);if(!po)return[];
+  const ids=new Set(selectedItemIds());
+  const {itemInvV,itemInvD}=buildLookup(poId);
+  const out=[];
+  po.items.forEach((item,idx)=>{
+    if(!ids.has(item.id)||item.batal)return;
+    const iv=itemInvV[idx]||null;
+    const ivIt=iv?.items?.find(i=>(i.poItemId&&i.poItemId===item.id))||iv?.items?.find(i=>i.nama===item.nama);
+    const hv=item.harga_vendor||(ivIt?(ivIt.harga_vendor_po!=null?ivIt.harga_vendor_po:ivIt.harga_vendor):0)||0;
+    out.push({item,idx,vendor:item.vendor||iv?.vendor||'',hv,invV:iv,invD:itemInvD[idx]||null});
+  });
+  return out;
+}
+
+// ===== BUAT INVOICE DARI MODE PILIH =====
+// Dipanggil saveInvV/saveInvD tepat sebelum halaman dirender ulang.
+function selAfterInvoiceSaved(){
+  const p=window._selInvPending;window._selInvPending=false;
+  if(!p)return;
+  if(p.sisa&&p.sisa.length)window._selRestore={poId:p.poId,ids:p.sisa};
+  else window._selMode=false;
+}
+// Memakai form invoice yang sudah ada (openNewInvVForVendor / openNewInvD) dan
+// mencentang item terpilih lewat fokusItemInvoice. Form sendiri yang menyaring
+// item yang sudah diinvoice — di sini hanya dilaporkan mana yang terlewat.
+function selBuatInvoice(poId,jenis){
+  const info=selItemInfo(poId);
+  if(!info.length){showToast('Pilih minimal 1 item aktif!',true);return;}
+  if(jenis==='d'){selBukaInvoice(poId,'d','',info);return;}
+  const byV=new Map();
+  info.forEach(x=>{const k=x.vendor||'';if(!byV.has(k))byV.set(k,[]);byV.get(k).push(x);});
+  if(byV.size===1){const [v,xs]=[...byV.entries()][0];selBukaInvoice(poId,'v',v,xs);return;}
+  // Vendor campur: satu invoice per vendor — user pilih vendor yang dikerjakan dulu
+  window._selVendorGroups={poId,groups:[...byV.entries()]};
+  document.getElementById('selv-list').innerHTML=window._selVendorGroups.groups.map(([v,xs],gi)=>{
+    const nilai=xs.reduce((a,x)=>a+(x.item.qty||0)*(x.hv||0),0);
+    const sudah=xs.filter(x=>x.invV).length;
+    return`<button class="btn" style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:6px;text-align:left;gap:8px" onclick="selPilihVendor(${gi})">
+      <span><strong>${v||'Belum ada vendor'}</strong> <span style="color:var(--t3)">(${xs.length} item${sudah?', '+sudah+' sudah ada invoice':''})</span></span>
+      <span class="num" style="color:var(--t2)">${nilai?fmtF(nilai):'—'}</span></button>`;
+  }).join('');
+  openModal('modal-sel-vendor');
+}
+function selPilihVendor(gi){
+  const g=window._selVendorGroups;if(!g)return;
+  const [v,xs]=g.groups[gi];
+  closeModal('modal-sel-vendor');
+  selBukaInvoice(g.poId,'v',v,xs);
+}
+function selBukaInvoice(poId,jenis,vendor,xs){
+  const sudahKey=jenis==='v'?'invV':'invD';
+  // Item yang sudah ada invoice-nya tetap dikirim ke form: kalau qty PO dinaikkan
+  // setelah diinvoice, form menawarkan SISA-nya dan baris itu ikut tercentang.
+  const ids=xs.map(x=>x.item.id);
+  if(jenis==='v')openNewInvVForVendor(poId,vendor,ids);
+  else openNewInvD(poId,ids);
+  const cbSel=jenis==='v'?'.invv-cb':'.invd-cb';
+  const found=new Set();
+  document.querySelectorAll(cbSel+':checked').forEach(cb=>[cb.dataset.itemId,...(cb.dataset.mergedItemIds||'').split(',')].filter(Boolean).forEach(x=>found.add(x)));
+  const lewat=xs.filter(x=>!found.has(x.item.id));
+  if(lewat.length===xs.length){
+    closeModal(jenis==='v'?'modal-invv':'modal-invd');
+    const nos=[...new Set(lewat.map(x=>x[sudahKey]?.no).filter(Boolean))];
+    showToast(`Semua item terpilih sudah ada invoice ${jenis==='v'?'vendor':'dapur'}${nos.length?' ('+nos.join(', ')+')':''}`,true);
+    return;
+  }
+  // Setelah invoice disimpan: item yang tidak masuk form ini (vendor lain /
+  // sudah diinvoice) tetap tercentang; kalau tidak ada sisa, mode pilih ditutup.
+  const sisa=selectedItemIds().filter(x=>!found.has(x)&&!lewat.some(l=>l.item.id===x));
+  window._selInvPending={poId,sisa};
+  if(lewat.length){
+    const nos=[...new Set(lewat.map(x=>x[sudahKey]?.no).filter(Boolean))];
+    showToast(`${lewat.length} item dilewati: sudah ada invoice${nos.length?' ('+nos.join(', ')+')':''}`);
+  }
 }
 function toggleSelHari(cb,hariId){
   document.querySelectorAll(`.item-sel-cb[data-hari="${hariId}"]`).forEach(c=>{c.checked=cb.checked;});

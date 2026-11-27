@@ -7,6 +7,7 @@ function openNewInvD(poId,itemId,itemIdx){
   // untuk Tambah Item (lihat openTambahItemInvD), pastikan field yang
   // disembunyikan/dikunci di sana dikembalikan dulu di sini.
   _invdAppendTarget=null;
+  window._selInvPending=false; // diset ulang oleh selBuatInvoice() kalau dibuka dari mode pilih
   document.getElementById('invd-modal-title').textContent='Buat Invoice ke Dapur';
   document.getElementById('invd-append-info').style.display='none';
   document.getElementById('invd-vendor-wrap').style.display='';
@@ -352,7 +353,9 @@ function saveInvD(){
   setBatch({invd:invs,ctr_invd:_cache.ctr_invd});
   if(poId)invalidatePO(poId);
   autoMaster(dapur,[]);
-  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');showToast('Invoice ke dapur disimpan!');segarkanHalamanAktif();
+  addLog('buat_invd','Buat invoice dapur','invd',inv.id,inv.no,dapur+' · '+fmtF(inv.total));closeModal('modal-invd');
+  selAfterInvoiceSaved(); // dibuka dari mode pilih Detail PO
+  showToast('Invoice ke dapur disimpan!');segarkanHalamanAktif();
 }
 
 // ===== TAMBAH ITEM KE INVOICE DAPUR YANG SUDAH ADA =====

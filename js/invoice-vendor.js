@@ -1,6 +1,7 @@
 // ===== INVOICE VENDOR =====
 function openNewInvV(poId){openNewInvVForVendor(poId,'');}
 function openNewInvVForVendor(poId,vendor,itemId,itemIdx){
+  window._selInvPending=false; // diset ulang oleh selBuatInvoice() kalau dibuka dari mode pilih
   document.getElementById('invv-no').value=nextInvNo('v');
   document.getElementById('invv-tgl').value=today();document.getElementById('invv-vendor').value=vendor||'';
   document.getElementById('invv-jatuh').value='';document.getElementById('invv-cat').value='';document.getElementById('invv-file').value='';document.getElementById('invv-total').value='';
@@ -367,6 +368,7 @@ function saveInvV(){
     if(poId)invalidatePO(poId);
     closeModal('modal-invv');
     resetBtn();
+    selAfterInvoiceSaved(); // dibuka dari mode pilih Detail PO
     showToast('Invoice vendor disimpan!');
     addLog('buat_invv','Buat invoice vendor','invv',inv.id,inv.no,inv.vendor+' · '+fmtF(inv.total));
     try{

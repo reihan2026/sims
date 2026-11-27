@@ -330,16 +330,23 @@ function invVGrpLbl(g){
 // beri sorotan, dan gulir ke barisnya. Cocokkan lewat id item permanen;
 // item lama tanpa id dicocokkan lewat index PO (data-idx / data-merged-idxs).
 function fokusItemInvoice(cbSel,itemId,idx){
-  if(!itemId&&(idx==null||idx===''))return;
+  // itemId boleh satu id atau array id (mode pilih Detail PO). Mengembalikan
+  // daftar id yang berhasil dicentang, supaya pemanggil bisa melaporkan yang
+  // tidak ada di form (mis. sudah masuk invoice lain).
+  const ids=Array.isArray(itemId)?itemId.filter(Boolean):(itemId?[itemId]:[]);
+  if(!ids.length&&(idx==null||idx===''))return[];
   const cbs=[...document.querySelectorAll(cbSel)];
-  const cocok=cb=>itemId
-    ?(cb.dataset.itemId===itemId||(cb.dataset.mergedItemIds||'').split(',').includes(itemId))
+  const idsOf=cb=>[cb.dataset.itemId,...(cb.dataset.mergedItemIds||'').split(',')].filter(Boolean);
+  const cocok=cb=>ids.length
+    ?idsOf(cb).some(x=>ids.includes(x))
     :(cb.dataset.idx===String(idx)||(cb.dataset.mergedIdxs||'').split(',').includes(String(idx)));
   const target=cbs.filter(cocok);
-  if(!target.length)return;
+  if(!target.length)return[];
   cbs.forEach(cb=>{cb.checked=target.includes(cb);});
   target.forEach(cb=>{const tr=cb.closest('tr');if(tr)tr.style.background='var(--ibg)';});
   const tr=target[0].closest('tr');if(tr)setTimeout(()=>tr.scrollIntoView({block:'center'}),50);
+  const found=new Set();target.forEach(cb=>idsOf(cb).forEach(x=>found.add(x)));
+  return ids.filter(x=>found.has(x));
 }
 
 // Setelah simpan dari modal: segarkan halaman yang SEDANG dibuka, jangan pindah.
